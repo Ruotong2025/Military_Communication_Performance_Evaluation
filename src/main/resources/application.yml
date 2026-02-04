@@ -64,3 +64,10 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: alpha
   packages-to-scan: com.ccnu.military.controller
+
+# Python 服务配置
+python:
+  executable: python  # Python 可执行文件路径，Windows 下可能是 python 或 python3
+  script:
+    path: python_service/evaluation_service.py  # Python 脚本相对路径
+  timeout: 300  # 超时时间（秒）

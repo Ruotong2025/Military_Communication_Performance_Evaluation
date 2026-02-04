@@ -31,9 +31,9 @@ public interface MilitaryEffectivenessRepository extends JpaRepository<MilitaryE
     List<MilitaryEffectivenessEvaluation> findAllByOrderByTestIdAsc();
 
     /**
-     * 查询崩溃次数大于0的记录
+     * 查询崩溃率大于0的记录
      */
-    @Query("SELECT e FROM MilitaryEffectivenessEvaluation e WHERE e.totalNetworkCrashes > 0 ORDER BY e.totalNetworkCrashes DESC")
+    @Query("SELECT e FROM MilitaryEffectivenessEvaluation e WHERE e.crashRate > 0 ORDER BY e.crashRate DESC")
     List<MilitaryEffectivenessEvaluation> findByCrashesGreaterThanZero();
 
     /**

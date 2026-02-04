@@ -25,106 +25,75 @@ public class MilitaryEffectivenessEvaluation {
     @Column(name = "test_id", nullable = false, unique = true, length = 50)
     private String testId;
 
-    // ========== 1. 响应能力指标 (2个) ==========
-    @Column(name = "avg_call_setup_duration_ms", precision = 12, scale = 3)
+    // ========== 1. 响应能力指标 (RS - 2个) ==========
+    @Column(name = "RS_avg_call_setup_duration_ms", precision = 12, scale = 3)
     private BigDecimal avgCallSetupDurationMs;
 
-    @Column(name = "avg_transmission_delay_ms", precision = 12, scale = 3)
+    @Column(name = "RS_avg_transmission_delay_ms", precision = 12, scale = 3)
     private BigDecimal avgTransmissionDelayMs;
 
-    // ========== 2. 处理能力指标 (4个) ==========
-    @Column(name = "effective_throughput", precision = 15, scale = 2)
+    // ========== 2. 处理能力指标 (PO - 2个) ==========
+    @Column(name = "PO_effective_throughput", precision = 15, scale = 2)
     private BigDecimal effectiveThroughput;
 
-    @Column(name = "spectral_efficiency", precision = 8, scale = 4)
+    @Column(name = "PO_spectral_efficiency", precision = 8, scale = 4)
     private BigDecimal spectralEfficiency;
 
-    @Column(name = "channel_utilization", precision = 5, scale = 2)
-    private BigDecimal channelUtilization;
-
-    @Column(name = "avg_concurrent_links", precision = 8, scale = 2)
-    private BigDecimal avgConcurrentLinks;
-
-    // ========== 3. 有效性指标 (3个) ==========
-    @Column(name = "avg_communication_distance", precision = 10, scale = 2)
+    // ========== 3. 有效性指标 (EF - 4个) ==========
+    @Column(name = "EF_avg_communication_distance", precision = 10, scale = 2)
     private BigDecimal avgCommunicationDistance;
 
-    @Column(name = "avg_ber", precision = 15, scale = 10)
+    @Column(name = "EF_avg_ber", precision = 15, scale = 10)
     private BigDecimal avgBer;
 
-    @Column(name = "avg_plr", precision = 8, scale = 6)
+    @Column(name = "EF_avg_plr", precision = 8, scale = 6)
     private BigDecimal avgPlr;
 
-    // ========== 4. 可靠性指标 (5个) ==========
-    @Column(name = "task_success_rate", precision = 8, scale = 6)
+    @Column(name = "EF_task_success_rate", precision = 8, scale = 6)
     private BigDecimal taskSuccessRate;
 
-    @Column(name = "communication_availability_rate", precision = 8, scale = 6)
+    // ========== 4. 可靠性指标 (RL - 4个) ==========
+    @Column(name = "RL_communication_availability_rate", precision = 8, scale = 6)
     private BigDecimal communicationAvailabilityRate;
 
-    @Column(name = "total_network_crashes")
-    private Integer totalNetworkCrashes;
+    @Column(name = "RL_communication_success_rate", precision = 8, scale = 6)
+    private BigDecimal communicationSuccessRate;
 
-    @Column(name = "avg_response_time_ms")
-    private Long avgResponseTimeMs;
+    @Column(name = "RL_recovery_duration_ms", precision = 12, scale = 3)
+    private BigDecimal recoveryDurationMs;
 
-    @Column(name = "avg_handling_duration_ms")
-    private Long avgHandlingDurationMs;
+    @Column(name = "RL_crash_rate", precision = 8, scale = 6)
+    private BigDecimal crashRate;
 
-    // ========== 5. 抗干扰性指标 (3个) ==========
-    @Column(name = "avg_snr", precision = 8, scale = 2)
-    private BigDecimal avgSnr;
-
-    @Column(name = "avg_sinr", precision = 8, scale = 2)
+    // ========== 5. 抗干扰性指标 (AJ - 2个) ==========
+    @Column(name = "AJ_avg_sinr", precision = 8, scale = 2)
     private BigDecimal avgSinr;
 
-    @Column(name = "avg_jamming_margin", precision = 8, scale = 2)
+    @Column(name = "AJ_avg_jamming_margin", precision = 8, scale = 2)
     private BigDecimal avgJammingMargin;
 
-    // ========== 6. 人为操作能力指标 (2个) ==========
-    @Column(name = "avg_operator_reaction_time_ms", precision = 10, scale = 2)
+    // ========== 6. 人为操作能力指标 (HO - 2个) ==========
+    @Column(name = "HO_avg_operator_reaction_time_ms", precision = 10, scale = 2)
     private BigDecimal avgOperatorReactionTimeMs;
 
-    @Column(name = "operation_success_rate", precision = 8, scale = 6)
+    @Column(name = "HO_operation_success_rate", precision = 8, scale = 6)
     private BigDecimal operationSuccessRate;
 
-    // ========== 7. 组网能力指标 (3个) ==========
-    @Column(name = "avg_network_setup_duration_ms")
-    private Long avgNetworkSetupDurationMs;
+    // ========== 7. 组网能力指标 (NC - 2个) ==========
+    @Column(name = "NC_avg_network_setup_duration_ms", precision = 12, scale = 3)
+    private BigDecimal avgNetworkSetupDurationMs;
 
-    @Column(name = "avg_network_setup_speed", precision = 8, scale = 2)
-    private BigDecimal avgNetworkSetupSpeed;
-
-    @Column(name = "avg_connectivity_rate", precision = 8, scale = 6)
+    @Column(name = "NC_avg_connectivity_rate", precision = 8, scale = 6)
     private BigDecimal avgConnectivityRate;
 
-    // ========== 8. 机动性指标 (2个) ==========
-    @Column(name = "deployment_speed", precision = 8, scale = 2)
-    private BigDecimal deploymentSpeed;
-
-    @Column(name = "personnel_avg_deployment_speed", precision = 8, scale = 2)
-    private BigDecimal personnelAvgDeploymentSpeed;
-
-    // ========== 9. 安全性指标 (7个) ==========
-    @Column(name = "avg_key_age_hours", precision = 10, scale = 2)
-    private BigDecimal avgKeyAgeHours;
-
-    @Column(name = "key_compromise_frequency", precision = 10, scale = 4)
+    // ========== 8. 安全性指标 (SC - 3个) ==========
+    @Column(name = "SC_key_compromise_frequency", precision = 10, scale = 4)
     private BigDecimal keyCompromiseFrequency;
 
-    @Column(name = "avg_key_leak_response_time_ms", precision = 10, scale = 2)
-    private BigDecimal avgKeyLeakResponseTimeMs;
-
-    @Column(name = "key_security_index", precision = 8, scale = 6)
-    private BigDecimal keySecurityIndex;
-
-    @Column(name = "key_response_efficiency", precision = 8, scale = 6)
-    private BigDecimal keyResponseEfficiency;
-
-    @Column(name = "detection_probability", precision = 5, scale = 4)
+    @Column(name = "SC_detection_probability", precision = 5, scale = 4)
     private BigDecimal detectionProbability;
 
-    @Column(name = "interception_resistance", precision = 5, scale = 2)
+    @Column(name = "SC_interception_resistance", precision = 5, scale = 2)
     private BigDecimal interceptionResistance;
 
     // ========== 统计信息 ==========
