@@ -1,0 +1,175 @@
+// 海军蓝主题样式
+
+// 颜色变量
+:root {
+  --navy-primary: #001f3f;
+  --navy-secondary: #0074D9;
+  --navy-light: #7FDBFF;
+  --navy-dark: #001529;
+  --accent-gold: #FFD700;
+  --accent-red: #FF4136;
+  --accent-green: #2ECC40;
+  --accent-orange: #FF851B;
+  --bg-primary: #f0f2f5;
+  --bg-card: #ffffff;
+  --text-primary: #001f3f;
+}
+
+// 全局样式
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Microsoft YaHei', 'SimHei', sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+// Element Plus 主题覆盖
+.el-menu {
+  background-color: var(--navy-dark) !important;
+  border-right: none;
+
+  .el-menu-item {
+    color: var(--navy-light);
+    font-size: 15px;
+    font-weight: 500;
+    transition: all 0.3s;
+
+    &:hover {
+      background-color: var(--navy-secondary) !important;
+      color: white;
+    }
+
+    &.is-active {
+      background: linear-gradient(90deg, var(--navy-secondary), var(--navy-primary)) !important;
+      color: white;
+      border-left: 4px solid var(--accent-gold);
+      font-weight: bold;
+    }
+
+    .el-icon {
+      color: var(--navy-light);
+      font-size: 18px;
+    }
+
+    &.is-active .el-icon {
+      color: var(--accent-gold);
+    }
+  }
+}
+
+.el-button--primary {
+  background: linear-gradient(135deg, var(--navy-secondary), var(--navy-primary));
+  border: none;
+  font-weight: 500;
+  transition: all 0.3s;
+
+  &:hover {
+    background: linear-gradient(135deg, var(--navy-light), var(--navy-secondary));
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 116, 217, 0.4);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.el-card {
+  border: 1px solid var(--navy-secondary);
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 116, 217, 0.1);
+  transition: all 0.3s;
+
+  &:hover {
+    box-shadow: 0 4px 20px rgba(0, 116, 217, 0.2);
+    transform: translateY(-2px);
+  }
+
+  .el-card__header {
+    background: linear-gradient(135deg, var(--navy-primary), var(--navy-secondary));
+    color: white;
+    font-weight: bold;
+    border-bottom: 2px solid var(--accent-gold);
+  }
+}
+
+.el-table {
+  border: 1px solid var(--navy-light);
+
+  th {
+    background: linear-gradient(135deg, var(--navy-primary), var(--navy-secondary)) !important;
+    color: white !important;
+    font-weight: bold;
+  }
+
+  tr:hover {
+    background-color: rgba(127, 219, 255, 0.1) !important;
+  }
+}
+
+.el-tabs__item {
+  color: var(--navy-primary);
+  font-weight: 500;
+
+  &.is-active {
+    color: var(--navy-secondary);
+    font-weight: bold;
+  }
+
+  &:hover {
+    color: var(--navy-secondary);
+  }
+}
+
+.el-tabs__active-bar {
+  background-color: var(--navy-secondary);
+  height: 3px;
+}
+
+.el-input-number {
+  .el-input__inner {
+    border-color: var(--navy-light);
+
+    &:focus {
+      border-color: var(--navy-secondary);
+    }
+  }
+}
+
+.el-alert {
+  border-radius: 6px;
+  
+  &.el-alert--success {
+    background-color: rgba(46, 204, 64, 0.1);
+    border-color: var(--accent-green);
+  }
+
+  &.el-alert--error {
+    background-color: rgba(255, 65, 54, 0.1);
+    border-color: var(--accent-red);
+  }
+}
+
+// 自定义滚动条
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f0f2f5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--navy-light);
+  border-radius: 4px;
+
+  &:hover {
+    background: var(--navy-secondary);
+  }
+}
