@@ -225,12 +225,19 @@ def build_ahp_matrix(priorities):
         priorities: dict, 例如 {'RL': 1, 'SC': 2, 'AJ': 3, ...}
     
     返回:
-        numpy 数组形式的判断矩阵
+        numpy 数组形式的判断矩阵和维度代码列表
     """
-    # 按优先级排序
-    sorted_dims = sorted(priorities.items(), key=lambda x: x[1])
-    dim_codes = [item[0] for item in sorted_dims]
+    # 调试日志
+    sys.stderr.write(f"[DEBUG] build_ahp_matrix 接收到的 priorities: {priorities}\n")
+    sys.stderr.flush()
+    
+    # 固定维度顺序（与前端一致）
+    dim_codes = ['RL', 'SC', 'AJ', 'EF', 'PO', 'NC', 'HO', 'RS']
     n = len(dim_codes)
+    
+    # 调试日志
+    sys.stderr.write(f"[DEBUG] 维度顺序（固定）: {[(code, priorities[code]) for code in dim_codes]}\n")
+    sys.stderr.flush()
     
     # 构建判断矩阵
     matrix = np.zeros((n, n))
@@ -239,13 +246,26 @@ def build_ahp_matrix(priorities):
         for j in range(n):
             if i == j:
                 matrix[i][j] = 1
-            elif i < j:
-                # i 的优先级高于 j，使用标度
-                diff = j - i
-                matrix[i][j] = diff + 1  # 优先级差1用2，差2用3，以此类推
             else:
-                # j 的优先级高于 i
-                matrix[i][j] = 1 / matrix[j][i]
+                # 获取两个维度的优先级
+                priority_i = priorities[dim_codes[i]]
+                priority_j = priorities[dim_codes[j]]
+                
+                if priority_i < priority_j:
+                    # i 的优先级高于 j（数字小表示优先级高）
+                    diff = priority_j - priority_i
+                    matrix[i][j] = diff + 1  # 优先级差1用2，差2用3，以此类推
+                elif priority_i > priority_j:
+                    # j 的优先级高于 i
+                    diff = priority_i - priority_j
+                    matrix[i][j] = 1.0 / (diff + 1)
+                else:
+                    # 优先级相同
+                    matrix[i][j] = 1
+    
+    # 调试日志
+    sys.stderr.write(f"[DEBUG] 构建的 AHP 矩阵:\n{matrix}\n")
+    sys.stderr.flush()
     
     return matrix, dim_codes
 
@@ -260,11 +280,18 @@ def ahp_calculate_weights(judgment_matrix):
     
     weights = max_eigenvector / max_eigenvector.sum()
     
+    # 调试日志
+    sys.stderr.write(f"[DEBUG] AHP 计算的权重向量: {weights}\n")
+    sys.stderr.flush()
+    
     CI = (max_eigenvalue - n) / (n - 1)
     RI_dict = {1: 0, 2: 0, 3: 0.58, 4: 0.90, 5: 1.12, 6: 1.24, 7: 1.32, 
                8: 1.41, 9: 1.45, 10: 1.49}
     RI = RI_dict.get(n, 1.41)
     CR = CI / RI if RI != 0 else 0
+    
+    sys.stderr.write(f"[DEBUG] 一致性比率 CR: {CR}\n")
+    sys.stderr.flush()
     
     return weights, CR
 
@@ -370,6 +397,12 @@ def evaluate(priorities):
             'consistencyRatio': float(CR),
             'consistencyPassed': bool(CR < 0.1),
             
+            # AHP 判断矩阵（添加）
+            'ahpMatrix': ahp_matrix.tolist(),
+            
+            # 维度代码顺序（添加）
+            'dimensionCodes': dim_codes_ordered,
+            
             # 一级权重（维度权重）
             'dimensionWeights': {
                 dim_code: {
@@ -377,6 +410,12 @@ def evaluate(priorities):
                     'weight': float(criteria_weights[i]),
                     'priority': priorities[dim_code]
                 }
+                for i, dim_code in enumerate(dim_codes_ordered)
+            },
+            
+            # 权重字典（便于前端使用）
+            'weights': {
+                dim_code: float(criteria_weights[i])
                 for i, dim_code in enumerate(dim_codes_ordered)
             },
             
@@ -404,6 +443,62 @@ def evaluate(priorities):
         # 添加每个测试批次的评估结果
         df_scores_sorted = df_scores.sort_values('rank')
         for idx, row in df_scores_sorted.iterrows():
+            # 计算每个维度的详细计算过程
+            dimension_calculations = {}
+            for i, dim_code in enumerate(dim_codes_ordered):
+                dim_info = INDICATOR_SYSTEM[dim_code]
+                dim_weight = criteria_weights[i]
+                
+                # 计算该维度下每个指标的贡献
+                indicator_contributions = []
+                dim_score_sum = 0
+                
+                for indicator in dim_info['indicators']:
+                    code = indicator['code']
+                    normalized_value = float(df_normalized.loc[idx, code])
+                    entropy_weight = indicator_entropy_weights[code]
+                    final_weight = final_weights[code]
+                    contribution = normalized_value * entropy_weight
+                    
+                    indicator_contributions.append({
+                        'code': code,
+                        'name': indicator['name'],
+                        'rawValue': float(df_raw.loc[idx, code]),
+                        'normalizedValue': normalized_value,
+                        'entropyWeight': float(entropy_weight),
+                        'finalWeight': float(final_weight),
+                        'contribution': float(contribution)
+                    })
+                    
+                    dim_score_sum += contribution
+                
+                # 维度得分 = 各指标贡献之和 / 该维度指标权重之和
+                dim_total_weight = sum(indicator_entropy_weights[ind['code']] for ind in dim_info['indicators'])
+                dim_score = dim_score_sum / dim_total_weight
+                
+                dimension_calculations[dim_code] = {
+                    'dimensionName': dim_info['name'],
+                    'ahpWeight': float(dim_weight),
+                    'dimensionScore': float(dim_score),
+                    'indicators': indicator_contributions,
+                    'calculation': f"维度得分 = Σ(归一化值 × 熵权) / Σ熵权 = {dim_score:.2f}"
+                }
+            
+            # 计算综合得分的详细过程
+            total_score_calculation = []
+            for i, dim_code in enumerate(dim_codes_ordered):
+                dim_weight = criteria_weights[i]
+                dim_score = float(row[f'{dim_code}_score'])
+                contribution = dim_weight * dim_score
+                
+                total_score_calculation.append({
+                    'dimensionCode': dim_code,
+                    'dimensionName': INDICATOR_SYSTEM[dim_code]['name'],
+                    'ahpWeight': float(dim_weight),
+                    'dimensionScore': dim_score,
+                    'contribution': float(contribution)
+                })
+            
             test_result = {
                 'evaluationId': int(row['evaluation_id']),
                 'testId': row['test_id'],
@@ -415,13 +510,23 @@ def evaluate(priorities):
                     dim_code: float(row[f'{dim_code}_score'])
                     for dim_code in dim_codes_ordered
                 },
-                'indicatorScores': {}
+                'indicatorScores': {},
+                'indicatorRawValues': {},
+                'dimensionCalculations': dimension_calculations,  # 添加维度计算过程
+                'totalScoreCalculation': total_score_calculation  # 添加综合得分计算过程
             }
             
-            # 添加指标得分
+            # 添加指标得分（归一化后）
             for dim_code in dim_codes_ordered:
                 test_result['indicatorScores'][dim_code] = {
                     ind['code']: float(df_normalized.loc[idx, ind['code']])
+                    for ind in INDICATOR_SYSTEM[dim_code]['indicators']
+                }
+            
+            # 添加指标原始值（归一化前）
+            for dim_code in dim_codes_ordered:
+                test_result['indicatorRawValues'][dim_code] = {
+                    ind['code']: float(df_raw.loc[idx, ind['code']])
                     for ind in INDICATOR_SYSTEM[dim_code]['indicators']
                 }
             
@@ -445,10 +550,18 @@ if __name__ == '__main__':
         # 从标准输入读取 JSON
         input_json = sys.stdin.read().strip()
         
+        # 调试日志：记录接收到的输入
+        sys.stderr.write(f"[DEBUG] 接收到的输入: {input_json}\n")
+        sys.stderr.flush()
+        
         if input_json:
             # 解析 JSON 输入
             input_data = json.loads(input_json)
             priorities = input_data.get('priorities', {})
+            
+            # 调试日志：记录解析后的优先级
+            sys.stderr.write(f"[DEBUG] 解析后的优先级: {priorities}\n")
+            sys.stderr.flush()
         else:
             # 默认优先级（用于测试）
             priorities = {
@@ -461,9 +574,18 @@ if __name__ == '__main__':
                 'HO': 7,  # 人为操作
                 'RS': 8   # 响应能力
             }
+            
+            # 调试日志：使用默认优先级
+            sys.stderr.write(f"[DEBUG] 使用默认优先级: {priorities}\n")
+            sys.stderr.flush()
         
         # 执行评估
         result = evaluate(priorities)
+        
+        # 调试日志：记录计算结果中的权重
+        if result.get('success'):
+            sys.stderr.write(f"[DEBUG] 计算成功，维度权重: {result.get('dimensionWeights', {})}\n")
+            sys.stderr.flush()
         
         # 输出 JSON 结果
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -475,5 +597,7 @@ if __name__ == '__main__':
             'message': f'脚本执行失败: {str(e)}',
             'error': str(e)
         }
+        sys.stderr.write(f"[ERROR] 脚本执行失败: {str(e)}\n")
+        sys.stderr.flush()
         print(json.dumps(error_result, ensure_ascii=False, indent=2))
         sys.exit(1)

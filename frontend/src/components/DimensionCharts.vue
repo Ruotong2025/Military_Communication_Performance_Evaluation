@@ -18,7 +18,7 @@
           <h3 class="dimension-title">
             【{{ dim.name }}】
             <el-tag type="primary" size="large" effect="dark">
-              AHP权重: {{ (ahpWeights[dim.code] * 100).toFixed(2) }}%
+              AHP权重: {{ (evaluationResult.dimensionWeights[dim.code]?.weight * 100 || 0).toFixed(2) }}%
             </el-tag>
           </h3>
         </div>
@@ -49,7 +49,7 @@
                 width="150"
               >
                 <template #default="{ row }">
-                  <span>{{ row.indicators[indicator.indicatorCode]?.toFixed(1) || '-' }}</span>
+                  <span>{{ formatIndicatorValue(indicator.indicatorCode, row.indicators[indicator.indicatorCode]) }}</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -67,10 +67,6 @@ import * as echarts from 'echarts'
 
 const props = defineProps({
   evaluationResult: {
-    type: Object,
-    required: true
-  },
-  ahpWeights: {
     type: Object,
     required: true
   }
@@ -92,31 +88,28 @@ const charts = {}
 
 // 获取维度的指标列表
 const getDimensionIndicators = (dimCode) => {
-  const firstBatch = props.evaluationResult.testBatchScores[0]
-  if (!firstBatch) return []
+  if (!props.evaluationResult.indicatorWeights) return []
   
-  const dimScore = firstBatch.dimensionScores[dimCode]
-  if (!dimScore || !dimScore.indicators) return []
+  const dimWeights = props.evaluationResult.indicatorWeights[dimCode]
+  if (!dimWeights) return []
   
-  return Object.values(dimScore.indicators)
+  return dimWeights.indicators.map(ind => ({
+    indicatorCode: ind.code,
+    indicatorName: ind.name,
+    entropyWeight: ind.entropyWeight,
+    finalWeight: ind.finalWeight
+  }))
 }
 
 // 获取详细数据
 const getDetailData = (dimCode) => {
-  return props.evaluationResult.testBatchScores.map(batch => {
-    const dimScore = batch.dimensionScores[dimCode]
-    const indicators = {}
-    
-    if (dimScore && dimScore.indicators) {
-      Object.entries(dimScore.indicators).forEach(([key, value]) => {
-        indicators[key] = value.normalizedValue
-      })
-    }
-    
+  if (!props.evaluationResult.evaluationResults) return []
+  
+  return props.evaluationResult.evaluationResults.map(result => {
     return {
-      testId: batch.testId,
-      score: dimScore?.score || 0,
-      indicators
+      testId: result.testId,
+      score: result.dimensionScores[dimCode] || 0,
+      indicators: result.indicatorRawValues?.[dimCode] || {}  // 使用原始值
     }
   })
 }
@@ -128,6 +121,64 @@ const getScoreType = (score) => {
   if (score >= 70) return 'warning'
   if (score >= 60) return 'info'
   return 'danger'
+}
+
+// 格式化指标值
+const formatIndicatorValue = (indicatorCode, value) => {
+  if (value === null || value === undefined) return '-'
+  
+  // 百分比类型的指标（rate, ratio）
+  if (indicatorCode.includes('rate') || indicatorCode.includes('ratio')) {
+    return (value * 100).toFixed(2) + '%'
+  }
+  
+  // 时间类型的指标（ms, duration）
+  if (indicatorCode.includes('_ms') || indicatorCode.includes('duration') || indicatorCode.includes('time')) {
+    return value.toFixed(2) + ' ms'
+  }
+  
+  // 距离类型的指标
+  if (indicatorCode.includes('distance')) {
+    return value.toFixed(2) + ' km'
+  }
+  
+  // 频率类型的指标
+  if (indicatorCode.includes('frequency')) {
+    return value.toFixed(4)
+  }
+  
+  // 概率类型的指标
+  if (indicatorCode.includes('probability')) {
+    return (value * 100).toFixed(2) + '%'
+  }
+  
+  // 吞吐量类型的指标
+  if (indicatorCode.includes('throughput')) {
+    return value.toFixed(2) + ' Mbps'
+  }
+  
+  // 频谱效率
+  if (indicatorCode.includes('efficiency')) {
+    return value.toFixed(2) + ' bps/Hz'
+  }
+  
+  // 信干噪比
+  if (indicatorCode.includes('sinr')) {
+    return value.toFixed(2) + ' dB'
+  }
+  
+  // 抗干扰余量
+  if (indicatorCode.includes('margin')) {
+    return value.toFixed(2) + ' dB'
+  }
+  
+  // 抗拦截能力（0-1之间的值）
+  if (indicatorCode.includes('resistance')) {
+    return value.toFixed(4)
+  }
+  
+  // 默认保留2位小数
+  return value.toFixed(2)
 }
 
 // 渲染所有图表
@@ -142,17 +193,17 @@ const renderDimensionChart = (dimCode, dimName) => {
   const chartEl = chartRefs.value[dimCode]
   if (!chartEl) return
   
-  // 初始化图表
+  // 初始化图表（使用 SVG 渲染器以避免中文乱码）
   if (!charts[dimCode]) {
-    charts[dimCode] = echarts.init(chartEl)
+    charts[dimCode] = echarts.init(chartEl, null, { renderer: 'svg' })
   }
   
   const chart = charts[dimCode]
   
   // 准备数据
-  const testIds = props.evaluationResult.testBatchScores.map(b => b.testId)
-  const dimScores = props.evaluationResult.testBatchScores.map(
-    b => b.dimensionScores[dimCode]?.score || 0
+  const testIds = props.evaluationResult.evaluationResults.map(r => r.testId)
+  const dimScores = props.evaluationResult.evaluationResults.map(
+    r => r.dimensionScores[dimCode] || 0
   )
   
   // 获取指标数据
@@ -164,9 +215,8 @@ const renderDimensionChart = (dimCode, dimName) => {
   
   // 为每个指标创建柱状图系列
   indicators.forEach((indicator, index) => {
-    const data = props.evaluationResult.testBatchScores.map(batch => {
-      const dimScore = batch.dimensionScores[dimCode]
-      return dimScore?.indicators[indicator.indicatorCode]?.normalizedValue || 0
+    const data = props.evaluationResult.evaluationResults.map(result => {
+      return result.indicatorScores[dimCode]?.[indicator.indicatorCode] || 0
     })
     
     series.push({
@@ -183,14 +233,15 @@ const renderDimensionChart = (dimCode, dimName) => {
         position: 'top',
         formatter: (params) => params.value > 5 ? params.value.toFixed(0) : '',
         fontSize: 10,
-        color: '#001f3f'
+        color: '#001f3f',
+        fontFamily: 'Microsoft YaHei, SimHei, Arial, sans-serif'
       }
     })
   })
   
   // 添加维度得分折线
   series.push({
-    name: '算法得分',
+    name: '维度得分',
     type: 'line',
     data: dimScores,
     yAxisIndex: 0,
@@ -208,30 +259,36 @@ const renderDimensionChart = (dimCode, dimName) => {
     label: {
       show: true,
       position: 'top',
-      formatter: '{c}',
+      formatter: (params) => params.value.toFixed(2),
       fontSize: 12,
       fontWeight: 'bold',
       color: '#FF4136',
       backgroundColor: '#FFD700',
       padding: [4, 8],
-      borderRadius: 4
+      borderRadius: 4,
+      fontFamily: 'Microsoft YaHei, SimHei, Arial, sans-serif'
     },
     z: 10
   })
   
+  // 获取 AHP 权重
+  const ahpWeight = props.evaluationResult.dimensionWeights?.[dimCode]?.weight || 0
+  
   const option = {
     title: {
       text: `${dimName} - 细粒度指标分析`,
-      subtext: `AHP权重: ${(props.ahpWeights[dimCode] * 100).toFixed(2)}%`,
+      subtext: `AHP权重: ${(ahpWeight * 100).toFixed(2)}%`,
       left: 'center',
       textStyle: {
         color: '#001f3f',
         fontSize: 18,
-        fontWeight: 'bold'
+        fontWeight: 'bold',
+        fontFamily: 'Microsoft YaHei, SimHei, Arial, sans-serif'
       },
       subtextStyle: {
         color: '#0074D9',
-        fontSize: 14
+        fontSize: 14,
+        fontFamily: 'Microsoft YaHei, SimHei, Arial, sans-serif'
       }
     },
     tooltip: {
@@ -243,7 +300,8 @@ const renderDimensionChart = (dimCode, dimName) => {
       borderColor: '#0074D9',
       borderWidth: 2,
       textStyle: {
-        color: '#fff'
+        color: '#fff',
+        fontFamily: 'Microsoft YaHei, SimHei, Arial, sans-serif'
       },
       formatter: (params) => {
         let result = `<div style="font-weight:bold;margin-bottom:5px;">${params[0].axisValue}</div>`
@@ -254,27 +312,37 @@ const renderDimensionChart = (dimCode, dimName) => {
       }
     },
     legend: {
-      data: [...indicators.map(i => i.indicatorName), '算法得分'],
-      top: 40,
+      data: [...indicators.map(i => i.indicatorName), '维度得分'],
+      top: 50,
+      left: 'center',
       textStyle: {
-        color: '#001f3f'
+        color: '#001f3f',
+        fontFamily: 'Microsoft YaHei, SimHei, Arial, sans-serif',
+        fontSize: 11
       },
-      type: 'scroll'
+      type: 'scroll',
+      pageIconSize: 12,
+      pageTextStyle: {
+        fontSize: 11
+      }
     },
     grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '15%',
-      top: 100,
+      left: '5%',
+      right: '5%',
+      bottom: '18%',
+      top: 120,
       containLabel: true
     },
     xAxis: {
       type: 'category',
       data: testIds,
       axisLabel: {
-        rotate: 45,
+        rotate: 30,
         color: '#001f3f',
-        fontSize: 12
+        fontSize: 11,
+        fontFamily: 'Microsoft YaHei, SimHei, Arial, sans-serif',
+        interval: 0,
+        margin: 10
       },
       axisLine: {
         lineStyle: {
@@ -286,11 +354,15 @@ const renderDimensionChart = (dimCode, dimName) => {
     yAxis: {
       type: 'value',
       name: '归一化得分 (0-100)',
+      nameTextStyle: {
+        fontFamily: 'Microsoft YaHei, SimHei, Arial, sans-serif'
+      },
       min: 0,
       max: 110,
       axisLabel: {
         color: '#001f3f',
-        fontSize: 12
+        fontSize: 12,
+        fontFamily: 'Microsoft YaHei, SimHei, Arial, sans-serif'
       },
       axisLine: {
         show: true,
@@ -306,44 +378,7 @@ const renderDimensionChart = (dimCode, dimName) => {
         }
       }
     },
-    series: series,
-    // 添加参考线
-    markLine: {
-      silent: true,
-      symbol: 'none',
-      data: [
-        {
-          yAxis: 90,
-          lineStyle: {
-            color: '#2ECC40',
-            type: 'dashed',
-            width: 2
-          },
-          label: {
-            formatter: '优秀线(90)',
-            position: 'end',
-            color: '#2ECC40',
-            fontSize: 12,
-            fontWeight: 'bold'
-          }
-        },
-        {
-          yAxis: 60,
-          lineStyle: {
-            color: '#FF851B',
-            type: 'dashed',
-            width: 2
-          },
-          label: {
-            formatter: '及格线(60)',
-            position: 'end',
-            color: '#FF851B',
-            fontSize: 12,
-            fontWeight: 'bold'
-          }
-        }
-      ]
-    }
+    series: series
   }
   
   chart.setOption(option)
@@ -411,7 +446,7 @@ onMounted(() => {
     }
 
     .chart-container {
-      height: 450px;
+      height: 500px;
       margin-bottom: 20px;
     }
 

@@ -50,11 +50,16 @@ public class PythonEvaluationService {
             // 构建命令（不传递 JSON 参数）
             ProcessBuilder processBuilder = new ProcessBuilder(
                     pythonExecutable,
+                    "-u",  // 无缓冲模式
                     pythonScriptPath
             );
 
-            // 设置工作目录
-            processBuilder.redirectErrorStream(true);
+            // 设置环境变量，确保 Python 使用 UTF-8 编码
+            Map<String, String> env = processBuilder.environment();
+            env.put("PYTHONIOENCODING", "utf-8");
+
+            // 不要重定向 stderr 到 stdout，分别读取
+            // processBuilder.redirectErrorStream(true);  // 注释掉这行
 
             // 启动进程
             Process process = processBuilder.start();
@@ -67,6 +72,27 @@ public class PythonEvaluationService {
 
             // 读取输出
             StringBuilder output = new StringBuilder();
+            StringBuilder errorOutput = new StringBuilder();
+            
+            // 在单独的线程中读取 stderr（调试信息）
+            Thread errorThread = new Thread(() -> {
+                try (BufferedReader errorReader = new BufferedReader(
+                        new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = errorReader.readLine()) != null) {
+                        errorOutput.append(line).append("\n");
+                        // 记录调试信息到日志
+                        if (line.contains("[DEBUG]") || line.contains("[ERROR]")) {
+                            log.info("Python 调试信息: {}", line);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("读取 Python stderr 失败", e);
+                }
+            });
+            errorThread.start();
+            
+            // 读取标准输出（JSON 结果）
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
@@ -74,6 +100,9 @@ public class PythonEvaluationService {
                     output.append(line).append("\n");
                 }
             }
+            
+            // 等待 stderr 读取完成
+            errorThread.join(5000);
 
             // 等待进程完成
             boolean finished = process.waitFor(pythonTimeout, TimeUnit.SECONDS);
