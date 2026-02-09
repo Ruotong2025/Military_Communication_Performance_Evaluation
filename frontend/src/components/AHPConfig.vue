@@ -127,36 +127,11 @@
         <div class="entropy-weights-section" v-if="pythonResult && pythonResult.indicatorWeights">
           <h3 class="section-title">
             <el-icon><DataAnalysis /></el-icon>
-            熵权法指标权重与得分计算详情
+            熵权法指标权重与得分计算详情 - 所有实验对比
           </h3>
           
-          <!-- 测试批次选择器 -->
-          <div class="batch-selector" v-if="pythonResult.evaluationResults && pythonResult.evaluationResults.length > 0">
-            <el-form inline>
-              <el-form-item label="选择测试批次：">
-                <el-select v-model="selectedBatchId" placeholder="请选择测试批次" style="width: 300px;">
-                  <el-option
-                    v-for="result in pythonResult.evaluationResults"
-                    :key="result.evaluationId"
-                    :label="`实验编号: ${result.testId}`"
-                    :value="result.evaluationId"
-                  />
-                </el-select>
-              </el-form-item>
-              <el-form-item>
-                <el-tag v-if="selectedBatch" type="success" size="large" effect="dark">
-                  综合得分: {{ selectedBatch.totalScore.toFixed(2) }}
-                </el-tag>
-              </el-form-item>
-              <el-form-item>
-                <el-tag v-if="selectedBatch" type="warning" size="large" effect="dark">
-                  排名: {{ selectedBatch.rank }}
-                </el-tag>
-              </el-form-item>
-            </el-form>
-          </div>
-          
-          <el-collapse accordion v-if="selectedBatch">
+          <!-- 按维度展示大表格 -->
+          <el-collapse v-if="pythonResult.evaluationResults && pythonResult.evaluationResults.length > 0" accordion>
             <el-collapse-item
               v-for="dim in dimensions"
               :key="dim.code"
@@ -168,74 +143,77 @@
                   <el-tag type="primary" effect="dark">
                     AHP权重: {{ (pythonResult.dimensionWeights[dim.code].weight * 100).toFixed(2) }}%
                   </el-tag>
-                  <el-tag v-if="selectedBatch.dimensionCalculations[dim.code]" type="success" effect="dark">
-                    维度得分: {{ selectedBatch.dimensionCalculations[dim.code].dimensionScore.toFixed(2) }}
-                  </el-tag>
                 </div>
               </template>
               
-              <div v-if="selectedBatch.dimensionCalculations[dim.code]">
+              <div>
                 <!-- 计算公式说明 -->
                 <el-alert
-                  :title="`维度得分 = Σ(归一化得分 × 熵权值 × AHP权重) = Σ贡献值`"
+                  :title="`维度得分 = Σ(归一化得分 × 熵权值 × AHP权重)`"
                   type="info"
                   :closable="false"
                   style="margin-bottom: 15px;"
                 >
                   <template #default>
                     <p style="margin: 5px 0; font-size: 13px;">
-                      其中 AHP权重 = {{ (pythonResult.dimensionWeights[dim.code].weight * 100).toFixed(2) }}%
+                      AHP权重 = {{ (pythonResult.dimensionWeights[dim.code].weight * 100).toFixed(2) }}% | 
+                      贡献值 = 归一化得分 × 熵权值 × AHP权重
                     </p>
                   </template>
                 </el-alert>
                 
-                <!-- 详细计算表格 -->
+                <!-- 横向对比大表格 -->
                 <el-table
-                  :data="selectedBatch.dimensionCalculations[dim.code].indicators"
+                  :data="getComparisonTableData(dim.code)"
                   border
                   size="small"
                   style="width: 100%"
-                  show-summary
-                  :summary-method="(param) => getSummaryRow(param, dim.code)"
+                  :max-height="600"
                 >
-                  <el-table-column prop="name" label="指标名称" width="180" fixed />
-                  
-                  <el-table-column label="原始数据" width="120" align="center">
+                  <!-- 指标名称列（固定） -->
+                  <el-table-column prop="indicatorName" label="指标名称" width="150" fixed>
                     <template #default="{ row }">
-                      <el-tag type="info">{{ row.rawValue.toFixed(4) }}</el-tag>
+                      <div style="font-weight: bold; font-size: 13px;">{{ row.indicatorName }}</div>
+                      <div v-if="!row.isTotal" style="font-size: 11px; color: #666; margin-top: 3px;">
+                        熵权: {{ row.entropyWeight }}
+                      </div>
                     </template>
                   </el-table-column>
                   
-                  <el-table-column label="归一化得分" width="120" align="center">
-                    <template #default="{ row }">
-                      <el-tag type="success">{{ row.normalizedValue.toFixed(2) }}</el-tag>
+                  <!-- 每个实验一列 -->
+                  <el-table-column
+                    v-for="result in pythonResult.evaluationResults"
+                    :key="result.evaluationId"
+                    :label="result.testId"
+                    width="160"
+                    align="center"
+                  >
+                    <template #header>
+                      <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 0;">
+                        <span style="font-weight: bold; font-size: 13px;">{{ result.testId }}</span>
+                        <el-tag type="success" size="small" effect="plain">得分: {{ result.totalScore.toFixed(2) }}</el-tag>
+                        <el-tag type="warning" size="small" effect="plain">排名: {{ result.rank }}</el-tag>
+                      </div>
                     </template>
-                  </el-table-column>
-                  
-                  <el-table-column label="熵权值" width="100" align="center">
                     <template #default="{ row }">
-                      <span style="font-size: 12px;">{{ (row.entropyWeight * 100).toFixed(2) }}%</span>
-                    </template>
-                  </el-table-column>
-                  
-                  <el-table-column label="贡献值" width="120" align="center">
-                    <template #default="{ row }">
-                      <el-tag type="warning">{{ getContribution(row, dim.code).toFixed(4) }}</el-tag>
-                    </template>
-                  </el-table-column>
-                  
-                  <el-table-column label="计算过程" align="left" min-width="350">
-                    <template #default="{ row }">
-                      <span style="font-size: 12px; color: #666; font-family: monospace;">
-                        {{ row.normalizedValue.toFixed(2) }} × {{ (row.entropyWeight * 100).toFixed(2) }}% × {{ (pythonResult.dimensionWeights[dim.code].weight * 100).toFixed(2) }}%
-                        = {{ getContribution(row, dim.code).toFixed(4) }}
-                      </span>
-                    </template>
-                  </el-table-column>
-                  
-                  <el-table-column label="最终权重" width="100" align="center">
-                    <template #default="{ row }">
-                      <span style="font-size: 12px;">{{ (row.finalWeight * 100).toFixed(2) }}%</span>
+                      <!-- 维度得分行 -->
+                      <div v-if="row.isTotal" style="background: linear-gradient(135deg, #f0f9ff, #e0f2fe); padding: 10px; border-radius: 4px;">
+                        <el-tag type="danger" size="large" effect="dark">
+                          {{ row.experiments[result.evaluationId] }}
+                        </el-tag>
+                      </div>
+                      <!-- 指标数据行 -->
+                      <div v-else style="display: flex; flex-direction: column; gap: 4px; padding: 8px 5px; line-height: 1.4;">
+                        <div style="font-size: 11px; color: #666;">
+                          原始: <span style="font-weight: bold; color: #333;">{{ row.experiments[result.evaluationId]?.raw }}</span>
+                        </div>
+                        <div style="font-size: 11px; color: #666;">
+                          归一: <el-tag type="success" size="small" effect="plain">{{ row.experiments[result.evaluationId]?.normalized }}</el-tag>
+                        </div>
+                        <div style="font-size: 11px; color: #666;">
+                          贡献: <el-tag type="warning" size="small" effect="plain">{{ row.experiments[result.evaluationId]?.contribution }}</el-tag>
+                        </div>
+                      </div>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -243,7 +221,7 @@
             </el-collapse-item>
           </el-collapse>
           
-          <!-- 如果没有选择批次，显示权重信息 -->
+          <!-- 如果没有实验数据，显示权重信息 -->
           <el-collapse accordion v-else>
             <el-collapse-item
               v-for="dim in dimensions"
@@ -326,33 +304,6 @@ const pythonResult = ref(null)
 const matrixTableData = ref([])
 const weightChartRef = ref(null)
 let weightChart = null
-
-// 测试批次选择
-const selectedBatchId = ref(null)
-const selectedBatch = ref(null)
-
-// 监听批次选择变化
-watch(selectedBatchId, (newBatchId) => {
-  if (newBatchId && pythonResult.value && pythonResult.value.evaluationResults) {
-    selectedBatch.value = pythonResult.value.evaluationResults.find(
-      result => result.evaluationId === newBatchId
-    )
-    console.log('[DEBUG] 选择的批次:', selectedBatch.value)
-  } else {
-    selectedBatch.value = null
-  }
-})
-
-// 监听 pythonResult 变化，自动选择第一个批次
-watch(pythonResult, (newResult) => {
-  if (newResult && newResult.evaluationResults && newResult.evaluationResults.length > 0) {
-    selectedBatchId.value = newResult.evaluationResults[0].evaluationId
-    console.log('[DEBUG] 自动选择第一个批次 ID:', selectedBatchId.value)
-  } else {
-    selectedBatchId.value = null
-    selectedBatch.value = null
-  }
-})
 
 // 计算AHP
 const calculateAHP = async () => {
@@ -494,44 +445,131 @@ const getContribution = (row, dimCode) => {
   return normalizedValue * entropyWeight * ahpWeight
 }
 
-// 计算汇总行
-const getSummaryRow = (param, dimCode) => {
-  const { columns, data } = param
-  const sums = []
+// 获取对比表格数据
+const getComparisonTableData = (dimCode) => {
+  if (!pythonResult.value || !pythonResult.value.evaluationResults) return []
   
-  columns.forEach((column, index) => {
-    if (index === 0) {
-      sums[index] = '合计'
-      return
+  const dimInfo = INDICATOR_SYSTEM[dimCode]
+  if (!dimInfo) return []
+  
+  const tableData = []
+  
+  // 为每个指标创建一行
+  dimInfo.indicators.forEach(indicator => {
+    const row = {
+      indicatorName: indicator.name,
+      indicatorCode: indicator.code,
+      entropyWeight: `${(pythonResult.value.indicatorWeights[dimCode].indicators.find(ind => ind.code === indicator.code)?.entropyWeight * 100 || 0).toFixed(2)}%`,
+      experiments: {},
+      isTotal: false
     }
     
-    if (column.label === '贡献值') {
-      // 贡献值列：计算所有指标的贡献值总和（即维度得分）
+    // 为每个实验添加数据
+    pythonResult.value.evaluationResults.forEach(result => {
+      const dimCalc = result.dimensionCalculations[dimCode]
+      if (dimCalc) {
+        const indicatorData = dimCalc.indicators.find(ind => ind.code === indicator.code)
+        if (indicatorData) {
+          row.experiments[result.evaluationId] = {
+            raw: indicatorData.rawValue.toFixed(4),
+            normalized: indicatorData.normalizedValue.toFixed(2),
+            contribution: getContribution(indicatorData, dimCode).toFixed(4)
+          }
+        }
+      }
+    })
+    
+    tableData.push(row)
+  })
+  
+  // 添加维度得分行
+  const totalRow = {
+    indicatorName: '维度得分',
+    indicatorCode: 'total',
+    entropyWeight: '',
+    experiments: {},
+    isTotal: true
+  }
+  
+  pythonResult.value.evaluationResults.forEach(result => {
+    const dimCalc = result.dimensionCalculations[dimCode]
+    if (dimCalc) {
       let totalContribution = 0
-      data.forEach(row => {
-        totalContribution += getContribution(row, dimCode)
+      dimCalc.indicators.forEach(indicator => {
+        totalContribution += getContribution(indicator, dimCode)
       })
-      
-      sums[index] = h('div', { style: 'display: flex; flex-direction: column; align-items: center;' }, [
-        h('el-tag', { type: 'danger', size: 'large', effect: 'dark' }, `维度得分 = ${totalContribution.toFixed(4)}`)
-      ])
-    } else if (column.label === '归一化得分') {
-      // 归一化得分列：显示平均值
-      const values = data.map(item => Number(item.normalizedValue))
-      const sum = values.reduce((prev, curr) => prev + curr, 0)
-      const avg = sum / values.length
-      sums[index] = `平均 = ${avg.toFixed(2)}`
-    } else if (column.label === '熵权值') {
-      // 熵权值列：显示总和
-      const values = data.map(item => Number(item.entropyWeight))
-      const sum = values.reduce((prev, curr) => prev + curr, 0)
-      sums[index] = `Σ = ${(sum * 100).toFixed(2)}%`
-    } else {
-      sums[index] = ''
+      totalRow.experiments[result.evaluationId] = totalContribution.toFixed(4)
     }
   })
   
-  return sums
+  tableData.push(totalRow)
+  
+  return tableData
+}
+
+// INDICATOR_SYSTEM 定义（与 Python 保持一致）
+const INDICATOR_SYSTEM = {
+  'RL': {
+    'name': '可靠性',
+    'indicators': [
+      {'code': 'RL_communication_availability_rate', 'name': '通信可用性'},
+      {'code': 'RL_communication_success_rate', 'name': '通信成功率'},
+      {'code': 'RL_recovery_duration_ms', 'name': '恢复时长'},
+      {'code': 'RL_crash_rate', 'name': '崩溃比例'}
+    ]
+  },
+  'SC': {
+    'name': '安全性',
+    'indicators': [
+      {'code': 'SC_key_compromise_frequency', 'name': '密钥泄露频率'},
+      {'code': 'SC_detection_probability', 'name': '被侦察概率'},
+      {'code': 'SC_interception_resistance', 'name': '抗拦截能力'}
+    ]
+  },
+  'AJ': {
+    'name': '抗干扰性',
+    'indicators': [
+      {'code': 'AJ_avg_sinr', 'name': '平均信干噪比'},
+      {'code': 'AJ_avg_jamming_margin', 'name': '平均抗干扰余量'}
+    ]
+  },
+  'EF': {
+    'name': '有效性',
+    'indicators': [
+      {'code': 'EF_avg_communication_distance', 'name': '平均通信距离'},
+      {'code': 'EF_avg_ber', 'name': '平均误码率'},
+      {'code': 'EF_avg_plr', 'name': '平均丢包率'},
+      {'code': 'EF_task_success_rate', 'name': '任务成功率'}
+    ]
+  },
+  'PO': {
+    'name': '处理能力',
+    'indicators': [
+      {'code': 'PO_effective_throughput', 'name': '有效吞吐量'},
+      {'code': 'PO_spectral_efficiency', 'name': '频谱效率'}
+    ]
+  },
+  'NC': {
+    'name': '组网能力',
+    'indicators': [
+      {'code': 'NC_avg_network_setup_duration_ms', 'name': '平均组网时长'},
+      {'code': 'NC_avg_connectivity_rate', 'name': '平均连通率'}
+    ]
+  },
+  'HO': {
+    'name': '人为操作',
+    'indicators': [
+      {'code': 'HO_avg_operator_reaction_time_ms', 'name': '平均操作员反应时间'},
+      {'code': 'HO_operation_success_rate', 'name': '操作成功率'}
+    ]
+  },
+  'RS': {
+    'name': '响应能力',
+    'indicators': [
+      {'code': 'RS_avg_call_setup_duration_ms', 'name': '平均呼叫建立时长'},
+      {'code': 'RS_avg_transmission_delay_ms', 'name': '平均传输时延'}
+    ]
+  }
 }
 
 // 重置优先级
@@ -610,17 +648,20 @@ const resetPriorities = () => {
     }
 
     .entropy-weights-section {
-      .batch-selector {
-        background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
-        padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
+      :deep(.el-tabs--border-card) {
         border: 2px solid var(--navy-light);
+        box-shadow: 0 2px 12px 0 rgba(0, 31, 63, 0.1);
+      }
 
-        :deep(.el-form-item__label) {
-          font-weight: bold;
-          color: var(--navy-primary);
-        }
+      :deep(.el-tabs__item) {
+        font-size: 14px;
+        padding: 0 20px;
+      }
+
+      :deep(.el-tabs__item.is-active) {
+        background: linear-gradient(135deg, var(--navy-primary), var(--navy-secondary));
+        color: white;
+        font-weight: bold;
       }
 
       :deep(.el-collapse-item__header) {
