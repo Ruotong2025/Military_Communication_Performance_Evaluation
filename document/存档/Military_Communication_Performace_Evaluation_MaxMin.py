@@ -255,643 +255,122 @@ print(f"\n总计: 8个维度, 21个指标")
 print()
 
 # ============================================================================
-# 第三部分：军事级别标准分段配置
+# 第三部分：数据标准化（0-100分）
 # ============================================================================
 
-print("步骤3: 定义军事级别标准分段")
+print("步骤3: 数据标准化（归一化到0-100分）")
 print("-"*80)
-print("使用归一化方法: 基于军事通信标准的分段评分")
-print("说明: 参考GJB军标、3GPP、ITU-T等标准，结合军事通信严格要求")
-print("      每个指标都有明确的性能分级标准")
+print("使用归一化方法: Min-Max归一化")
+print("说明: 所有指标统一使用Min-Max归一化，简单直观，适合小样本数据")
+print("      极小值指标（误码率、丢包率）先进行对数变换")
 print()
 
-# 军事无线通信标准配置（超短波、短波、卫星通信）
-# 参考标准：
-# 【国际标准】
-# - ITU-R P.533：短波（HF）传播预测方法
-# - ITU-R P.1546：陆地移动业务（VHF/UHF）传播预测
-# - ITU-R M.1079：移动卫星业务性能目标
-# - ITU-R M.1225：IMT-2000无线电接口规范
-# - ITU-R M.1645：频谱效率评估框架
-# - ITU-T G.114：单向传输时延建议
-# - ITU-T G.826：数字传输系统误码性能
-# - ITU-T Y.1541：IP网络性能参数
-# 【北约标准（公开）】
-# - STANAG 4285：短波（HF）数据传输标准（1.2-9.6kbps）
-# - STANAG 4415：短波（HF）自动链路建立（ALE）
-# - STANAG 4538：短波（HF）自动链路建立（ALE）增强版
-# - STANAG 4406：军事消息处理系统
-# 【行业标准】
-# - TIA-102 (P25)：专业数字无线电标准（美国公共安全）
-# - ETSI EN 300 392 (TETRA)：陆地集群无线电标准
-# - IEEE 802.11：无线局域网（扩频技术参考）
-# - IEEE 802.15.4：低速无线个域网（自组网参考）
-# 【技术参考】
-# - 超短波电台：VHF/UHF 30-512MHz，视距5-50km，空地100-400km，数据速率64kbps-2Mbps
-# - 短波电台：HF 1.5-30MHz，天波1000-4000km，数据速率1.2-9.6kbps
-# - 卫星通信：GEO时延250-300ms，LEO时延20-50ms，数据速率1-10Mbps
-
-MILITARY_STANDARDS = {
-    # ========== C1. 响应能力 (RS) ==========
-    'RS_avg_call_setup_duration_ms': {
-        'name': '平均呼叫建立时长',
-        'unit': 'ms',
-        'direction': 'min',
-        'type': 'threshold',
-        'segments': [
-            # (阈值, 基准分, 等级说明)
-            # 参考：超短波快速呼叫0.5-2s，短波ALE 3-10s，卫星1-3s
-            (500, 100, '优秀 - 超短波快速呼叫'),     # <500ms: 超短波快速
-            (1500, 90, '良好 - 超短波标准'),         # 0.5-1.5s: 超短波标准
-            (3000, 80, '中上 - 卫星/短波良好'),      # 1.5-3s: 卫星标准
-            (5000, 70, '中等 - 短波ALE可接受'),      # 3-5s: 短波可接受
-            (8000, 60, '及格 - 短波ALE勉强'),        # 5-8s: 短波勉强
-            (10000, 40, '较差 - 影响作战'),          # 8-10s: 较差
-            (float('inf'), 20, '不合格 - 严重延迟')  # >10s: 不合格
-        ],
-        'reference': 'STANAG 4538 (HF ALE), TIA-102 (P25), 超短波电台技术指标'
-    },
-    
-    'RS_avg_transmission_delay_ms': {
-        'name': '平均传输时延',
-        'unit': 'ms',
-        'direction': 'min',
-        'type': 'threshold',
-        'segments': [
-            # 参考：超短波10-50ms，短波100-200ms，GEO卫星250-300ms，LEO卫星20-50ms
-            (20, 100, '优秀 - 超短波/LEO卫星'),      # <20ms: 超短波直通
-            (50, 90, '良好 - 超短波标准'),           # 20-50ms: 超短波/LEO
-            (100, 80, '中上 - 短波良好'),            # 50-100ms: 短波单跳良好
-            (200, 70, '中等 - 短波标准'),            # 100-200ms: 短波标准
-            (280, 60, '及格 - GEO卫星标准'),         # 200-280ms: GEO卫星
-            (400, 40, '较差 - 影响实时性'),          # 280-400ms: 较差
-            (float('inf'), 20, '不合格 - 无法实时')  # >400ms: 不合格
-        ],
-        'reference': 'ITU-T G.114 (语音时延), ITU-R M.1079 (卫星), 短波通信标准'
-    },
-    
-    # ========== C2. 处理能力 (PO) ==========
-    'PO_effective_throughput': {
-        'name': '有效吞吐量',
-        'unit': 'Mbps',
-        'direction': 'max',
-        'type': 'threshold',
-        'segments': [
-            # 参考：短波1.2-9.6kbps，超短波窄带64-256kbps，超短波宽带1-2Mbps，卫星1-10Mbps
-            (5, 100, '优秀 - 宽带卫星/超短波'),      # >5Mbps: 宽带卫星
-            (2, 90, '良好 - 超短波宽带'),            # 2-5Mbps: 超短波宽带
-            (1, 80, '中上 - 超短波宽带标准'),        # 1-2Mbps: 超短波宽带标准
-            (0.256, 70, '中等 - 超短波窄带'),        # 256kbps-1Mbps: 超短波窄带高端
-            (0.064, 60, '及格 - 超短波窄带标准'),    # 64-256kbps: 超短波窄带
-            (0.0096, 40, '较差 - 短波高速'),         # 9.6-64kbps: 短波高速
-            (0, 20, '不合格 - 短波低速')             # <9.6kbps: 短波低速
-        ],
-        'reference': 'STANAG 4285/4415 (HF 1.2-9.6kbps), TETRA (25-100kbps), 超短波电台技术指标'
-    },
-    
-    'PO_spectral_efficiency': {
-        'name': '频谱效率',
-        'unit': 'bps/Hz',
-        'direction': 'max',
-        'type': 'threshold',
-        'segments': [
-            # 参考：短波SSB约1bps/Hz，超短波FM 0.5-1bps/Hz，数字调制QAM 2-4bps/Hz
-            (4, 100, '优秀 - 高阶调制QAM'),          # >4 bps/Hz: 高阶QAM
-            (3, 90, '良好 - 16QAM/64QAM'),          # 3-4 bps/Hz: 16/64QAM
-            (2, 80, '中上 - QPSK/8PSK'),            # 2-3 bps/Hz: QPSK/8PSK
-            (1, 70, '中等 - 短波SSB标准'),           # 1-2 bps/Hz: SSB标准
-            (0.5, 60, '及格 - 超短波FM'),            # 0.5-1 bps/Hz: FM
-            (0.3, 40, '较差 - 低效调制'),            # 0.3-0.5 bps/Hz: 低效
-            (0, 20, '不合格 - 极低效')               # <0.3 bps/Hz: 极低效
-        ],
-        'reference': 'ITU-R M.1645 (频谱效率), STANAG 4285 (HF调制), TETRA标准'
-    },
-    
-    # ========== C3. 有效性 (EF) ==========
-    'EF_avg_communication_distance': {
-        'name': '平均通信距离',
-        'unit': 'km',
-        'direction': 'max',
-        'type': 'threshold',
-        'segments': [
-            # 参考：超短波地面5-50km，空地100-400km；短波1000-4000km；卫星全球
-            (1000, 100, '优秀 - 短波/卫星远程'),    # >1000km: 短波/卫星
-            (100, 90, '良好 - 超短波空地'),         # 100-1000km: 超短波空地
-            (50, 80, '中上 - 超短波地面远程'),      # 50-100km: 超短波地面远程
-            (30, 70, '中等 - 超短波地面标准'),      # 30-50km: 超短波标准
-            (15, 60, '及格 - 超短波地面近程'),      # 15-30km: 超短波近程
-            (5, 40, '较差 - 短距离通信'),           # 5-15km: 短距离
-            (0, 20, '不合格 - 覆盖不足')            # <5km: 覆盖不足
-        ],
-        'reference': 'ITU-R P.1546 (VHF/UHF传播), ITU-R P.533 (HF传播), 军用电台技术指标'
-    },
-    
-    'EF_avg_ber': {
-        'name': '平均误码率',
-        'unit': '',
-        'direction': 'min',
-        'type': 'exponential',
-        'segments': [
-            # 参考：超短波数据BER≤10^-5，短波BER 10^-3~10^-4，卫星BER可达10^-6
-            (1e-7, 100, '优秀 - 卫星通信级别'),     # <10^-7: 卫星优秀
-            (1e-6, 95, '卓越 - 卫星标准'),          # 10^-7 ~ 10^-6: 卫星标准
-            (1e-5, 90, '良好 - 超短波数据标准'),    # 10^-6 ~ 10^-5: 超短波数据
-            (1e-4, 75, '中上 - 短波良好'),          # 10^-5 ~ 10^-4: 短波良好
-            (1e-3, 60, '中等 - 短波标准/超短波语音'), # 10^-4 ~ 10^-3: 短波标准
-            (5e-3, 40, '及格 - 短波恶劣条件'),      # 10^-3 ~ 5×10^-3: 短波恶劣
-            (1e-2, 25, '较差 - 严重误码'),          # 5×10^-3 ~ 10^-2: 严重误码
-            (float('inf'), 10, '不合格 - 无法通信') # >10^-2: 无法通信
-        ],
-        'reference': 'ITU-T G.826, STANAG 4285 (HF BER), 超短波/卫星通信标准'
-    },
-    
-    'EF_avg_plr': {
-        'name': '平均丢包率',
-        'unit': '',
-        'direction': 'min',
-        'type': 'exponential',
-        'segments': [
-            # 参考：战术数据链≤1%，短波恶劣条件3%-5%
-            (1e-5, 100, '优秀 - 无损传输'),         # <10^-5: 无损
-            (1e-4, 95, '卓越 - 超低丢包'),          # 10^-5 ~ 10^-4: 超低
-            (1e-3, 90, '良好 - 低丢包'),            # 10^-4 ~ 10^-3: 低丢包
-            (1e-2, 80, '中上 - 战术数据链标准'),    # 10^-3 ~ 10^-2 (1%): 战术标准
-            (3e-2, 65, '中等 - 可接受'),            # 1% ~ 3%: 可接受
-            (5e-2, 50, '及格 - 短波恶劣条件'),      # 3% ~ 5%: 短波恶劣
-            (1e-1, 30, '较差 - 严重丢包'),          # 5% ~ 10%: 严重丢包
-            (float('inf'), 10, '不合格 - 无法通信') # >10%: 无法通信
-        ],
-        'reference': 'ITU-T Y.1541, STANAG 4406, 战术数据链标准'
-    },
-    
-    'EF_task_success_rate': {
-        'name': '任务成功率',
-        'unit': '%',
-        'direction': 'max',
-        'type': 'probability',
-        'formula': lambda x: x * 100,  # 直接转百分制
-        'reference': '军事任务标准'
-    },
-    
-    # ========== C4. 可靠性 (RL) ==========
-    'RL_communication_availability_rate': {
-        'name': '通信可用性',
-        'unit': '%',
-        'direction': 'max',
-        'type': 'probability_strict',
-        'segments': [
-            (0.9999, 100, '优秀 - 4个9'),           # >99.99%
-            (0.999, 95, '良好 - 3个9'),             # 99.9-99.99%
-            (0.99, 85, '中上 - 2个9'),              # 99-99.9%
-            (0.98, 75, '中等 - 98%以上'),           # 98-99%
-            (0.95, 65, '及格 - 95%以上'),           # 95-98%
-            (0.90, 45, '较差 - 90%以上'),           # 90-95%
-            (0, 20, '不合格 - 低于90%')             # <90%
-        ],
-        'reference': 'GJB 367A, ITU-T E.800'
-    },
-    
-    'RL_communication_success_rate': {
-        'name': '通信成功率',
-        'unit': '%',
-        'direction': 'max',
-        'type': 'probability_strict',
-        'segments': [
-            (0.99, 100, '优秀 - 极高成功率'),       # >99%
-            (0.98, 95, '良好 - 高成功率'),          # 98-99%
-            (0.95, 85, '中上 - 较高成功率'),        # 95-98%
-            (0.90, 75, '中等 - 可接受'),            # 90-95%
-            (0.85, 60, '及格 - 勉强可用'),          # 85-90%
-            (0.80, 40, '较差 - 频繁失败'),          # 80-85%
-            (0, 15, '不合格 - 严重不可靠')          # <80%
-        ],
-        'reference': '军事通信可靠性标准'
-    },
-    
-    'RL_recovery_duration_ms': {
-        'name': '恢复时长',
-        'unit': 'ms',
-        'direction': 'min',
-        'type': 'threshold',
-        'segments': [
-            (100, 100, '优秀 - 快速恢复'),          # <100ms
-            (500, 90, '良好 - 较快恢复'),           # 100-500ms
-            (1000, 80, '中上 - 秒级恢复'),          # 0.5-1s
-            (3000, 70, '中等 - 可接受'),            # 1-3s
-            (5000, 55, '及格 - 较慢'),              # 3-5s
-            (10000, 35, '较差 - 严重延迟'),         # 5-10s
-            (float('inf'), 10, '不合格 - 极慢')     # >10s
-        ],
-        'reference': 'GJB 7396, 电信级标准'
-    },
-    
-    'RL_crash_rate': {
-        'name': '崩溃比例',
-        'unit': '%',
-        'direction': 'min',
-        'type': 'probability_inverse',
-        'segments': [
-            (0.001, 100, '优秀 - 极少崩溃'),        # <0.1%
-            (0.005, 90, '良好 - 很少崩溃'),         # 0.1-0.5%
-            (0.01, 80, '中上 - 偶尔崩溃'),          # 0.5-1%
-            (0.02, 70, '中等 - 少量崩溃'),          # 1-2%
-            (0.05, 50, '及格 - 可接受'),            # 2-5%
-            (0.10, 30, '较差 - 频繁崩溃'),          # 5-10%
-            (float('inf'), 5, '不合格 - 严重不稳定') # >10%
-        ],
-        'reference': '高可靠性系统标准'
-    },
-    
-    # ========== C5. 抗干扰性 (AJ) ==========
-    'AJ_avg_sinr': {
-        'name': '平均信干噪比',
-        'unit': 'dB',
-        'direction': 'max',
-        'type': 'threshold',
-        'segments': [
-            # 参考：超短波FM门限12dB，短波SSB门限10dB，扩频可在负SNR下工作
-            (20, 100, '优秀 - 极强信号'),           # >20dB: 极强
-            (15, 90, '良好 - 强信号'),              # 15-20dB: 强信号
-            (12, 80, '中上 - 超短波FM门限'),        # 12-15dB: 超短波FM门限
-            (10, 70, '中等 - 短波SSB门限'),         # 10-12dB: 短波SSB门限
-            (5, 60, '及格 - 弱信号可用'),           # 5-10dB: 弱信号
-            (0, 45, '较差 - 扩频勉强可用'),         # 0-5dB: 扩频勉强
-            (-5, 30, '很差 - 扩频极限'),            # -5-0dB: 扩频极限
-            (float('-inf'), 10, '不合格 - 无法通信') # <-5dB: 无法通信
-        ],
-        'reference': 'ITU-R M.1225, IEEE 802.11 (扩频), 超短波/短波电台技术指标'
-    },
-    
-    'AJ_avg_jamming_margin': {
-        'name': '平均抗干扰余量',
-        'unit': 'dB',
-        'direction': 'max',
-        'type': 'threshold',
-        'segments': [
-            # 参考：扩频处理增益20-40dB，跳频10-20dB
-            (40, 100, '优秀 - 直扩高增益'),         # >40dB: 直扩高增益
-            (30, 95, '卓越 - 直扩标准'),            # 30-40dB: 直扩标准
-            (20, 85, '良好 - 直扩/跳频'),           # 20-30dB: 直扩低端/跳频高端
-            (15, 75, '中上 - 跳频标准'),            # 15-20dB: 跳频标准
-            (10, 65, '中等 - 跳频低端'),            # 10-15dB: 跳频低端
-            (5, 50, '及格 - 弱抗干扰'),             # 5-10dB: 弱抗干扰
-            (0, 30, '较差 - 很弱抗干扰'),           # 0-5dB: 很弱
-            (float('-inf'), 10, '不合格 - 无抗干扰能力') # <0dB: 无抗干扰
-        ],
-        'reference': 'IEEE 802.11 (扩频), 跳频/扩频通信系统标准'
-    },
-    
-    # ========== C6. 人为操作 (HO) ==========
-    'HO_avg_operator_reaction_time_ms': {
-        'name': '平均操作员反应时间',
-        'unit': 'ms',
-        'direction': 'min',
-        'type': 'threshold',
-        'segments': [
-            (200, 100, '优秀 - 极快反应'),          # <200ms
-            (500, 90, '良好 - 快速反应'),           # 200-500ms
-            (1000, 80, '中上 - 较快反应'),          # 0.5-1s
-            (2000, 70, '中等 - 正常反应'),          # 1-2s
-            (3000, 60, '及格 - 可接受'),            # 2-3s
-            (5000, 40, '较差 - 反应慢'),            # 3-5s
-            (float('inf'), 15, '不合格 - 严重迟缓') # >5s
-        ],
-        'reference': '人机工程学标准, MIL-STD-1472'
-    },
-    
-    'HO_operation_success_rate': {
-        'name': '操作成功率',
-        'unit': '%',
-        'direction': 'max',
-        'type': 'probability',
-        'formula': lambda x: x * 100,
-        'reference': '人机交互标准'
-    },
-    
-    # ========== C7. 组网能力 (NC) ==========
-    'NC_avg_network_setup_duration_ms': {
-        'name': '平均组网时长',
-        'unit': 'ms',
-        'direction': 'min',
-        'type': 'threshold',
-        'segments': [
-            # 参考：超短波MANET 10-30s，短波网络30-60s
-            (5000, 100, '优秀 - 快速组网'),         # <5s: 快速
-            (10000, 90, '良好 - 超短波MANET良好'),  # 5-10s: 良好
-            (20000, 80, '中上 - 超短波MANET标准'),  # 10-20s: 超短波标准
-            (30000, 70, '中等 - 超短波MANET可接受'), # 20-30s: 可接受
-            (45000, 60, '及格 - 短波网络良好'),     # 30-45s: 短波良好
-            (60000, 45, '较差 - 短波网络勉强'),     # 45-60s: 短波勉强
-            (float('inf'), 25, '不合格 - 组网过慢') # >60s: 过慢
-        ],
-        'reference': 'IEEE 802.15.4 (自组网), Ad-hoc网络标准, 短波组网标准'
-    },
-    
-    'NC_avg_connectivity_rate': {
-        'name': '平均连通率',
-        'unit': '%',
-        'direction': 'max',
-        'type': 'probability',
-        'formula': lambda x: x * 100,
-        'reference': '网络拓扑标准'
-    },
-    
-    # ========== C8. 安全性 (SC) ==========
-    'SC_key_compromise_frequency': {
-        'name': '密钥泄露频率',
-        'unit': '次/小时',
-        'direction': 'min',
-        'type': 'threshold',
-        'segments': [
-            (0.001, 100, '优秀 - 极少泄露'),        # <0.001次/小时
-            (0.01, 90, '良好 - 很少泄露'),          # 0.001-0.01次/小时
-            (0.05, 75, '中上 - 偶尔泄露'),          # 0.01-0.05次/小时
-            (0.1, 60, '中等 - 少量泄露'),           # 0.05-0.1次/小时
-            (0.5, 40, '较差 - 频繁泄露'),           # 0.1-0.5次/小时
-            (1.0, 20, '严重 - 大量泄露'),           # 0.5-1次/小时
-            (float('inf'), 0, '不合格 - 极度不安全') # >1次/小时
-        ],
-        'reference': '军事密码标准, FIPS 140-2'
-    },
-    
-    'SC_detection_probability': {
-        'name': '被侦察概率',
-        'unit': '%',
-        'direction': 'min',
-        'type': 'probability_inverse',
-        'segments': [
-            (0.01, 100, '优秀 - 极难侦察'),         # <1%
-            (0.05, 90, '良好 - 很难侦察'),          # 1-5%
-            (0.10, 80, '中上 - 较难侦察'),          # 5-10%
-            (0.20, 70, '中等 - 中等隐蔽'),          # 10-20%
-            (0.30, 55, '及格 - 一般隐蔽'),          # 20-30%
-            (0.50, 35, '较差 - 易被侦察'),          # 30-50%
-            (float('inf'), 10, '不合格 - 极易暴露') # >50%
-        ],
-        'reference': '军事隐蔽通信标准, LPI标准'
-    },
-    
-    'SC_interception_resistance': {
-        'name': '抗拦截能力',
-        'unit': '%',
-        'direction': 'max',
-        'type': 'probability',
-        'formula': lambda x: x * 100,
-        'reference': '军事抗截获标准, LPD标准'
-    }
+# 定义极小值指标（需要对数变换）
+# 这些指标跨越多个数量级（10⁻⁶ ~ 10⁻²），需要对数变换将指数级差异转为线性差异
+LOGARITHMIC_INDICATORS = {
+    'EF_avg_ber',   # 误码率（10⁻⁵ ~ 10⁻³，跨3个数量级）
+    'EF_avg_plr',   # 丢包率（10⁻⁴ ~ 10⁻²，跨2个数量级）
 }
-
-print("✓ 已定义21个指标的军事级别标准分段")
-print(f"✓ 参考标准: GJB军标、3GPP、ITU-T、NATO STANAG、MIL-STD等")
-print()
 
 def normalize_indicator(series, direction, indicator_code=None):
     """
-    基于军事标准的分段评分归一化方法
+    Min-Max归一化方法：所有指标都使用Min-Max归一化
     
     处理流程：
-    1. 查找指标的军事标准配置
-    2. 根据标准类型进行分段评分
-    3. 返回0-100分的标准化得分
+    1. 极小值指标（误码率、丢包率）→ 先对数变换，将指数级差异转为线性差异
+    2. 所有指标 → 统一使用Min-Max归一化到0-100分
+    
+    原理（Min-Max归一化）:
+        normalized = (x - min) / (max - min) × 100
+        
+        对于逆向指标（越小越好）：
+        normalized = (max - x) / (max - min) × 100
     
     参数:
         series: 指标数据序列
         direction: 'max'表示越大越好，'min'表示越小越好
-        indicator_code: 指标代码
+        indicator_code: 指标代码，用于判断是否需要对数变换
     
     返回:
-        标准化后的序列（0-100分）
+        归一化后的序列（0-100分）
     
     优点:
-        - 有明确的军事标准参考
-        - 可解释性强
-        - 跨批次可比
-        - 符合工程实践
+        - 简单直观，易于理解
+        - 保留原始数据的相对关系
+        - 不受样本量影响
+        - 适合小样本数据
+        - 即使只有2个不同值也能正常工作
     """
     # 处理空值
     if series.isna().all():
         return pd.Series([50] * len(series), index=series.index)
     
-    # 检查是否有标准配置
-    if indicator_code not in MILITARY_STANDARDS:
-        # 如果没有标准，使用Min-Max归一化
-        return normalize_by_minmax(series, direction)
+    # 步骤1：预处理（对数变换）
+    # 只对极小值指标进行对数变换，将指数级差异转为线性差异
+    if indicator_code in LOGARITHMIC_INDICATORS:
+        # 对数变换：-log10(value)
+        # 误码率：10⁻⁵ → 5, 10⁻³ → 3
+        # 丢包率：10⁻⁴ → 4, 10⁻² → 2
+        series = -np.log10(series + 1e-10)  # 加极小值避免log(0)
     
-    config = MILITARY_STANDARDS[indicator_code]
-    norm_type = config['type']
-    
-    # 类型1：概率类（直接转百分制）
-    if norm_type == 'probability':
-        return config['formula'](series)
-    
-    # 类型2：阈值分段（时延、距离、吞吐量等）
-    elif norm_type == 'threshold':
-        return normalize_by_threshold(series, config)
-    
-    # 类型3：指数分段（误码率、丢包率）
-    elif norm_type == 'exponential':
-        return normalize_by_exponential(series, config)
-    
-    # 类型4：严格概率分段（可用性、成功率）
-    elif norm_type == 'probability_strict':
-        return normalize_by_probability_strict(series, config)
-    
-    # 类型5：逆向概率分段（崩溃率、被侦察概率）
-    elif norm_type == 'probability_inverse':
-        return normalize_by_probability_inverse(series, config)
-    
-    else:
-        # 默认使用Min-Max
-        return normalize_by_minmax(series, direction)
-
-
-def normalize_by_minmax(series, direction):
-    """Min-Max归一化（兜底方案）"""
+    # 步骤2：Min-Max归一化
     min_val = series.min()
     max_val = series.max()
     
+    # 如果最大值等于最小值（所有值相同），返回中等水平
     if max_val == min_val:
         return pd.Series([50] * len(series), index=series.index)
     
+    # Min-Max归一化
     if direction == 'max':
-        score = (series - min_val) / (max_val - min_val) * 100
+        # 越大越好：(x - min) / (max - min) × 100
+        normalized = (series - min_val) / (max_val - min_val) * 100
     else:
-        score = (max_val - series) / (max_val - min_val) * 100
+        # 越小越好：(max - x) / (max - min) × 100
+        normalized = (max_val - series) / (max_val - min_val) * 100
     
-    return score
+    return normalized
 
-
-def normalize_by_threshold(series, config):
-    """阈值分段评分"""
-    segments = config['segments']
-    direction = config['direction']
-    scores = []
-    
-    for value in series:
-        score = 0
-        
-        if direction == 'min':
-            # 越小越好（时延类）
-            for i, (threshold, base_score, label) in enumerate(segments):
-                if value < threshold:
-                    if i == 0:
-                        score = base_score
-                    else:
-                        # 在两个阈值之间线性插值
-                        prev_threshold, prev_score, _ = segments[i-1]
-                        ratio = (value - prev_threshold) / (threshold - prev_threshold)
-                        score = prev_score - ratio * (prev_score - base_score)
-                    break
-        else:
-            # 越大越好（吞吐量、距离、SINR等）
-            for i, (threshold, base_score, label) in enumerate(segments):
-                if value >= threshold:
-                    score = base_score
-                    break
-            else:
-                # 如果小于所有阈值，使用最低分
-                score = segments[-1][1]
-        
-        scores.append(max(0, min(100, score)))
-    
-    return pd.Series(scores, index=series.index)
-
-
-def normalize_by_exponential(series, config):
-    """指数分段评分（误码率、丢包率）"""
-    segments = config['segments']
-    scores = []
-    
-    for value in series:
-        score = 0
-        
-        for i, (threshold, base_score, label) in enumerate(segments):
-            if value < threshold:
-                if i == 0:
-                    score = base_score
-                else:
-                    # 在两个阈值之间对数插值
-                    prev_threshold, prev_score, _ = segments[i-1]
-                    log_value = np.log10(value + 1e-12)
-                    log_prev = np.log10(prev_threshold + 1e-12)
-                    log_curr = np.log10(threshold + 1e-12)
-                    ratio = (log_value - log_prev) / (log_curr - log_prev)
-                    score = prev_score - ratio * (prev_score - base_score)
-                break
-        
-        scores.append(max(0, min(100, score)))
-    
-    return pd.Series(scores, index=series.index)
-
-
-def normalize_by_probability_strict(series, config):
-    """严格概率分段（可用性、成功率）"""
-    segments = config['segments']
-    scores = []
-    
-    for value in series:
-        score = 0
-        
-        for i, (threshold, base_score, label) in enumerate(segments):
-            if value >= threshold:
-                if i == 0:
-                    score = base_score
-                else:
-                    # 在两个阈值之间线性插值
-                    prev_threshold, prev_score, _ = segments[i-1]
-                    ratio = (value - prev_threshold) / (threshold - prev_threshold)
-                    score = prev_score + ratio * (base_score - prev_score)
-                break
-        else:
-            # 如果小于所有阈值，使用最低分
-            score = segments[-1][1]
-        
-        scores.append(max(0, min(100, score)))
-    
-    return pd.Series(scores, index=series.index)
-
-
-def normalize_by_probability_inverse(series, config):
-    """逆向概率分段（崩溃率、被侦察概率 - 越小越好）"""
-    segments = config['segments']
-    scores = []
-    
-    for value in series:
-        score = 0
-        
-        for i, (threshold, base_score, label) in enumerate(segments):
-            if value < threshold:
-                if i == 0:
-                    score = base_score
-                else:
-                    # 在两个阈值之间线性插值
-                    prev_threshold, prev_score, _ = segments[i-1]
-                    ratio = (value - prev_threshold) / (threshold - prev_threshold)
-                    score = prev_score - ratio * (prev_score - base_score)
-                break
-        
-        scores.append(max(0, min(100, score)))
-    
-    return pd.Series(scores, index=series.index)
-
-
-print("归一化方法说明:")
-print("  1. 概率类（成功率、可用性等）: 直接转百分制")
-print("  2. 阈值分段（时延、距离、吞吐量等）: 基于军事标准分段评分")
-print("  3. 指数分段（误码率、丢包率）: 对数插值分段评分")
-print("  4. 严格概率分段（高可靠性指标）: 精细化分段")
-print("  5. 逆向概率分段（崩溃率、被侦察概率）: 越小越好的概率指标")
+print("极小值指标（先对数变换，再Min-Max归一化）:")
+for idx, indicator in enumerate(sorted(LOGARITHMIC_INDICATORS), 1):
+    print(f"  {idx}. {indicator}")
 print()
-print("✅ 优点: 有明确标准、可解释性强、跨批次可比、符合工程实践")
+print("其他指标（直接Min-Max归一化）:")
+print("  - 概率类: 成功率、可用性、连通率等（0-1范围）")
+print("  - 时延类: 呼叫建立时长、传输时延、反应时间等")
+print("  - 距离类: 通信距离")
+print("  - 吞吐量: 有效吞吐量、频谱效率")
+print("  - 信号类: 信干噪比、抗干扰余量")
+print("  - 频率类: 密钥泄露频率")
+print("  - 等等...")
+print()
+print("✅ 优点: 简单直观，适合小样本数据，不会出现IQR=0的问题")
 print()
 
 # 创建标准化数据框
 df_normalized = df_raw[['test_id', 'scenario_id']].copy()
 
 # 对每个指标进行标准化
-print("开始标准化各指标:")
 for dim_code, dim_info in INDICATOR_SYSTEM.items():
-    print(f"\n  {dim_info['name']} ({dim_code}):")
     for indicator in dim_info['indicators']:
         col_name = indicator['code']
         direction = indicator['direction']
         
         if col_name in df_raw.columns:
-            # 传入指标代码，使用军事标准分段评分
+            # 传入指标代码，用于判断是否为概率类指标
             df_normalized[col_name] = normalize_indicator(df_raw[col_name], direction, col_name)
-            
-            # 显示标准化信息
-            if col_name in MILITARY_STANDARDS:
-                std_info = MILITARY_STANDARDS[col_name]
-                print(f"    ✓ {indicator['name']}: {std_info['type']}类型, 参考{std_info['reference']}")
-            else:
-                print(f"    ✓ {indicator['name']}: Min-Max归一化（无标准）")
         else:
-            print(f"    ⚠ 警告: 指标 {col_name} 不存在于数据中")
+            print(f"⚠ 警告: 指标 {col_name} 不存在于数据中")
             df_normalized[col_name] = 50  # 默认中等水平
 
-print()
-print(f"✓ 完成21个指标的军事标准分段评分")
-print(f"✓ 所有指标已归一化到0-100分区间")
+print(f"✓ 完成21个指标的标准化")
+print(f"✓ 标准化后数据范围: 0-100分")
 print()
 
 # 显示标准化后的数据预览
-print("标准化后数据预览（0-100分，前3个测试批次）:")
-display_cols = ['test_id'] + [ind['code'] for dim in list(INDICATOR_SYSTEM.values())[:3] for ind in dim['indicators'][:2]]
+print("标准化后数据预览（前3个测试批次）:")
+display_cols = ['test_id'] + [ind['code'] for dim in INDICATOR_SYSTEM.values() for ind in dim['indicators'][:2]]
 print(df_normalized[display_cols].head(3).to_string(index=False))
-print()
-
-# 显示关键指标的评分统计
-print("关键指标评分统计:")
-key_indicators = ['EF_avg_ber', 'EF_avg_plr', 'RL_communication_availability_rate', 
-                  'RS_avg_transmission_delay_ms', 'AJ_avg_sinr']
-for ind_code in key_indicators:
-    if ind_code in df_normalized.columns:
-        scores = df_normalized[ind_code]
-        ind_name = next((ind['name'] for dim in INDICATOR_SYSTEM.values() 
-                        for ind in dim['indicators'] if ind['code'] == ind_code), ind_code)
-        print(f"  {ind_name}:")
-        print(f"    最高分: {scores.max():.2f}, 最低分: {scores.min():.2f}, 平均分: {scores.mean():.2f}")
 print()
 
 # ============================================================================
@@ -909,10 +388,9 @@ print()
 def calculate_indicator_entropy_weights(df_norm, indicator_system):
     """
     在每个维度内部使用熵权法计算指标的客观权重
-    基于标准化后的数据（0-100分）计算熵权
     
     参数:
-        df_norm: 标准化后的数据框（0-100分）
+        df_norm: 标准化后的数据框
         indicator_system: 指标体系
     
     返回:
@@ -920,7 +398,6 @@ def calculate_indicator_entropy_weights(df_norm, indicator_system):
     """
     
     print("在每个维度内部计算指标的熵权（客观权重）:")
-    print("说明: 基于军事标准分段评分数据（0-100分）计算熵权")
     
     indicator_weights = {}
     
@@ -929,7 +406,7 @@ def calculate_indicator_entropy_weights(df_norm, indicator_system):
         
         indicator_cols = [ind['code'] for ind in dim_info['indicators']]
         
-        # 提取该维度的指标数据（Z-score标准化后的数据）
+        # 提取该维度的指标数据
         dim_indicator_data = df_norm[indicator_cols].values
         n_samples, n_indicators = dim_indicator_data.shape
         
@@ -938,31 +415,25 @@ def calculate_indicator_entropy_weights(df_norm, indicator_system):
             indicator_weights[indicator_cols[0]] = 1.0
             print(f"    {dim_info['indicators'][0]['name']}: 1.000000 (100.00%)")
         else:
-            # 步骤1: 确保数据为非负值
-            # 标准化后的数据已经是0-100分，直接使用
-            data_positive = dim_indicator_data + 1  # +1避免log(0)
+            # 计算维度内指标的熵权
+            data_normalized = dim_indicator_data / 100.0
+            data_sum = data_normalized.sum(axis=0)
+            data_sum[data_sum == 0] = 1
+            p = data_normalized / data_sum
             
-            # 步骤2: 归一化为概率分布（每列求和为1）
-            data_sum = data_positive.sum(axis=0)
-            data_sum[data_sum == 0] = 1  # 避免除以0
-            p = data_positive / data_sum
-            
-            # 步骤3: 计算信息熵
             k = 1 / np.log(n_samples)
             entropy = np.zeros(n_indicators)
             
             for j in range(n_indicators):
                 p_j = p[:, j]
-                p_j = p_j[p_j > 0]  # 只考虑正值
+                p_j = p_j[p_j > 0]
                 if len(p_j) > 0:
                     entropy[j] = -k * np.sum(p_j * np.log(p_j))
                 else:
                     entropy[j] = 0
             
-            # 步骤4: 计算信息效用值（差异系数）
             d = 1 - entropy
             
-            # 步骤5: 计算权重
             # 避免所有权重为0的情况
             if d.sum() == 0:
                 # 如果所有指标的信息熵都是1（完全均匀分布），则平均分配权重
@@ -974,7 +445,7 @@ def calculate_indicator_entropy_weights(df_norm, indicator_system):
             for i, ind_code in enumerate(indicator_cols):
                 indicator_weights[ind_code] = weights[i]
                 ind_name = dim_info['indicators'][i]['name']
-                print(f"    {ind_name}: 熵={entropy[i]:.4f}, 差异系数={d[i]:.4f}, 权重={weights[i]:.6f} ({weights[i]*100:.2f}%)")
+                print(f"    {ind_name}: {weights[i]:.6f} ({weights[i]*100:.2f}%)")
     
     print()
     return indicator_weights
@@ -1088,53 +559,39 @@ for i, dim_code in enumerate(dim_codes_ordered):
 print()
 
 # ============================================================================
-# 第六部分：综合评分计算（移除Sigmoid映射）
+# 第六部分：综合评分计算
 # ============================================================================
 
 print("步骤6: 综合评分计算")
 print("-"*80)
 print("使用混合权重（AHP维度权重 × 熵权法指标权重）")
-print("指标得分已通过军事标准分段评分归一化到0-100分")
 print()
 
-# 6.1 数据已经是0-100分，直接使用
+# 7.1 计算指标层得分（已经标准化为0-100分）
 df_scores = df_normalized.copy()
 
-print("6.1 指标得分已完成（0-100分，基于军事标准）")
-print()
-
-# 6.2 计算维度层得分
-print("6.2 计算维度层得分:")
+# 7.2 计算维度层得分
 for dim_code in dim_codes_ordered:
     dim_info = INDICATOR_SYSTEM[dim_code]
     dim_score = 0
     
     for indicator in dim_info['indicators']:
         code = indicator['code']
-        # 使用维度内的熵权（已归一化）
-        entropy_weight = indicator_entropy_weights[code]
-        dim_score += df_scores[code] * entropy_weight
+        weight = final_weights[code]
+        dim_score += df_normalized[code] * weight
     
-    df_scores[f'{dim_code}_score'] = dim_score
-    print(f"  {dim_info['name']} ({dim_code}): 完成")
-
-print()
+    # 归一化到维度权重
+    dim_total_weight = sum(final_weights[ind['code']] for ind in dim_info['indicators'])
+    df_scores[f'{dim_code}_score'] = dim_score / dim_total_weight
     
-# 6.3 计算综合得分（目标层）
-print("6.3 计算综合得分（目标层）:")
+# 7.3 计算综合得分（目标层）
 df_scores['total_score'] = 0
 
 for i, dim_code in enumerate(dim_codes_ordered):
     dim_weight = criteria_weights[i]
     df_scores['total_score'] += df_scores[f'{dim_code}_score'] * dim_weight
-    print(f"  {INDICATOR_SYSTEM[dim_code]['name']}: 权重={dim_weight:.4f}")
-
-print()
-print(f"✓ 综合得分计算完成")
-
 
 # 7.4 评估等级
-print("7.4 评估等级划分:")
 def get_grade(score):
     if score >= 90:
         return '优秀'
@@ -1149,14 +606,6 @@ def get_grade(score):
 
 df_scores['grade'] = df_scores['total_score'].apply(get_grade)
 
-# 统计各等级数量
-grade_counts = df_scores['grade'].value_counts()
-print("  等级分布:")
-for grade in ['优秀', '良好', '中等', '及格', '较差']:
-    count = grade_counts.get(grade, 0)
-    print(f"    {grade}: {count}个测试批次")
-print()
-
 # 7.5 排名
 df_scores['rank'] = df_scores['total_score'].rank(ascending=False, method='min').astype(int)
 
@@ -1166,22 +615,6 @@ df_scores = df_scores.sort_values('rank')
 print("✓ 完成综合评分计算")
 print()
 
-# 显示得分统计信息
-print("综合得分统计:")
-print(f"  最高分: {df_scores['total_score'].max():.2f}分")
-print(f"  最低分: {df_scores['total_score'].min():.2f}分")
-print(f"  平均分: {df_scores['total_score'].mean():.2f}分")
-print(f"  标准差: {df_scores['total_score'].std():.2f}")
-print()
-
-# 显示各维度得分统计
-print("各维度得分统计:")
-for dim_code in dim_codes_ordered:
-    dim_name = INDICATOR_SYSTEM[dim_code]['name']
-    dim_scores = df_scores[f'{dim_code}_score']
-    print(f"  {dim_name:8s}: 最高={dim_scores.max():.2f}, 最低={dim_scores.min():.2f}, 平均={dim_scores.mean():.2f}")
-print()
-
 # ============================================================================
 # 第八部分：评估结果输出
 # ============================================================================
@@ -1189,11 +622,6 @@ print()
 print("="*80)
 print("评估结果汇总")
 print("="*80)
-print()
-print("说明: 综合得分 = Σ(维度得分 × AHP维度权重)")
-print("      维度得分 = Σ(指标得分 × 熵权法指标权重)")
-print("      指标得分 = 基于军事标准的分段评分 ∈ [0, 100]")
-print("      参考标准: GJB军标、3GPP、ITU-T、NATO STANAG、MIL-STD等")
 print()
 
 # 输出排名表
@@ -1297,9 +725,6 @@ def save_to_database(df_raw, df_scores):
         test_id = row['test_id']
         scenario_id = row['scenario_id']
         
-        # 获取对应的评分数据
-        score_row = df_scores[df_scores['test_id'] == test_id].iloc[0]
-        
         # 检查是否已存在
         cursor.execute("SELECT evaluation_id FROM military_effectiveness_evaluation WHERE test_id = %s", (test_id,))
         existing = cursor.fetchone()
@@ -1332,9 +757,6 @@ def save_to_database(df_raw, df_scores):
                 SC_interception_resistance = %s,
                 total_communications = %s,
                 total_lifecycles = %s,
-                total_score = %s,
-                grade = %s,
-                rank_position = %s,
                 updated_at = CURRENT_TIMESTAMP
             WHERE test_id = %s
             """
@@ -1364,9 +786,6 @@ def save_to_database(df_raw, df_scores):
                 row['SC_interception_resistance'],
                 row['total_communications'],
                 row['total_lifecycles'],
-                float(score_row['total_score']),
-                score_row['grade'],
-                int(score_row['rank']),
                 test_id
             ))
             update_count += 1
@@ -1384,10 +803,9 @@ def save_to_database(df_raw, df_scores):
                 HO_avg_operator_reaction_time_ms, HO_operation_success_rate,
                 NC_avg_network_setup_duration_ms, NC_avg_connectivity_rate,
                 SC_key_compromise_frequency, SC_detection_probability, SC_interception_resistance,
-                total_communications, total_lifecycles,
-                total_score, grade, rank_position
+                total_communications, total_lifecycles
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
             
@@ -1415,10 +833,7 @@ def save_to_database(df_raw, df_scores):
                 row['SC_detection_probability'],
                 row['SC_interception_resistance'],
                 row['total_communications'],
-                row['total_lifecycles'],
-                float(score_row['total_score']),
-                score_row['grade'],
-                int(score_row['rank'])
+                row['total_lifecycles']
             ))
             insert_count += 1
     
