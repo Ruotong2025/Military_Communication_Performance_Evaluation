@@ -1,0 +1,561 @@
+航空学报
+Acta Aeronautica et Astronautica Sinica
+ISSN 1000-6893,CN 11-1929/V
+《航空学报》网络首发论文
+题目： 有人/无人机协同作战效能智能评估方法
+作者： 赵子俊，陈士涛，贺维艳，刘龙浩，张政浩
+收稿日期： 2025-10-10
+网络首发日期： 2025-12-16
+引用格式： 赵子俊，陈士涛，贺维艳，刘龙浩，张政浩．有人/无人机协同作战效能智能
+评估方法[J/OL]．航空学报.
+https://link.cnki.net/urlid/11.1929.V.20251216.0900.002
+网络首发：在编辑部工作流程中，稿件从录用到出版要经历录用定稿、排版定稿、整期汇编定稿等阶
+段。录用定稿指内容已经确定，且通过同行评议、主编终审同意刊用的稿件。排版定稿指录用定稿按照期
+刊特定版式（包括网络呈现版式）排版后的稿件，可暂不确定出版年、卷、期和页码。整期汇编定稿指出
+版年、卷、期、页码均已确定的印刷或数字出版的整期汇编稿件。录用定稿网络首发稿件内容必须符合《出
+版管理条例》和《期刊出版管理规定》的有关规定；学术研究成果具有创新性、科学性和先进性，符合编
+辑部对刊文的录用要求，不存在学术不端行为及其他侵权行为；稿件内容应基本符合国家有关书刊编辑、
+出版的技术标准，正确使用和统一规范语言文字、符号、数字、外文字母、法定计量单位及地图标注等。
+为确保录用定稿网络首发的严肃性，录用定稿一经发布，不得修改论文题目、作者、机构名称和学术内容，
+只可基于编辑规范进行少量文字的修改。
+出版确认：纸质期刊编辑部通过与《中国学术期刊（光盘版）》电子杂志社有限公司签约，在《中国
+学术期刊（网络版）》出版传播平台上创办与纸质期刊内容一致的网络版，以单篇或整期出版形式，在印刷
+出版之前刊发论文的录用定稿、排版定稿、整期汇编定稿。因为《中国学术期刊（网络版）》是国家新闻出
+版广电总局批准的网络连续型出版物（ISSN 2096-4188，CN 11-6037/Z），所以签约期刊的网络版上网络首
+发论文视为正式出版。
+航 空 学 报 Jan. 25 2021 Vol.42 No.X:
+Acta Aeronautica et Astronautica Sinica ISSN 1000-6893 CN 11-1929/V
+http://hkxb.buaa.edu.cn hkxb@buaa.edu.cn
+引用格式：赵子俊, 陈士涛, 贺维艳, 等. 有人/无人机协同作战效能智能评估方法[J]．航空学报, 2025, XX(X): XXXXX．XX, XX, XX, et al.
+ZHAO Z J, CHEN S T, HE W Y, et al. Intelligent Assessment Method for MAV/UAV Collaborative Combat Effectiveness[J].
+Acta Aeronautica et Astronautica Sinica, 2025, XX(X): XXXXX (in Chinese). doi: 10.7527/S1000-6893.2025.32887. 有人/无人机协同作战效能智能评估方法
+赵子俊 1, 2, 3，陈士涛 1, 2, 3,*，贺维艳 4，刘龙浩 1, 2, 3，张政浩 1, 2, 3
+1. 空军工程大学 装备管理与无人机工程学院，西安 710051
+2. 无人飞行器技术全国重点实验室，西安 710051
+3. 陕西高校青年创新团队，西安 710051
+4. 解放军95972部队，酒泉 735000
+摘 要：随着现代战争智能化、信息化、体系化程度提升，对未来作战提出了作战效能实时评估和方案高效决策的需
+求。针对有人/无人机协同空面作战效能评估问题，提出基于作战仿真推演和人工神经网络的智能评估方法。依托仿真
+推演平台，通过构建作战效能评估指标体系、设计作战推演流程、综合评估结果，获取推演评估数据，运用BP神经网络
+对数据进行训练并检验训练效果，最用进行实例分析验证方法可行性，并通过灵敏度分析研究各方案关键指标及其影
+响。本文方法可为有人/无人机协同作战效能评估、装备研究改进以及作战方案快速决策提供技术参考。
+关键词：有人/无人机协同作战；仿真推演；效能评估；BP神经网络；灵敏度分析
+中图分类号：V37; E91 文献标识码：A 文章编号：S1000-6893（2025）XX-XXXXX-XX
+收稿日期：2025-10-10；退修日期：2025-10-28；录用日期：2025-11-19；网络出版时间：
+网络出版地址：
+基金项目：国家自然科学基金(72203166)；军事类研究生资助课题（JY2024C115）
+*通讯作者. E-mail: chenshitao311@163.com
+1 引言
+有人/无人机智能协同作战，是应对未来体系
+化、无人化、智能化战争的新型作战样式，将成
+为未来战争的核心形态之一[1]。本文研究有人/无
+人机智能协同作战是以有人机作为指挥机、无人
+机作为攻击机的空对面体系作战，具有制空压
+制、高体系破击率、低风险成本等优势[2]，其作
+战效能评估研究对相关装备研发改进和作战方案
+决策优化具有重要意义。
+作战效能评估最为常用的方法包括作战模拟
+法和解析法。作战模拟法是基于仿真推演，通过
+构建虚拟作战环境与过程模拟真实战场条件下的
+对抗与决策，从而量化评估作战效能的方法[3-5]，
+其优点与实战联系紧密、结果较为精确，但缺点
+是平台门槛高，需要大量试验，成本高、周期长
+[6]。解析法是通过建立效能指标、构建合适的数
+学模型计算评估值[7]，例如ADC法[8-10]、AHP法[11, 12]、模糊综合评价法[13, 14]、灰色关联评估法[15, 16]
+等，优点是模型便于分析、方法简单便捷，但此
+类方法存在的普遍弊端是主观性依赖较强，例如
+指标权重或相对重要度确定大多依赖主观确定，
+导致结果难以避免出现偏差。随着现代作战节奏
+加快，亟需对作战方案快速评估和决策的手段，
+网络首发时间：2025-12-16 14:44:44 网络首发地址：https://link.cnki.net/urlid/11.1929.V.20251216.0900.002
+航 空 学 报
+同时为方案改进提供理论指导，以支撑任务前和
+任务中的指挥决策。有人/无人机协同作战效能评
+估具有突出的时效性和指向性需求，需要对方案
+快速决策与实时调控，评估模型需紧贴实际任
+务。尽管技术不断发展，但要实现高效评估与快
+速决策，仍面临诸多严峻挑战，例如动态战场环
+境的适配性、快速决策的实时性与精准性平衡以
+及方法验证的实战化支撑等。当前关于有人/无人
+机协同作战效能评估研究多数基于数学模型或模
+拟仿真，这些方法除了上述不足外，还存在时限
+性差等弊端，不能满足实际应用需求。模拟仿真
+是评估体系效能的理想工具，这得益于其能构建
+逼真的作战环境，能够揭示出装备在交互操作与
+对抗博弈中表现出的动态、非线性特性。结合人
+工智能和仿真推演，是解决作战效能评估时效性
+问题的突破口。
+基于人工神经网络和作战仿真推演的作战效
+能智能评估方法通过仿真数据推演和神经网络学
+习，建立贴合作战实际、更加快速便捷的多指标
+综合评价模型进行评估，可有效克服上述传统方
+法弊端。出于模型的权值是通过实例学习得到
+的，避免了人为赋权等主观影响和不确定性，从
+而克服了传统解析法受主观偏差影响大的弊端
+[17]。经过仿真数据训练支撑的效能评估模型不依
+赖仿真平台条件，更加快速便捷，能够有效支撑
+作战效能分析或作战方案快速决策，更好地适应
+智能化战争需求。
+2 有人/无人机协同作战仿真推演
+2.1 作战效能评估指标体系构建
+指标体系构建严格遵循系统性、科学性与可
+操作性原则，结合空面打击作战的OODA循环理
+论，明确有人/无人机协同对面打击体系需具备搜
+索识别到协同打击全过程能力，聚焦有人/无人机
+协同作战模式，以有人/无人机协同对面作战任务
+为想定，从任务想定中分解提炼出战场适应能
+力、协同编组能力、侦察监视能力、电子对抗能
+力、协同攻击能力需求，并结合智能化特点补充
+智能协同特性等指标。通过有人/无人机协同作战
+概念、战法、智能化应用程度以及战技指标等分
+析，并经过相关专家进行论证最终确定作战效能
+评估指标体系。其中一级指标是系统效能规划，
+包括作战系统（无人机系统）战场适应、侦察监
+视、电子对抗、协同攻击能力以及有人/无人体系
+协同编队能力[18]；二级指标是对各系统能力的分
+解；三级指标是对能力指标进一步分解得到的可
+量化的技术性指标。有人/无人机协同作战效能评
+估指标体系如图1所示。
+图 1 有人/无人机协同作战效能评估指标体系
+Fig.1 MAV/UAV Cooperative Combat Effectiveness Evaluation Index System 有人/无人机协同作战效能评估指标体系共包
+含 5 个一级指标、10 个二级指标和 26 个三级指
+标。可以看出指标体系较为复杂，采用传统的评
+估手段需要繁琐的数据处理和计算过程，且依赖
+大量的主观赋权或打分，导致计算结果容易出现
+偏差。
+2.2 仿真推演流程设计
+作战仿真推演首先要明确推演流程，确保仿
+航 空 学 报
+真推演战场关联性强、推演结果可信度高。本文
+根据作战概念图和作战时序图描述推演的兵力布
+势、任务规划以及作战流程。想定运用一架有人
+机与4架无人机，配合陆基导弹执行空面打击任
+务，作战概念图如图2所示。
+图 2 作战概念图
+Fig.2 Operational Concept Diagram
+图 3 作战时序图
+Fig.3 Combat Sequence Diagram 作战推演的作战事件时序图如图3所示。根
+据作战规划划分任务阶段，进而分解出各阶段作
+战事件，明确推演过程以及效能指标在作战推演
+中的体现，支撑动态推演验证，通过可视化作战
+流程时间逻辑增强推演的可追溯性与复盘效率
+[19]。
+明确推演流程后，运用战役级仿真推演平台
+进行作战仿真设计和推演。通过设计作战场景、
+导入武器库、输入装备指标值，可推演出作战结
+果。仿真推演核心参数设置如表1所示。
+表1 仿真核心参数表
+Table 1 Simulation Core Parameters Table 参数类别 具体参数 设定值
+有人/无人机作
+战能力指标值
+根据评估指标体
+系进行设置
+根据方案设置
+有人机初始
+状态
+初始高度、速
+度、姿态等
+8km、650km/h、水
+平平飞
+无人机初始
+状态
+初始高度、速
+度、姿态等
+7km（攻击型）、
+9km（侦察/干扰
+型）、450km/h、跟
+随编队姿态
+战场环境
+气象条件
+晴天，能见度≥
+15km 电磁环境 中等干扰强度
+地形类型 平原
+仿真推演参数
+仿真步长 1s 蒙特卡洛次数 10
+仿真时长 单次≤1200s 2.3 仿真结果处理
+每次仿真推演前，根据想定输入进行仿真推演
+场景构设，并进行 10 次蒙特卡洛仿真获取收敛数
+据。仿真系统输出包括任务完成时间、损伤率、弹
+药消耗率、目标毁伤率以及关键节点存活率。通过
+综合各输出指标值，得出综合效能评估结果。首先
+需要对输出结果进行标准化处理以消除量纲差异，
+方法为对各指标设定阈值，分别用TThreshold 、 LThreshold AThreshold 、 DThreshold 、 SThreshold 表示，用
+实际与阈值之比将指标值归为[0, 1]区间。以任务完
+成时间为例，其归一化公式如式(1)：
+actual Threshold
+T
+T
+T
+ (1)
+航 空 学 报
+归一化后的指标值分别为T 、 L 、 A 、 D 、
+S ，根据任务要求设定权重，构建综合评估公式： Ei  wT
+T  wL
+ L  wA
+ A  wD
+ D  wS
+ S (2)
+最终可得到一次仿真结果。式(2)中权重的核心
+用途是将仿真推演输出的 5 个关键指标T 、 L 、 A 、 D 、 S 聚合为单一综合效能值，作为 BP 神经
+网络的“真值标签”。神经网络通过学习 26 个三
+级指标与该标签的映射关系，自主习得指标间的内
+在关联，全程不再调用式(2)及相应权重。重复上述
+步骤，从而获取有人/无人机协同对面作战效能评估
+样本，为后续神经网络训练提供样本支持。本文参
+数较多，在表 2 中列举了本文各参数符号含义。
+表2 符号含义对照表
+Table 2 Symbol Meaning Reference Table 符号 含义 符号 含义
+TThreshold 任务完成时间 wT T 权重
+LThreshold 损伤率 wL L 权重
+AThreshold 弹药消耗率 wA A 权重
+DThreshold 目标毁伤率 wD D 权重
+SThreshold 关键节点存活率 wS S 权重
+T TThreshold 归一化 net
+l
+j 神经网络输入
+L LThreshold 归一化 h
+l
+j 神经网络输出
+A AThreshold 归一化 MSE 均方误差
+D DThreshold 归一化 MAPE 平均百分比误差
+S SThreshold 归一化 R2 拟合优度
+3 BP神经网络评估模型训练
+前馈神经网络是人工神经网络中运用最广泛的
+模型之一，BP 网络则是前馈神经网络的核心部
+分，广泛应用于分类识别、逼近、回归等领域[20]。
+在实际应用中，大约 80%的神经网络模型采取了
+BP 网络或 BP 网络的变化形式。运用 BP 神经网络
+进行评估首先要根据样本数据训练神经网络，而后
+将训练好的神经网络用于效能评估实际。因此智能
+评估模型的训练主要包括以下两个过程：一是基于
+训练样本，训练 BP 神经网络；二是对训练 BP 神
+经网络进行测试，如果训练结果满足要求则可以使
+用。
+3.1 BP神经网络训练
+设定各指标值的上界、中位数、下界，分别对
+各指标进行三角抽样得到一组方案值，共抽取 1000
+组，分别输入仿真推演系统，总共得到 1000 次仿
+真推演结果做为样本数据。将原始样本数据中 80%
+作为训练样本以训练神经网络，将 20%数据作为测
+试样本以检验训练效果。由于输入指标数据为原始
+数据，为减小数据量纲带来的影响，运用式(3)对数
+据归一化处理，同时将归一化参数传递给测试和后
+续评估函数，以确保采用相同的归一化方法。通过
+按行逐行地对数据进行标准化处理，将每一行数据
+分别标准化到区间[ ymin
+, ymax ] 内。
+max min min min max min ( y y ) (x x ) y y
+x x   
+ 
+
+(3)
+3.1.1 网络模型
+输入为 26 个指标，输出有 1 个结果（效能
+值），因此有 26 个输入节点，1 个输出节点。采用
+三层 BP 神经网络进行训练。神经网络结构如图 4
+所示。
+图 4 BP 神经网络结构
+Fig.4 BP Neural Network Structure 在 BP 神经网络中，各神经元输入输出的数学
+模型如式(4)所示。
+11( )
+l l
+j
+l
+j s
+l l l
+j ij j
+j
+h f net
+net w b
+ 
+ 
+   
+ 
+(4)
+式中， net
+l
+j 为第l 层第 j 个神经元的输入， wi
+l
+j
+和b
+l
+j 分别代表权重和偏置，为输出变量，对于激活
+函数，通常选用 Sigmod 函数，如式(5)所示。
+1
+( ) 1
+x f x
+e 
+
+(5)
+BP 神经网络通过误差反向传播算法调整网络
+权重，运用梯度下降法更新权重与偏置，直至误差
+航 空 学 报
+最小，此过程在此不做赘述。
+3.1.2 训练效果
+在训练过程中，BP 神经网络拟合优度如图 5
+所示。四张图分别为训练集、验证集、测试集和所
+有数据的拟合优度图形，对于一个理想的拟合，数
+据应该沿着 45°下降，即网络输出和目标相等。若
+相关性 R 在 0.9 以上，说明模型预测较为精准。据
+图 5 可知 R 最小值为 0.93428，最大值为 0.96477，
+且总体目标已达到了 0.9521，说明拟合较为精准。
+(a) 训练集
+(a) Training set
+(b) 验证集
+(b) Validation set
+(c) 测试集
+(c) Test set
+(d) 全部数据
+(d) All data 图 5 BP 神经网络训练拟合优度
+Fig.5 BP Neural Network Training Goodness of Fit
+3.2 BP神经网络测试
+在此主要采用 MSE、MAPE 和拟合优度 R2 三
+个指标判定测试效果。在本案例中，测试数据的
+MSE 为 0.000082，表明误差非常小。而 MAPE 值
+也仅为 1.415515，测试 R2 为 0.8748，表明测试效
+果较好。测试真实值与网络预测值如图 6 所示，测
+试残差图如图 7 所示。据图可知真实值曲线与网络
+测试值曲线拟合程度较好、测试残差近似随机分
+布，说明训练精度较好。
+图 6 测试真实值与网络预测值对比
+Fig.6 Comparison of Actual Values and Network
+Predictions
+图 7 测试残差
+Fig.7 Test Residuals 表3 有人/无人机协同作战效能指标参数
+Table 3 MAV/UAV Cooperative Combat Effectiveness Metrics 一级指标 二级指标 三级指标 类型 方案 1 方案 2 方案 3 方案 4 方案 5
+A1 B1 C1 + 340 510 630 550 500
+C2 + 8700 10400 9400 7200 7800
+C3 + 1500 1400 1600 1400 1500
+C4 + 25 23 20 24 20
+B2 C5 + 0.47 0.76 0.71 0.56 0.61
+C6 + 0.58 0.78 0.53 0.61 0.64
+A2 B3 C7 + 85 104 80 125 106
+C8 + 7.3 15.8 12.7 17.6 10.0
+C9 - 2.3 4.5 4.1 3.2 5.8
+航 空 学 报
+B4 C10 + 2.0 3.0 3.4 1.8 4.6
+C11 + 6.5 6.8 3.9 6.3 4.4
+A3 B5 C12 + 70 85 90 75 75
+C13 + 3800 1600 4400 3400 2300
+B6 C14 + 160 230 210 230 160
+C15 + 220 200 250 200 250
+A4 B7 C16 + 0.5 0.7 0.5 0.6 0.7
+C17 + 3.5 2.0 3.0 2.7 2.1
+C18 + 6.2 7.2 5.7 5.5 5.0
+B8 C19 - 45 41 43 46 37
+C20 - 1.6 1.3 2.9 1.6 1.6
+C21 + 130 132 100 160 150
+A5 B9 C22 + 5 3 2 5 4
+C23 + 2.2 3.8 2.6 4.0 3.0
+B10 C24 + 0.50 0.52 0.60 0.70 0.50
+C25 + 0.50 0.53 0.65 0.40 0.50
+C26 + 0.55 0.50 0.60 0.65 0.65
+4 实例分析
+4.1 评估案例
+选取 5 组有人/无人机协同作战效能指标参数，
+如表 3 所示。表中指标数据类型分为正向指标和反
+向指标，对于正向指标数值越高越好，对于负向指
+标则是数值越低越好。接下来确定各输出指标的权
+重值，首先运用德尔菲法征询专家意见，确定权重
+初步范围；接着以 100 组历史仿真推演数据为基
+础，计算各输出指标与作战任务成功与否的相关性
+系数，对专家初始权重进行修正。综上基于专家主
+观赋权与数据客观赋权相结合的方式确定 wT 、 wL 、 wA 、 wD 、 wS 分别为 0.2、0.2、0.1、0.3、
+0.2。
+4.2 评估结果分析
+根据 BP 神经网络的基本原理，通过模拟数据
+训练好的网络可以评估各方案作战效能综合效能
+值，评估结果如图 8 所示。其中，T阈值 、 L阈值 、 A阈值 、 D阈值 、 S阈值 值分别为 50、0.7、0.8、0.8、
+0.6。通过柱状图，可以快速识别出最优和最劣的方
+案。
+各方案评估结果依次为 0.5072, 0.5456, 0.5345, 0.5675, 0.4903。综合来看，该神经网络评估模型能
+有效对方案效能进行评估，结果为方案 4 的综合效
+能最高。采用图 1 所示的三级指标体系，邀请 10
+名作战效能评估领域专家，针对同一层级指标的相
+对重要性构建各层级判断矩阵，并经验证满足逻辑
+一致性要求。最终确定作战系统战场适应能力为
+0.18、侦察监视能力为 0.22、电子对抗能力为
+0.20、协同攻击能力为 0.25、体系协同编队能力为
+0.15，采用加权求和法最终得到各方案的综合效能
+值。AHP 法得出的 5 组方案效能排序为：方案 4
+（0.665）、方案 2（0.643）、方案 3（0.632）、方
+案 1（0.606）、方案 5（0.589），与 BP 神经网络
+的排序结果完全一致。
+图 8 方案评估结果
+Fig.8 Evaluation Results of the Proposal
+4.3 指标灵敏度分析
+灵敏度分析（Sensitivity Analysis）的基本原理
+是通过评估输入变量的变化对输出结果的影响，来
+确定哪些输入变量对模型或决策过程最为关键，包
+航 空 学 报
+括指标灵敏度对比和单指标值灵敏度分析。针对
+BP 神经网络评估模型的灵敏度分析，能够挖掘指
+指标属性值与方案总体效能间的相互关联关系，如
+正向、负向、线性或非线性关系等，揭示有人/无人
+机作战效能评估内在机理。指标进行灵敏度对比侧
+重于横向对比指标对方案效能的影响程度；单指标
+值灵敏度分析则侧重于考察单个指标的变化对整体
+评估结果的影响程度。
+4.3.1 指标灵敏度对比分析
+指标灵敏度对比分析旨在比较某一方案不同指
+标灵敏度强弱，从而确定对方案效能的影响最为显
+著的指标。方法是通过增加或减少方案的某一指标
+值，同时保持其余指标值不发生变化，观察该方案
+效能评估值的变化情况。指标均为定量指标，以指
+标值增大或减小 20%为例，分析不同指标对方案评
+估结果影响的大小。运用龙卷风图展示各方案效能
+对指标值变化的灵敏度。图 9 分别展示了排名靠前
+的方案 4、方案 2 的灵敏度分析图，图形最顶层指
+标表示对效能灵敏度影响最大，例如对于方案 4 “电子对抗最小作用距离”指标对整体效能影响最
+大，该指标增大 20%使效能值从基准值的 0.5675 增
+大到 0.5832（蓝色），增幅为 2.7%，而减小 20%
+则效能降低到 0.5509（红色），降幅为 2.9%。
+(a)方案 4 灵敏度分析
+(a) Sensitivity Analysis for Scenario 4
+(b) 方案 2 灵敏度分析
+(b) Sensitivity Analysis for Scenario 2
+图 9 方案指标灵敏度分析
+Fig.9 Sensitivity Analysis of Scheme Indicators 根据图 9 对方案 2 和方案 4 的指标灵敏度分析
+排名可知，不同方案指标灵敏度排名大致相同，但
+存在个别指标排名不同，且同一指标对不同方案效
+能值影响也各有差异。这一方面反映出各因素对方
+案效能值的影响机理不同，因此指标值变化相同幅
+度导致效能值增减变化；另一方面反映出某些指标
+在达到特定阈值后对效能产生影响减弱，例如在方
+案 2 中“突防概率”指标值为 0.78，可能相对整体
+效能值已满足需求，其变化对效能影响较小；而在
+方案 4“突防概率”指标值为 0.61，远低于整体效
+能要求，其轻微变化就会导致效能大幅上升。整体
+来看，对各方案效能值影响较大的指标主要集中于
+电子对抗最小作用距离、突防概率、导弹突防概
+率、导弹毁伤率、信号低截获概率等指标。
+4.3.2 单指标值灵敏度分析
+以方案效能评估值对单一指标值变化灵敏度研
+究为目的，分析指标值从所有方案的最小变化到最
+大时，方案效能值及其排序的变化。图 10 展示了
+方案 2 的 3 个指标的灵敏度分析，其中方案效能变
+化对应左轴，名次排序变化对应右轴。“导弹毁伤
+率 C26”为正向指标，其值从 0.5 上升至 0.74，整
+体效能提升 5.0%，排名从第二上升至第一位；“电
+子对抗响应时间 C20”为负向指标，其值从 1.3 增
+加至 2.66，整体效能降低 2.1%，排名从第二下降至
+第三位；“导弹突防概率 C24”为正向指标，其值
+从 0.52 下降至 0.4，整体效能降低 1.7%，排名从第
+二下降至第三位，而当指标值从 0.52 提升至 0.74，
+航 空 学 报
+整体效能提升 4.1%，排名上升至第一位。分析结果
+表明上述指标与效能之间呈显著正相关关系，根据
+分析结果可明确指标改进或波动控制范围，为方案
+以及决策调整改进提供参考。
+(a) 导弹毁伤率灵敏度分析
+(a) Analysis of Missile Damage Rate Sensitivity
+(b) 电子对抗相应时间灵敏度分析
+(b) Analysis of Electronic Countermeasure Response
+Time Sensitivity
+(c) 导弹突防概率灵敏度分析
+(c) Analysis of Missile Penetration Probability
+Sensitivity
+图 10 单指标灵敏度分析
+Figure 10 Single-Indicator Sensitivity Analysis 5 结束语
+针对有人/无人机协同作战效能高效评估和方案
+快速决策问题，在深入分析传统作战效能评估方法
+基础上，提出基于仿真推演和神经网络的作战效能
+智能评估方法。通过建立作战效能指标体系，借助
+仿真推演平台设计蜂群反舰作战场景并输入指标数
+值，综合推演结果得到作战效能评估数据。利用推
+演评估数据对模型训练，并运用实例分析验证了模
+型的可行性。最后通过指标灵敏度分析对指标值与
+效能值关系研究，明确灵敏度较高指标及其影响机
+理，从而为关键指标识别和方案改进提供指导。
+参 考 文 献
+[1] 张宏宏, 李文华, 郑家毅, 等. 有人/无人机协同作战：概
+念、技术与挑战[J]. 航空学报, 2024, 45(15): 168-194. ZHANG H H, ZHU W H, ZHENG J Y, et al. Manned/Unmanned Aerial Vehicle Cooperative Combat
+System: Concepts, Technologies, and Challenges[J]. Acta Aeronautica et Astronautica Sinica, 2024, 45(15): 168-194.(in Chinese)
+[2] 熊威, 张栋, 任智, 等. 面向有人/无人机协同打击的智能决
+策方法研究[J]. 系统工程与电子技术, 2025, 47(04): 1285- 1299. XIONG W, ZHANG D, REN Z, et al.Research on
+Intelligent Decision-making Methods for Coordinated Attack
+by Manned Aerial Vehicles and Unmanned Aerial Vehicles[J]. Systems Engineering and Electronics, 2025, 47(4): 1285- 1299.(in Chinese)
+[3] 王晓悦, 王珣, 王永贞, 等. 基于仿真的蜂群体系对抗效能
+评估方法[J]. 航空学报, 2022, 43(S1): 110-118. WANG X Y, WANG X, WANG Y Z, et al. Evaluation Method
+for Combat Effectiveness of Task-based Simulated UAV
+Swarm System[J]. Acta Aeronautica et Astronautica Sinica, 2022, 43(S1): 110-118.(in Chinese)
+[4] 杨松, 王维平, 李小波, 等. 无人集群体系设计与仿真评估
+方法[J]. 国防科技大学学报, 2024, 46(03): 126-136. YANG S, WANG W P, LI X B, et al. Design, Simulation and
+Evaluation Method for Unmanned Swarm System⁃of⁃System. Journal of National University of Defense Technology, 2024, 46(03): 126-136.(in Chinese)
+[5] 魏武臣, 徐硕, 何晓夫, 等. 基于作战仿真推演的空-地制导
+弹药效能评估[J]. 兵工学报, 2022, 43(S1): 107-114. WEI W C, XU S, HE X F, et al. Effectiveness Evaluation of
+Air-ground Guided Ammunition[J]. Acta Armamentarii, 2022, 43(S1): 107-114.(in Chinese)
+[6] 胡杰, 陈化良, 刘亮, 等. 无人机蜂群作战效能评估研究[J]. 火力与指挥控制, 2022, 47(4): 164-168. HU J, CHEN H L, LIU L, et al. Research on Operational
+Effectiveness Evaluation of UAV Swarm[J]. Fire Control &
+Command Control, 2022, 47(4): 164-168.(in Chinese)
+[7] ZHAO J, PAN J F, QIU R S. Effectiveness Evaluation of Smart
+Equipment Support Information System Based on Entropy￾revised G1 Method[J]. Journal of Physics: Conference Series, 2021, 2033(1). [8] 常会振, 秦大国, 孙盛智, 等. 基于ADC模型优化的海上无
+人机作战效能评估[J]. 兵器装备工程学报, 2023, 44(9): 58
+航 空 学 报
+-68. CHANG H Z,QIN D G, SUN S Z, et al. Operational effectiveness evaluation of marine un-manned aerial vehicle based on ADC model optimization[J]. Journal of Ordnance Equipment Engineering, 2023, 4444(9): 58-68.(in Chinese)
+[9] 刘登攀, 寇昆湖, 王超, 等. 基于改进ADC法的侦察无人机
+作战效能评估[J]. 电光与控制, 2024, 31(4): 121-127. LIU D P, KOU K H, WANG C, et al. Operational
+Effectiveness Assessment of Reconnaissance UAS Based on
+Improved ADC Method[J]. Electronics Optics & Control, 2024, 31(4): 121-127.(in Chinese)
+[10] LIANG Q, LUO M, WANG Y, et al. Multi-attacks effectiveness evaluation of UUV based on wake guidance[J]. Ocean Engineering, 2022, 266: 112654. [11] 邓力源, 杨萍, 刘卫东, 等. 基于证据理论层次分析法的云
+贝叶斯网络在预警雷达毁伤效果评估中的应用[J]. 兵工学
+报, 2022, 43(04): 814-825. DENG L Y, YANG P, LIU W D, et al. Application in Damage Effect Evaluation of Early Warning Radar of Cloudy Bayesian Network Based on Dempster-Shafer/Analytic Hierarchy
+Process Method[J]. Acta Armamentarii, 2022, 43(04): 814- 825.(in Chinese)
+[12] 孔刚鹏. 基于AHP-模糊综合评定的炮兵连作战试验能力评
+价方法研究[J]. 兵工自动化, 2024, 43(11): 52-56. KONG G P. Research on Evaluation Method of Artillery
+Company Operational Test Capability Based on AHP-Fuzzy
+Comprehensive Evaluation[J].Ordnance Industry Automation, 2024, 43(11): 52-56.(in Chinese)
+[13] 袁彰求, 杨朝旭, 荣海军. 面向定性与定量指标的轻量化高
+空飞艇效能评估方法[J]. 系统工程与电子技术, 2025, 47(0
+3): 817-826. YUAN Z Q, YANG Z X, RONG H J. Lightweight
+Effectiveness Evaluation Method for High Altitude Airships
+for Both Qualitative and Quantitative Indicators[J]. Systems Engineering and Electronics, 2025, 47(3): 817-826.(in Chinese)
+[14] 高俊吉, 王司霖, 朱雪莲. 舰艇磁性对抗能力综合评估模型
+[J]. 哈尔滨工程大学学报, 2024, 45(08): 1559-1563. GAO J J, WANG S L, ZHU X L. Comprehensive Evaluation
+Model for The Magnetic Confrontation Capability of Ships[J]. Journal of Harbin Engineering University, 2024, 45(8): 1559- 1563.(in Chinese)
+[15] 王光源, 李浩民, 祝大程, 等. 基于熵权法-灰色关联法的海
+面目标威胁度评估[J]. 指挥控制与仿真, 2023, 45(04): 57- 61. WANG G Y, LI H M, ZHU D C, et al. Threat Evaluation of
+Targets at Sea Based on Entropy Weight-Grey Correlation Method[J]. Command Control & Simulation, 2023, 45(04): 57- 61.(in Chinese)
+[16] WANG X Y, YANG Z, CHAI S Y, et al. Integrated Threat
+Assessment Method of Beyond-Visual-Range Air Combat[J]. Journal of Systems Engineering and Electronics, 2025, 36(1): 176–193. [17] 邵明军, 刘树光, 严惊涛. 基于ADC-BP模型的对地攻击无
+人机自主作战效能评估[J]. 空军工程大学学报, 2023, 24
+(6): 112-119. SHAO M J, LIU S G, YAN J T. Assessment of Autonomous Combat Effectiveness of Ground-Attack UAV Based on ADC- BP Model[J]. Journal of Air Force Engineering University, 2023, 24(6): 112-119.(in Chinese)
+[18] 尹浩, 魏急波, 赵海涛, 等. 面向有人/无人协同的智能通信
+与组网关键技术：现状与趋势[J]. 通信学报, 2024, 45(1): 1-17. YIN H, WEI J B, ZHAO H T, et al. Intelligent Communication
+and Networking Key Technologies for Manned/Unmanned
+Cooperation: States-of-The-Art and Trends[J]. Journal on Communications, 2024, 45(1): 1-17.(in Chinese)
+[19] 徐向前, 豆亚杰, 钱立炜, 等. 作战体系能力需求敏捷开发
+方法研究[J]. 系统工程与电子技术, 2023, 45(10): 3139-31
+48. XU X Q, DOU Y J, QIAN L W, et al. Research on Agile Development Method-of-Combat System-of-Systems Capability Requirements[J]. Systems Engineering and
+Electronics, 2023, 45(10): 3139-3148.(in Chinese)
+[20] WANG S, DU Y, ZHAO S, et al. Research on The Construction of Weaponry Indicator System and Intelligent
+Evaluation Methods[J]. Scientific Reports, 2023, 13(1): 19370.
+航 空 学 报
+Intelligent Assessment Method for MAV/UAV Collaborative Combat
+Effectiveness
+ZHAO Zijun
+1, 2, 3
+, CHEN Shitao
+1, 2, 3*, HE Weiyan
+4
+, LIU Longhao
+1, 2, 3
+, ZHANG Zhenghao
+1, 2, 3
+1. Air Force Engineering University, Equipment Management and UAV Engineering School, Xi’an 710051, China
+2. National Key Laboratory of Unmanned Aerial Vehicle Technology , Xi’an 710051, China
+3 The Youth Innovation Team of Shaanxi University, Xi’an 710051, China
+4. Unit 95972 of PLA, Jiuquan 735000, China
+Abstract: With the increasing intelligence, informatization, and systematization of modern warfare, there emerges a
+demand for real-time combat effectiveness evaluation and efficient decision-making in future operations. To address
+the effectiveness evaluation problem in manned aerial vehicle(MAV)/unmanned aerial vehicle(UAV) cooperative air-to- ground combat, this paper proposes an intelligent assessment method based on combat simulation deduction and
+artificial neural networks. Supported by the simulation deduction system, evaluation data are obtained through
+constructing an combat effectiveness evaluation index system, designing simulation deduction processes, and
+synthesizing evaluation results. BP neural network is employed to train the data and verify training effectiveness. Case
+analysis validates the feasibility of the method, while sensitivity analysis investigates key indicators of various
+schemes and their impacts. The proposed method provides technical references for effectiveness evaluation of
+MAV/UAV cooperative combat, equipment improvement research, and rapid operational decision-making. Keywords: MAV/UAV cooperative combat; simulation deduction; effectiveness evaluation; BP neural network;
+Sensitivity Analysis
+Received：2025-10-10；Revised：2025-10-28；Accepted：2025-11-19；Published online：
+Foundation item：National Natural Science Foundation of China (72203166)；Military Graduate Student Research Funding Program
+(JY2024C115) *Corresponding author. E-mail：chenshitao311@163.com
