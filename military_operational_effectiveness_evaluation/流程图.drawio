@@ -1,0 +1,163 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/26.0.9 Chrome/128.0.6613.186 Electron/32.2.5 Safari/537.36" version="26.0.9">
+  <diagram name="军事通信装备效能评估系统" id="flowchart">
+    <mxGraphModel dx="1958" dy="1195" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1600" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="军事通信装备效能评估系统" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=33;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="300" y="34" width="500" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="main_arrow_1" value="" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#000000;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;fontStyle=1;fontSize=16;" parent="1" source="phase1_label" target="phase2_label" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="120" as="sourcePoint" />
+            <mxPoint x="120" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="main_arrow_2" value="" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#000000;fontStyle=1;fontSize=16;" parent="1" source="phase2_label" target="phase3_label" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="422" as="sourcePoint" />
+            <mxPoint x="120" y="682" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="main_arrow_3" value="" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#000000;fontStyle=1;fontSize=16;" parent="1" source="phase3_label" target="phase4_label" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="709" as="sourcePoint" />
+            <mxPoint x="120" y="969" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="main_arrow_4" value="" style="endArrow=classic;html=1;strokeWidth=3;strokeColor=#000000;fontStyle=1;fontSize=16;" parent="1" source="phase4_label" target="phase5_label" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="969" as="sourcePoint" />
+            <mxPoint x="120" y="1229" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="phase1_label" value="阶段一&#xa;专家可信度评估" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2F5496;fontColor=#FFFFFF;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="40" y="120" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="phase1_dashed" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;dashed=1;dashPattern=8 8;strokeWidth=2;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+          <mxGeometry x="240" y="100" width="820" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="phase1_orange" value="专家可信度评估" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#5B9BD5;strokeColor=#2F5597;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="420" y="115" width="460" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="phase1_g1" value="experts表 → 专家背景 → 主观可信度(α)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="175" width="250" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase1_g2" value="ahp_expert_military_operation_effect_weights → AHP评分 → 客观可信度(β)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="530" y="175" width="380" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase1_g3" value="把握度 → 综合可信度(γ) → 专家最终可信度(λ)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="225" width="650" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase1_out" value="输出: expert_credibility_results 表 (α, β, γ, λ)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#666666;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="265" width="650" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="phase2_label" value="阶段二&lt;br&gt;实验基础打分数据" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2F5496;fontColor=#FFFFFF;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="40" y="422" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="phase2_out" value="输出: 定性指标量化得分 (写回评分表/或参与综合得分)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#666666;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="66" y="581" width="780" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="phase3_label" value="阶段三&#xa;AHP最终权重计算" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2F5496;fontColor=#FFFFFF;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="40" y="709" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="phase3_dashed" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;dashed=1;dashPattern=8 8;strokeWidth=2;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+          <mxGeometry x="240" y="647" width="820" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="phase3_orange" value="AHP权重计算与修正" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#5B9BD5;strokeColor=#2F5597;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="480" y="662" width="340" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="phase3_g1" value="ahp_expert_military_operation_effect_weights (专家AHP评分: 权重+把握度)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="722" width="450" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase3_g2" value="AHP一致性检验 + 把握度过滤 + 异常值剔除 → 权重修正" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="772" width="520" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase3_g3" value="expert_credibility_results 表 (综合可信度λ) + 置信度矩阵" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="730" y="722" width="310" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase3_out" value="输出: ahp_final_weights (indicator_key + final_weight，全局归一化=1)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#666666;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="822" width="780" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="phase4_label" value="阶段四&#xa;惩罚综合效能计算" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2F5496;fontColor=#FFFFFF;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="40" y="969" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="phase4_dashed" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;dashed=1;dashPattern=8 8;strokeWidth=2;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+          <mxGeometry x="240" y="907" width="820" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="phase4_orange" value="加权得分 + 惩罚模型" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#5B9BD5;strokeColor=#2F5597;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="480" y="922" width="340" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="phase4_g1" value="military_operation_effect_score 表 → 指标得分 Sj(0~100, 越大越好)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="982" width="520" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase4_g2" value="ahp_final_weights.final_weight → 权重 ωj (Σωj=1)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="1032" width="240" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase4_g3" value="Sstage = Σ(ωj × Sj)；惩罚指标: reliability_crash_rate_qt，阈值70，m=0.8；Sfinal = Sstage × P" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="520" y="1032" width="520" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase4_out" value="输出: effectiveness_evaluation_results (Sstage, P, Sfinal) + 图表" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#666666;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="1082" width="780" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="phase5_label" value="阶段五&#xa;成本归一化与效费比" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2F5496;fontColor=#FFFFFF;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="40" y="1229" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="phase5_dashed" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;dashed=1;dashPattern=8 8;strokeWidth=2;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+          <mxGeometry x="240" y="1167" width="820" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="phase5_orange" value="效费分析 (投入-产出)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#5B9BD5;strokeColor=#2F5597;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="480" y="1182" width="340" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="phase5_g1" value="cost_evaluation 表 → 21项成本字段" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="1242" width="520" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase5_g2" value="Max-Min归一化(正向): (x-min)/(max-min) → 平均成本投入 C = mean(normalized_costs)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="1292" width="780" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase5_g3" value="效费比 R = Sfinal / (C×100)；输出对比图: 最终得分(柱) + 效费比(折线)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+          <mxGeometry x="260" y="1342" width="780" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase5_out" value="输出: cost_effectiveness_results + cost_effectiveness_comparison.png(含文字总结)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#666666;fontStyle=1" parent="1" vertex="1">
+          <mxGeometry x="260" y="1387" width="780" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="dLyK3XyuM-aj-wFQU5im-2" value="" style="group" parent="1" vertex="1" connectable="0">
+          <mxGeometry x="240" y="360" width="399" height="244" as="geometry" />
+        </mxCell>
+        <mxCell id="phase2_dashed" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;dashed=1;dashPattern=8 8;strokeWidth=2;fontStyle=1;fontSize=12;" parent="dLyK3XyuM-aj-wFQU5im-2" vertex="1">
+          <mxGeometry width="399" height="244" as="geometry" />
+        </mxCell>
+        <mxCell id="phase2_orange" value="专家定性数据集结" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#5B9BD5;strokeColor=#2F5597;fontSize=12;fontStyle=1;" parent="dLyK3XyuM-aj-wFQU5im-2" vertex="1">
+          <mxGeometry x="22.58490566037736" y="14" width="352.8891509433962" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="phase2_g1" value="定性指标区间评分表 (等级A+/A... + 把握度)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="dLyK3XyuM-aj-wFQU5im-2" vertex="1">
+          <mxGeometry x="18.82075471698113" y="75" width="357.5943396226415" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase2_g2" value="等级→区间 → 覆盖函数 → 质心计算 (按综合可信度加权)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="dLyK3XyuM-aj-wFQU5im-2" vertex="1">
+          <mxGeometry x="16.93867924528302" y="177" width="359.47641509433964" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="phase2_g3" value="expert_credibility_results 表 (α、β、综合可信度)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="dLyK3XyuM-aj-wFQU5im-2" vertex="1">
+          <mxGeometry x="18.82075471698113" y="128" width="357.5943396226415" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="dLyK3XyuM-aj-wFQU5im-3" value="" style="group" parent="1" vertex="1" connectable="0">
+          <mxGeometry x="662" y="358" width="409" height="244" as="geometry" />
+        </mxCell>
+        <mxCell id="dLyK3XyuM-aj-wFQU5im-4" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;dashed=1;dashPattern=8 8;strokeWidth=2;fontStyle=1;fontSize=12;" parent="dLyK3XyuM-aj-wFQU5im-3" vertex="1">
+          <mxGeometry width="399" height="244" as="geometry" />
+        </mxCell>
+        <mxCell id="dLyK3XyuM-aj-wFQU5im-5" value="定量基础数据计算" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#5B9BD5;strokeColor=#2F5597;fontSize=12;fontStyle=1;" parent="dLyK3XyuM-aj-wFQU5im-3" vertex="1">
+          <mxGeometry x="22.58490566037736" y="14" width="352.8891509433962" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="dLyK3XyuM-aj-wFQU5im-6" value="Max-Min归一化(正向): (x-min)/(max-min)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="dLyK3XyuM-aj-wFQU5im-3" vertex="1">
+          <mxGeometry x="18.82075471698113" y="75" width="357.5943396226415" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="dLyK3XyuM-aj-wFQU5im-8" value="0 ~ 1打分记过数据" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="dLyK3XyuM-aj-wFQU5im-3" vertex="1">
+          <mxGeometry x="18.82075471698113" y="128" width="357.5943396226415" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="T7NhHpltGTh3wHnrtAcv-1" value="输出：0~100的打分score表" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#666666;fontStyle=1" vertex="1" parent="dLyK3XyuM-aj-wFQU5im-3">
+          <mxGeometry x="-20" y="220" width="429" height="24" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

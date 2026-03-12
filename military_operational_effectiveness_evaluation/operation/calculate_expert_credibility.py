@@ -163,7 +163,7 @@ class ExpertCredibilityEvaluator:
         self.cursor.execute(query)
         return self.cursor.fetchall()
     
-    def load_expert_ahp_weights(self, batch_id='AHP-2026-001'):
+    def load_expert_ahp_weights(self, batch_id='AHP-2026-002'):
         """
         加载专家AHP权重数据（包含权重和把握度）
         
@@ -1292,7 +1292,173 @@ class ExpertCredibilityEvaluator:
         print(f"  最终权重总和: {corrected_weights_final.sum():.6f} (已全局归一化到1.000000)")
 
         return corrected_weights_dict
-    
+
+    def save_credibility_results(self, comprehensive_results, batch_id='AHP-2026-001'):
+        """
+        保存专家可信度评估结果到数据库
+
+        参数:
+            comprehensive_results: 综合可信度计算结果列表
+            batch_id: 批次ID
+        """
+        from datetime import datetime
+
+        evaluation_date = datetime.now().date()
+
+        # 先删除该批次已存在的数据
+        delete_query = "DELETE FROM expert_credibility_results WHERE batch_id = %s"
+        self.cursor.execute(delete_query, (batch_id,))
+        self.connection.commit()
+        print(f"\n  已清除批次 {batch_id} 的旧可信度结果数据")
+
+        # 插入新数据
+        insert_query = """
+            INSERT INTO expert_credibility_results (
+                batch_id, evaluation_date, expert_name,
+                influence_score, knowledge_score, subjective_total_score, subjective_credibility,
+                dispersion, consistency_score, objective_credibility, comprehensive_credibility,
+                subjective_weight, objective_weight
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+        """
+
+        for result in comprehensive_results:
+            values = (
+                batch_id,
+                evaluation_date,
+                result['expert_name'],
+                round(result.get('influence_score', 0), 4),
+                round(result.get('knowledge_score', 0), 4),
+                round(result.get('subjective_total_score', 0), 4),
+                round(result.get('subjective_credibility', 0), 4),
+                round(result.get('dispersion', 0), 2) if result.get('dispersion') is not None and not np.isnan(result.get('dispersion', 0)) else None,
+                round(result.get('consistency_score', 0), 4),
+                round(result.get('objective_credibility', 0), 4),
+                round(result['comprehensive_credibility'], 4),
+                COMPREHENSIVE_WEIGHT['subjective'],
+                COMPREHENSIVE_WEIGHT['objective']
+            )
+            self.cursor.execute(insert_query, values)
+
+        self.connection.commit()
+        print(f"  已保存 {len(comprehensive_results)} 位专家的可信度结果")
+
+    def save_ahp_weights(self, corrected_weights_dict, batch_id='AHP-2026-001'):
+        """
+        保存最终AHP权重结果到数据库
+
+        参数:
+            corrected_weights_dict: 修正权重结果字典
+            batch_id: 批次ID
+        """
+        from datetime import datetime
+
+        evaluation_date = datetime.now().date()
+
+        # 先删除该批次已存在的数据
+        delete_query = "DELETE FROM ahp_final_weights WHERE batch_id = %s"
+        self.cursor.execute(delete_query, (batch_id,))
+        self.connection.commit()
+        print(f"  已清除批次 {batch_id} 的旧AHP权重数据")
+
+        # 插入数据
+        insert_query = """
+            INSERT INTO ahp_final_weights (
+                batch_id, evaluation_date, indicator_key, indicator_name, indicator_name_en,
+                category, final_weight, second_level_weight, original_weight,
+                lambda_max, CI, CR, is_consistent, valid_experts
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+        """
+
+        final_weights = corrected_weights_dict['second_level_corrected']
+        second_level_raw = corrected_weights_dict['second_level_raw']
+        second_level_original = corrected_weights_dict['second_level_original']
+        ahp_results = corrected_weights_dict['ahp_consistency_results']
+
+        for i, indicator_key in enumerate(AHP_WEIGHT_FIELDS):
+            # 获取指标所属类别
+            category = None
+            indicator_name = None
+            indicator_name_en = None
+            for cat, info in INDICATOR_HIERARCHY.items():
+                if i in info['indices']:
+                    category = cat
+                    indicator_name = info['name']
+                    indicator_name_en = info['name_en']
+                    # 获取具体指标名称
+                    idx_in_category = info['indices'].index(i)
+                    indicator_names = {
+                        'security': ['密钥泄露', '被侦察概率', '抗拦截能力'],
+                        'reliability': ['崩溃率', '恢复能力', '通信可用性'],
+                        'transmission': ['带宽', '呼叫建立时间', '传输时延', '误码率', '吞吐量', '频谱效率'],
+                        'anti_jamming': ['SINR', '抗干扰余量', '通信距离'],
+                        'resource': ['功耗', '人力需求'],
+                        'effect': ['毁伤率', '任务完成率', '效费比']
+                    }
+                    if cat in indicator_names and idx_in_category < len(indicator_names[cat]):
+                        indicator_name = indicator_names[cat][idx_in_category]
+                    break
+
+            # 获取AHP一致性结果
+            if category in ahp_results:
+                ahp_cat = ahp_results[category]
+                lambda_max = ahp_cat.get('lambda_max', 0)
+                CI = ahp_cat.get('CI', 0)
+                CR = ahp_cat.get('CR', 0)
+                is_consistent = 1 if ahp_cat.get('is_consistent', True) else 0
+                valid_experts = ahp_cat.get('valid_experts', 0)
+            else:
+                lambda_max, CI, CR, is_consistent, valid_experts = 0, 0, 0, 1, 0
+
+            # 获取指标英文名
+            indicator_name_en_map = {
+                'security_key_leakage': 'Key Leakage',
+                'security_detected_probability': 'Detected Probability',
+                'security_interception_resistance': 'Interception Resistance',
+                'reliability_crash_rate': 'Crash Rate',
+                'reliability_recovery_capability': 'Recovery Capability',
+                'reliability_communication_availability': 'Communication Availability',
+                'transmission_bandwidth': 'Bandwidth',
+                'transmission_call_setup_time': 'Call Setup Time',
+                'transmission_transmission_delay': 'Transmission Delay',
+                'transmission_bit_error_rate': 'Bit Error Rate',
+                'transmission_throughput': 'Throughput',
+                'transmission_spectral_efficiency': 'Spectral Efficiency',
+                'anti_jamming_sinr': 'SINR',
+                'anti_jamming_anti_jamming_margin': 'Anti-jamming Margin',
+                'anti_jamming_communication_distance': 'Communication Distance',
+                'resource_power_consumption': 'Power Consumption',
+                'resource_manpower_requirement': 'Manpower Requirement',
+                'effect_damage_rate': 'Damage Rate',
+                'effect_mission_completion_rate': 'Mission Completion Rate',
+                'effect_cost_effectiveness': 'Cost Effectiveness'
+            }
+            indicator_name_en = indicator_name_en_map.get(indicator_key, indicator_key)
+
+            values = (
+                batch_id,
+                evaluation_date,
+                indicator_key.replace('_weight', ''),
+                indicator_name,
+                indicator_name_en,
+                category,
+                round(final_weights[i], 6),
+                round(second_level_raw[i], 6),
+                round(second_level_original[i], 6),
+                round(lambda_max, 4) if lambda_max else 0,
+                round(CI, 6) if CI else 0,
+                round(CR, 6) if CR else 0,
+                is_consistent,
+                valid_experts
+            )
+            self.cursor.execute(insert_query, values)
+
+        self.connection.commit()
+        print(f"  已保存 {len(AHP_WEIGHT_FIELDS)} 个指标的AHP权重")
+
     def evaluate(self):
         """执行完整的专家可信度评估"""
         print("\n" + "="*100)
@@ -1336,7 +1502,13 @@ class ExpertCredibilityEvaluator:
         print("\n[步骤8] 生成可视化图表...")
         self.visualize_results(comprehensive_results, experts_background, weight_matrix, avg_weight_vector, consistency_result, corrected_weights_dict)
         print("  可视化完成")
-        
+
+        # 9. 保存结果到数据库
+        print("\n[步骤9] 保存结果到数据库...")
+        self.save_credibility_results(comprehensive_results, batch_id='AHP-2026-001')
+        self.save_ahp_weights(corrected_weights_dict, batch_id='AHP-2026-001')
+        print("  数据库保存完成")
+
         print("\n" + "="*100)
         print("评估完成！")
         print("="*100 + "\n")
@@ -1537,7 +1709,11 @@ class ExpertCredibilityEvaluator:
             subjective_credibility, objective_credibility, avg_confidence
         )
 
-        # 2. 其他图表合并到一张图（2×2布局）
+        # 2. 向量离散度图（单独保存）
+        print("    生成向量离散度图...")
+        self.plot_vector_dispersion_separate(weight_matrix, expert_names, consistency_result)
+
+        # 3. 其他图表合并到一张图（2×2布局）
         print("    生成图2-5: 其他图表...")
         self.plot_other_charts_2x2(expert_names, comprehensive_credibility, corrected_weights_dict)
 
@@ -2531,10 +2707,137 @@ class ExpertCredibilityEvaluator:
                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
         
         ax.legend(fontsize=7, loc='upper right')
-    
+
+    def plot_vector_dispersion_separate(self, weight_matrix, expert_names, consistency_result=None):
+        """单独保存向量离散度图"""
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        m = weight_matrix.shape[0]  # 专家数量
+        avg_weights = np.mean(weight_matrix, axis=0)
+        
+        # 计算每位专家的向量相对离散度
+        vector_dispersions = []
+        expert_cvs = []
+
+        if consistency_result and 'confidence_matrix' in consistency_result:
+            confidence_matrix = consistency_result['confidence_matrix']
+            threshold = float(consistency_result.get('confidence_threshold', 0.6))
+            active_indicator_mask = consistency_result.get('active_indicator_mask', np.ones(weight_matrix.shape[1], dtype=bool))
+            indicator_means = self._compute_indicator_means_with_confidence(weight_matrix, confidence_matrix, threshold=threshold)
+            valid_scores = weight_matrix[confidence_matrix >= threshold]
+            overall_mean = float(np.mean(valid_scores)) if valid_scores.size > 0 else float(np.mean(weight_matrix))
+        else:
+            confidence_matrix = None
+            threshold = 0.0
+            active_indicator_mask = np.ones(weight_matrix.shape[1], dtype=bool)
+            indicator_means = np.mean(weight_matrix, axis=0)
+            overall_mean = float(np.mean(weight_matrix))
+        
+        for i in range(m):
+            expert_weights = weight_matrix[i]
+            
+            # 分子：欧氏距离
+            numerator = np.sqrt(np.sum((expert_weights - avg_weights) ** 2))
+            
+            # 分母：向量模的和
+            denominator = np.sqrt(np.sum(expert_weights ** 2) + np.sum(avg_weights ** 2))
+            
+            # 相对离散度
+            if denominator > 0:
+                dispersion = numerator / denominator
+            else:
+                dispersion = 0
+            
+            vector_dispersions.append(dispersion)
+            
+            # 计算CV
+            if confidence_matrix is not None:
+                valid_indicator = active_indicator_mask & (confidence_matrix[i, :] >= threshold) & (~np.isnan(indicator_means))
+                if np.sum(valid_indicator) < 2:
+                    cv = np.nan
+                else:
+                    deviations = expert_weights[valid_indicator] - indicator_means[valid_indicator]
+                    std_of_deviations = np.std(deviations, ddof=1)
+                    cv = (std_of_deviations / overall_mean) * 100 if overall_mean > 0 else 0.0
+            else:
+                deviations = expert_weights - indicator_means
+                std_of_deviations = np.std(deviations, ddof=1) if deviations.size > 1 else 0.0
+                cv = (std_of_deviations / overall_mean) * 100 if overall_mean > 0 else 0.0
+            expert_cvs.append(cv)
+        
+        # 创建DataFrame用于排序
+        dispersion_data = list(zip(expert_names, vector_dispersions, expert_cvs))
+        dispersion_data.sort(key=lambda x: x[1])
+        
+        sorted_experts = [d[0] for d in dispersion_data]
+        sorted_dispersions = [d[1] for d in dispersion_data]
+        sorted_cvs = [d[2] for d in dispersion_data]
+        
+        x = np.arange(len(sorted_experts))
+        
+        # 双Y轴：左轴为离散度，右轴为CV
+        ax1 = ax
+        ax2 = ax1.twinx()
+        
+        # 绘制柱状图 - 离散度
+        colors = plt.cm.RdYlGn_r(np.array(sorted_dispersions) / max(sorted_dispersions))
+        bars = ax1.bar(x, sorted_dispersions, color=colors, alpha=0.7, 
+                     edgecolor='black', linewidth=1, label='Vector Dispersion')
+        
+        # 绘制折线图 - CV
+        line = ax2.plot(x, sorted_cvs, 'b-o', linewidth=2, markersize=8, 
+                       label='CV (%)', color='darkblue')
+        
+        ax1.set_title('Expert Weight Vector Dispersion Analysis\n(Vector-based Relative Dispersion vs Coefficient of Variation)', 
+                    fontsize=12, fontweight='bold')
+        ax1.set_xlabel('Expert', fontsize=10)
+        ax1.set_ylabel('Relative Dispersion (0-0.707)', fontsize=10, color='darkgreen')
+        ax2.set_ylabel('CV (%)', fontsize=10, color='darkblue')
+        
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(sorted_experts, fontsize=9, rotation=45, ha='right')
+        ax1.grid(axis='y', alpha=0.3)
+        
+        # 设置Y轴范围
+        ax1.set_ylim(0, max(sorted_dispersions) * 1.2)
+        if not all(np.isnan(cv) for cv in sorted_cvs):
+            valid_cvs = [cv for cv in sorted_cvs if not np.isnan(cv)]
+            if valid_cvs:
+                ax2.set_ylim(0, max(valid_cvs) * 1.3)
+        
+        # 添加数值标签 - 离散度
+        for i, (bar, val) in enumerate(zip(bars, sorted_dispersions)):
+            ax1.text(i, val, f'{val:.4f}', ha='center', va='bottom', fontsize=8, color='darkgreen')
+        
+        # 添加数值标签 - CV
+        for i, cv in enumerate(sorted_cvs):
+            if not np.isnan(cv):
+                ax2.text(i, cv, f'{cv:.1f}%', ha='center', va='bottom', fontsize=8, color='darkblue')
+        
+        # 添加平均线
+        avg_disp = np.mean(sorted_dispersions)
+        ax1.axhline(y=avg_disp, color='green', linestyle='--', linewidth=2, 
+                   alpha=0.6, label=f'Avg Dispersion={avg_disp:.4f}')
+        
+        # 合并图例
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right', fontsize=8)
+        
+        # 添加说明
+        ax1.text(0.02, 0.98, 
+                f'Theoretical Max Dispersion: 0.707\nCurrent Max: {max(sorted_dispersions):.4f}\nDispersion Formula: ||W_i - W_avg|| / (||W_i|| + ||W_avg||)',
+               transform=ax1.transAxes, fontsize=8, verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        plt.tight_layout()
+        plt.savefig('图6_向量离散度分析.png', dpi=150, bbox_inches='tight', facecolor='white')
+        plt.close()
+        
+        print("    [OK] 向量离散度图已保存: 图6_向量离散度分析.png")
+
     def plot_weight_correction(self, ax, corrected_weights_dict):
         """图表7: 权重修正对比图"""
-        original_weights = corrected_weights_dict['second_level_original']
         corrected_weights = corrected_weights_dict['second_level_corrected']
         
         # 计算变化率
