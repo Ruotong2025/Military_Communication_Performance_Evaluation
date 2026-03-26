@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.stream.Collectors;
 
 /**
  * 动态表查询服务
@@ -25,8 +26,15 @@ public class TableService {
     private static final Set<String> ALLOWED_TABLES = new HashSet<>(Arrays.asList(
         "communication_network_lifecycle",
         "during_battle_communications",
-        "military_effectiveness_evaluation"
+        "military_effectiveness_evaluation",
+        "records_military_operation_info",
+        "records_military_communication_info",
+        "records_link_maintenance_events",
+        "records_security_events"
     ));
+
+    // 业务要求：基础表不允许按行删除
+    private static final String BASE_TABLE = "records_military_operation_info";
 
     /**
      * 获取表结构信息
@@ -83,6 +91,40 @@ public class TableService {
         int totalPages = (int) Math.ceil((double) total / size);
         
         return new PageResult(records, total, page, size, totalPages);
+    }
+
+    /**
+     * 按主键删除一行（仅允许非基础 records 表）
+     */
+    public int deleteTableRow(String tableName, Map<String, Object> row) {
+        validateTableName(tableName);
+        if (BASE_TABLE.equals(tableName)) {
+            throw new IllegalArgumentException("基础表不支持删除行: " + tableName);
+        }
+        if (row == null || row.isEmpty()) {
+            throw new IllegalArgumentException("删除失败：缺少行数据");
+        }
+
+        String pkSql = "SELECT COLUMN_NAME FROM information_schema.COLUMNS " +
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_KEY = 'PRI' " +
+                "ORDER BY ORDINAL_POSITION";
+        List<String> pkColumns = jdbcTemplate.queryForList(pkSql, String.class, tableName);
+        if (pkColumns == null || pkColumns.isEmpty()) {
+            throw new IllegalArgumentException("删除失败：表未定义主键，禁止删除");
+        }
+
+        for (String pk : pkColumns) {
+            if (!row.containsKey(pk) || row.get(pk) == null) {
+                throw new IllegalArgumentException("删除失败：缺少主键字段 " + pk);
+            }
+        }
+
+        String whereClause = pkColumns.stream()
+                .map(pk -> "`" + pk + "` = ?")
+                .collect(Collectors.joining(" AND "));
+        Object[] args = pkColumns.stream().map(row::get).toArray();
+        String sql = "DELETE FROM `" + tableName + "` WHERE " + whereClause + " LIMIT 1";
+        return jdbcTemplate.update(sql, args);
     }
 
     /**

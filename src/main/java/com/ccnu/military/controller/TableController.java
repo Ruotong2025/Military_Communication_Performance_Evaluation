@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -61,6 +62,24 @@ public class TableController {
         try {
             PageResult result = tableService.getTableData(tableName, page, size);
             return ApiResponse.success("查询成功", result);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(400, e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/data/{tableName}")
+    @Operation(summary = "删除表数据单行", description = "按主键删除指定表的一行数据")
+    public ApiResponse<Integer> deleteTableRow(
+            @Parameter(description = "表名", example = "records_military_communication_info")
+            @PathVariable String tableName,
+            @RequestBody Map<String, Object> row) {
+        log.info("API调用: 删除表行 - {}", tableName);
+        try {
+            int affected = tableService.deleteTableRow(tableName, row);
+            if (affected > 0) {
+                return ApiResponse.success("删除成功", affected);
+            }
+            return ApiResponse.error(404, "未匹配到可删除的数据行");
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(400, e.getMessage());
         }

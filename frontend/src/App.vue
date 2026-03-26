@@ -22,11 +22,15 @@
         >
           <el-menu-item index="data">
             <el-icon><DataAnalysis /></el-icon>
-            <span>基础数据查看</span>
+            <span>军事作战模拟数据</span>
           </el-menu-item>
           <el-menu-item index="evaluation">
             <el-icon><TrendCharts /></el-icon>
             <span>效能评估分析</span>
+          </el-menu-item>
+          <el-menu-item index="expert">
+            <el-icon><User /></el-icon>
+            <span>专家可信度评估</span>
           </el-menu-item>
         </el-menu>
       </el-aside>
@@ -42,7 +46,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Trophy, User, Setting, DataAnalysis, TrendCharts } from '@element-plus/icons-vue'
+import { Trophy, Setting, DataAnalysis, TrendCharts, User } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

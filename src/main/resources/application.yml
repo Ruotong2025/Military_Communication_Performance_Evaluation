@@ -1,12 +1,12 @@
 spring:
   application:
     name: military-communication-evaluation
-  
+
   # 数据源配置
   datasource:
-    url: jdbc:mysql://localhost:3306/military_communication_effectiveness?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: root
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/military_operational_effectiveness_evaluation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:admin}
+    password: ${SPRING_DATASOURCE_PASSWORD:admin}
     driver-class-name: com.mysql.cj.jdbc.Driver
     
     # 连接池配置
@@ -71,3 +71,6 @@ python:
   script:
     path: python_service/evaluation_service.py  # Python 脚本相对路径
   timeout: 300  # 超时时间（秒）
+  # 作战模拟四表生成脚本（相对项目根目录 / 工作目录）
+  combat-data-script: military_operational_effectiveness_evaluation/generate/generate_all_data.py
+  combat-timeout: 600  # 生成脚本超时（秒），数据量大时可加大

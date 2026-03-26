@@ -1,6 +1,6 @@
 <mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/26.0.9 Chrome/128.0.6613.186 Electron/32.2.5 Safari/537.36" version="26.0.9">
   <diagram name="军事通信装备效能评估系统" id="flowchart">
-    <mxGraphModel dx="1958" dy="1195" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1600" math="0" shadow="0">
+    <mxGraphModel dx="1363" dy="939" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="1600" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -52,13 +52,13 @@
         <mxCell id="phase1_out" value="输出: expert_credibility_results 表 (α, β, γ, λ)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#666666;fontStyle=1" parent="1" vertex="1">
           <mxGeometry x="260" y="265" width="650" height="24" as="geometry" />
         </mxCell>
-        <mxCell id="phase2_label" value="阶段二&lt;br&gt;实验基础打分数据" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2F5496;fontColor=#FFFFFF;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+        <mxCell id="phase2_label" value="阶段二&lt;br&gt;单次实验评估数据" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2F5496;fontColor=#FFFFFF;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
           <mxGeometry x="40" y="422" width="160" height="80" as="geometry" />
         </mxCell>
         <mxCell id="phase2_out" value="输出: 定性指标量化得分 (写回评分表/或参与综合得分)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#666666;fontStyle=1" parent="1" vertex="1">
           <mxGeometry x="66" y="581" width="780" height="24" as="geometry" />
         </mxCell>
-        <mxCell id="phase3_label" value="阶段三&#xa;AHP最终权重计算" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2F5496;fontColor=#FFFFFF;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+        <mxCell id="phase3_label" value="阶段一&lt;br&gt;AHP权重矩阵构建" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4472C4;strokeColor=#2F5496;fontColor=#FFFFFF;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
           <mxGeometry x="40" y="709" width="160" height="80" as="geometry" />
         </mxCell>
         <mxCell id="phase3_dashed" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;dashed=1;dashPattern=8 8;strokeWidth=2;fontStyle=1;fontSize=12;" parent="1" vertex="1">
@@ -154,7 +154,7 @@
         <mxCell id="dLyK3XyuM-aj-wFQU5im-8" value="0 ~ 1打分记过数据" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#9DC3E6;strokeColor=#2F5597;fontSize=12;fontStyle=1" parent="dLyK3XyuM-aj-wFQU5im-3" vertex="1">
           <mxGeometry x="18.82075471698113" y="128" width="357.5943396226415" height="36" as="geometry" />
         </mxCell>
-        <mxCell id="T7NhHpltGTh3wHnrtAcv-1" value="输出：0~100的打分score表" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#666666;fontStyle=1" vertex="1" parent="dLyK3XyuM-aj-wFQU5im-3">
+        <mxCell id="T7NhHpltGTh3wHnrtAcv-1" value="输出：0~100的打分score表" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#666666;fontStyle=1" parent="dLyK3XyuM-aj-wFQU5im-3" vertex="1">
           <mxGeometry x="-20" y="220" width="429" height="24" as="geometry" />
         </mxCell>
       </root>
