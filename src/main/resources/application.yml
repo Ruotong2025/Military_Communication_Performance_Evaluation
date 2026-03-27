@@ -1,14 +1,32 @@
+# ============================================================
+# 军事通信效能评估系统 - Spring Boot 主配置
+#
+# 默认激活开发环境 (dev)
+# 开发环境数据库：root / root
+# 生产环境启动时添加参数：--spring.profiles.active=prod
+#
+# Python 脚本路径配置说明：
+#   Windows: C:\\path\\to\\military_operational_effectiveness_evaluation\\generate\\generate_all_data.py
+#   Linux: /opt/military-evaluation/military_operational_effectiveness_evaluation/generate/generate_all_data.py
+# ============================================================
+
 spring:
   application:
     name: military-communication-evaluation
 
-  # 数据源配置
+  # 激活的配置文件
+  # 开发环境：默认使用主配置（无需指定）
+  # 生产环境：--spring.profiles.active=prod
+  profiles:
+    active: dev
+
+  # 数据源配置 - 开发环境默认配置
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/military_operational_effectiveness_evaluation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
-    username: ${SPRING_DATASOURCE_USERNAME:admin}
-    password: ${SPRING_DATASOURCE_PASSWORD:admin}
+    url: jdbc:mysql://localhost:3306/military_operational_effectiveness_evaluation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
-    
+
     # 连接池配置
     hikari:
       minimum-idle: 5
@@ -16,19 +34,19 @@ spring:
       idle-timeout: 300000
       connection-timeout: 20000
       max-lifetime: 1200000
-  
+
   # JPA配置
   jpa:
     database: mysql
     database-platform: org.hibernate.dialect.MySQLDialect
     show-sql: true
     hibernate:
-      ddl-auto: none  # 不自动创建表，使用现有数据库
+      ddl-auto: none
     properties:
       hibernate:
         format_sql: true
         use_sql_comments: true
-  
+
   # Jackson配置
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
@@ -45,7 +63,7 @@ server:
       enabled: true
       force: true
 
-# 日志配置
+# 日志配置 - 开发环境（详细日志）
 logging:
   level:
     root: INFO
@@ -67,10 +85,9 @@ springdoc:
 
 # Python 服务配置
 python:
-  executable: python  # Python 可执行文件路径，Windows 下可能是 python 或 python3
+  executable: python
   script:
-    path: python_service/evaluation_service.py  # Python 脚本相对路径
-  timeout: 300  # 超时时间（秒）
-  # 作战模拟四表生成脚本（相对项目根目录 / 工作目录）
+    path: python_service/evaluation_service.py
+  timeout: 300
   combat-data-script: military_operational_effectiveness_evaluation/generate/generate_all_data.py
-  combat-timeout: 600  # 生成脚本超时（秒），数据量大时可加大
+  combat-timeout: 600

@@ -19,7 +19,18 @@ npm install
 npm run dev
 ```
 
-## 访问地址
+## 二、上传到服务器
 
-- **API接口**: http://localhost:8080/api
-- **API文档**: http://localhost:8080/api/swagger-ui.html
+```bash
+.\scripts\windows\build-all.ps1
+
+scp -P 1122 deploy.zip user4@172.0.249.12:/opt/military-evaluation/
+!Hzsfdxlzl!
+
+cd /opt/military-evaluation
+unzip -o deploy.zip
+chmod +x *.sh
+pkill -f app.jar
+
+nohup ./java17/bin/java -Xms512m -Xmx1024m -jar app.jar --spring.profiles.active=prod > app.log 2>&1 &
+```

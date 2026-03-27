@@ -1,0 +1,26 @@
+# ============================================================
+# 生产环境配置
+# 启动命令：java -jar app.jar --spring.profiles.active=prod
+#
+# Python 脚本部署：
+#   1. 上传 military_operational_effectiveness_evaluation/ 到 /opt/military-evaluation/
+#   2. 确保 generate/generate_all_data.py 存在
+# ============================================================
+
+spring:
+  # 数据源配置 - 生产环境
+  datasource:
+    url: jdbc:mysql://localhost:3306/military_operational_effectiveness_evaluation?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: admin
+    password: admin
+
+# Python 脚本路径 - 服务器部署后修改为实际路径
+python:
+  combat-data-script: /opt/military-evaluation/military_operational_effectiveness_evaluation/generate/generate_all_data.py
+
+# 日志配置 - 生产环境（简洁日志）
+logging:
+  level:
+    root: INFO
+    com.ccnu.military: INFO
+    org.hibernate.SQL: WARN

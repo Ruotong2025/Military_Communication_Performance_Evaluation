@@ -4,11 +4,23 @@
 整合所有数据生成功能到一个脚本中
 """
 import json
+import os
 import mysql.connector
 from mysql.connector import Error
 from datetime import datetime, timedelta, date
 import random
 import numpy as np
+
+
+def get_db_config():
+    """从环境变量获取数据库配置，兼容旧代码"""
+    return {
+        'host': os.environ.get('DB_HOST', 'localhost'),
+        'port': int(os.environ.get('DB_PORT', '3306')),
+        'database': os.environ.get('DB_NAME', 'military_operational_effectiveness_evaluation'),
+        'user': os.environ.get('DB_USER', 'root'),
+        'password': os.environ.get('DB_PASS', 'root')
+    }
 
 
 class DataGenerator:
@@ -63,12 +75,9 @@ class DataGenerator:
     }
 
     def __init__(self):
-        self.connection = mysql.connector.connect(
-            host='localhost',
-            database='military_operational_effectiveness_evaluation',
-            user='root',
-            password='root'
-        )
+        db_config = get_db_config()
+        print(f"[INFO] 连接数据库: {db_config['host']}:{db_config['port']}/{db_config['database']}")
+        self.connection = mysql.connector.connect(**db_config)
         self.expert_names = [
             '张军', '李建国', '王海峰', '刘芳', '陈伟',
             '赵敏', '孙强', '周婷', '吴磊', '郑雪'

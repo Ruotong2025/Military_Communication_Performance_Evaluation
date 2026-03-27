@@ -31,10 +31,9 @@ public class ExpertAHPController {
     @GetMapping("/meta")
     public ApiResponse<Map<String, Object>> getMeta() {
         try {
-            Map<String, Object> meta = Map.of(
-                "dimensions", ExpertAHPService.getDimensions(),
-                "indicators", ExpertAHPService.getDimensionIndicators()
-            );
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            meta.put("dimensions", ExpertAHPService.getDimensions());
+            meta.put("indicators", ExpertAHPService.getDimensionIndicators());
             return ApiResponse.success(meta);
         } catch (Exception e) {
             log.error("获取AHP元信息失败", e);

@@ -47,12 +47,12 @@ public class MetricsCalculationService {
             }
 
             if (targetIds.isEmpty()) {
-                return Map.of(
-                        "success", true,
-                        "message", "没有找到作战数据",
-                        "count", 0,
-                        "data", Collections.emptyList()
-                );
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("success", true);
+                result.put("message", "没有找到作战数据");
+                result.put("count", 0);
+                result.put("data", Collections.emptyList());
+                return result;
             }
 
             String evaluationBatchId = newEvaluationBatchId();
@@ -80,10 +80,10 @@ public class MetricsCalculationService {
 
         } catch (Exception e) {
             log.error("指标计算失败", e);
-            return Map.of(
-                    "success", false,
-                    "message", "指标计算失败: " + e.getMessage()
-            );
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("message", "指标计算失败: " + e.getMessage());
+            return result;
         }
     }
 
@@ -391,7 +391,11 @@ public class MetricsCalculationService {
      */
     public Map<String, Object> generateScore(String evaluationBatchId) {
         if (!StringUtils.hasText(evaluationBatchId)) {
-            return Map.of("success", false, "message", "evaluationBatchId 不能为空", "count", 0);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("message", "evaluationBatchId 不能为空");
+            result.put("count", 0);
+            return result;
         }
         log.info("开始为评估批次 {} 生成归一化 score 数据", evaluationBatchId);
 
@@ -403,7 +407,11 @@ public class MetricsCalculationService {
             List<Map<String, Object>> rawData = getCalculatedMetrics(evaluationBatchId);
             if (rawData == null || rawData.isEmpty()) {
                 log.warn("评估批次 {} 无原始指标数据，跳过 score 生成", evaluationBatchId);
-                return Map.of("success", false, "message", "该批次无原始指标数据，请先执行「计算指标」", "count", 0);
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("success", false);
+                result.put("message", "该批次无原始指标数据，请先执行「计算指标」");
+                result.put("count", 0);
+                return result;
             }
 
             // 3. 计算每个指标的 min/max（在同一批次内）
@@ -445,15 +453,19 @@ public class MetricsCalculationService {
             }
 
             log.info("评估批次 {} 完成 score 生成，共 {} 条记录", evaluationBatchId, count);
-            return Map.of(
-                    "success", true,
-                    "message", String.format("成功生成 %d 条归一化 score 数据（批次 %s）", count, evaluationBatchId),
-                    "count", count,
-                    "evaluationBatchId", evaluationBatchId
-            );
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", true);
+            result.put("message", String.format("成功生成 %d 条归一化 score 数据（批次 %s）", count, evaluationBatchId));
+            result.put("count", count);
+            result.put("evaluationBatchId", evaluationBatchId);
+            return result;
         } catch (Exception e) {
             log.error("生成 score 数据失败", e);
-            return Map.of("success", false, "message", "生成 score 数据失败: " + e.getMessage(), "count", 0);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("success", false);
+            result.put("message", "生成 score 数据失败: " + e.getMessage());
+            result.put("count", 0);
+            return result;
         }
     }
 

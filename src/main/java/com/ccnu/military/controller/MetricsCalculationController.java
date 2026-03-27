@@ -78,7 +78,7 @@ public class MetricsCalculationController {
         if (deleted <= 0) {
             return ApiResponse.error(404, "未找到该评估批次或已无数据");
         }
-        return ApiResponse.success("已删除 " + deleted + " 条记录", Map.of("deleted", deleted));
+        return ApiResponse.success("已删除 " + deleted + " 条记录", new java.util.LinkedHashMap<String, Object>() {{ put("deleted", deleted); }});
     }
 
     /**
@@ -88,7 +88,7 @@ public class MetricsCalculationController {
     @Operation(summary = "获取归一化得分", description = "按 evaluationId 获取归一化后的 score 数据（0~1，越大越好）")
     public ApiResponse<List<Map<String, Object>>> getScoreData(
             @RequestParam(value = "evaluationId", required = false) String evaluationId) {
-        if (evaluationId == null || evaluationId.isBlank()) {
+        if (evaluationId == null || evaluationId.trim().isEmpty()) {
             return ApiResponse.error(400, "evaluationId 不能为空");
         }
         List<Map<String, Object>> data = metricsCalculationService.getScoreData(evaluationId);

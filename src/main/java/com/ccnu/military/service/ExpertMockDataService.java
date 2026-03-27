@@ -1028,17 +1028,17 @@ public class ExpertMockDataService {
         boolean autoEvaluate = request.getAutoEvaluate() == null || request.getAutoEvaluate();
 
         if (autoEvaluate) {
-            for (ExpertBaseInfo expert : experts) {
-                try {
+        for (ExpertBaseInfo expert : experts) {
+            try {
                     // 检查是否已有评估记录（新增模式下跳过已有）
                     if (!"overwrite".equals(generateMode) && scoreRepository.findByExpertId(expert.getExpertId()).isPresent()) {
                         log.debug("专家已有评估记录，跳过: {}", expert.getExpertName());
                         continue;
                     }
-                    ExpertCredibilityScore score = scoringCalculator.evaluateExpert(expert);
-                    scores.add(scoreRepository.save(score));
-                } catch (Exception e) {
-                    log.error("评估专家失败: {}", expert.getExpertName(), e);
+                ExpertCredibilityScore score = scoringCalculator.evaluateExpert(expert);
+                scores.add(scoreRepository.save(score));
+            } catch (Exception e) {
+                log.error("评估专家失败: {}", expert.getExpertName(), e);
                 }
             }
         }
