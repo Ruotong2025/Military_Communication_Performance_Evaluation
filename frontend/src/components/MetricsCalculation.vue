@@ -21,6 +21,7 @@
             <p v-if="availableOperations.length === 0" class="field-hint">
               当前无作战记录，请先生成模拟数据后再执行指标计算。
             </p>
+            <p v-else class="field-hint">与页面顶部「作战 ID」筛选联动；顶部留空则此处可自选多条作战。</p>
           </div>
         </el-form-item>
         <el-form-item>
@@ -363,6 +364,7 @@ import {
   getScoreChartData,
   generateScore,
 } from "@/api";
+import { globalOperationId } from "@/composables/useGlobalOperationFilter";
 import * as echarts from "echarts";
 
 const availableOperations = ref([]);
@@ -381,6 +383,15 @@ let chartInstance = null;
 const form = ref({
   operationIds: [],
 });
+
+watch(
+  globalOperationId,
+  (id) => {
+    form.value.operationIds =
+      id != null && id !== "" ? [id] : [];
+  },
+  { immediate: true },
+);
 
 /** 与后端 MetricsDirection 一致：正向 = 原始值越大越好 */
 const POSITIVE_METRICS = [

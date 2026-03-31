@@ -75,6 +75,26 @@
         </el-tag>
       </div>
 
+      <!-- 四张模拟表共用作战 ID 筛选：选一次后切换 Tab 无需重选 -->
+      <div v-if="globalOperationIds.length" class="global-operation-filter">
+        <span class="filter-label">作战ID：</span>
+        <el-select
+          v-model="globalOperationId"
+          placeholder="全部（不筛选）"
+          clearable
+          filterable
+          style="width: 200px"
+        >
+          <el-option
+            v-for="id in globalOperationIds"
+            :key="id"
+            :label="`作战ID ${id}`"
+            :value="id"
+          />
+        </el-select>
+        <span v-if="globalOperationId" class="filter-hint">四张表与下方「作战选择」均按此 ID 筛选</span>
+      </div>
+
       <!-- 四表 Tab：lazy 仅挂载当前页；table-name 固定，避免四个表格同时抢同一 activeTab 重复请求 -->
       <el-tabs v-model="activeTab" @tab-change="handleTabChange" class="table-tabs">
         <el-tab-pane label="作战基础信息" name="records_military_operation_info" lazy>
@@ -103,13 +123,18 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { DataAnalysis, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import DynamicTable from '@/components/DynamicTable.vue'
 import AdvancedParamsPanel from '@/components/AdvancedParamsPanel.vue'
 import MetricsCalculation from '@/components/MetricsCalculation.vue'
 import { generateCombatSimulation } from '@/api'
+import {
+  globalOperationId,
+  globalOperationIds,
+  loadGlobalOperationIds
+} from '@/composables/useGlobalOperationFilter'
 
 const activeTab = ref('records_military_operation_info')
 const generating = ref(false)
@@ -182,6 +207,7 @@ const handleGenerate = async () => {
     await generateCombatSimulation(payload)
     hasGenerated.value = true
     tableRefreshTick.value += 1
+    await loadGlobalOperationIds()
     await nextTick()
     metricsCalculationRef.value?.refreshFromParent?.()
     ElMessage.success(`模拟数据已生成（模式：${modeLabel.value}），表格已刷新`)
@@ -209,6 +235,10 @@ const handleReset = () => {
 const handleTabChange = (tabName) => {
   console.log('切换到表:', tabName)
 }
+
+onMounted(() => {
+  loadGlobalOperationIds()
+})
 </script>
 
 <style scoped lang="scss">
@@ -251,6 +281,29 @@ const handleTabChange = (tabName) => {
 
   .current-params {
     margin-bottom: 12px;
+  }
+
+  .global-operation-filter {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: #f5f7fa;
+    border-radius: 6px;
+    border: 1px solid #e4e8ef;
+
+    .filter-label {
+      font-size: 13px;
+      color: #606266;
+      font-weight: 500;
+    }
+
+    .filter-hint {
+      font-size: 12px;
+      color: #909399;
+    }
   }
 
   .table-tabs {

@@ -1,28 +1,5 @@
 <template>
   <div class="dynamic-table">
-    <!-- 作战ID筛选下拉（仅模拟四表且有数据时显示） -->
-    <div v-if="showOperationFilter" class="filter-bar">
-      <span class="filter-label">作战ID：</span>
-      <el-select
-        v-model="operationId"
-        placeholder="全部（不筛选）"
-        clearable
-        filterable
-        style="width: 160px"
-        @change="handleOperationIdChange"
-      >
-        <el-option
-          v-for="id in operationIds"
-          :key="id"
-          :label="`作战ID ${id}`"
-          :value="id"
-        />
-      </el-select>
-      <span v-if="operationId" class="filter-hint">
-        共 {{ total }} 条
-      </span>
-    </div>
-
     <el-table
       v-loading="loading"
       :data="tableData"
@@ -68,8 +45,9 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { getTableStructure, getTableData, deleteTableRow, getDistinctOperationIds } from '@/api'
+import { getTableStructure, getTableData, deleteTableRow } from '@/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { globalOperationId } from '@/composables/useGlobalOperationFilter'
 
 const props = defineProps({
   tableName: {
@@ -100,24 +78,15 @@ const OPERATION_FILTERABLE = new Set([
   'records_security_events'
 ])
 const showOperationFilter = computed(() => OPERATION_FILTERABLE.has(props.tableName))
-const operationId = ref(null)
-const operationIds = ref([])
-
-const loadOperationIds = async () => {
-  if (!showOperationFilter.value) return
-  try {
-    operationIds.value = await getDistinctOperationIds()
-  } catch {
-    operationIds.value = []
-  }
-}
 
 const loadTableStructure = async () => {
   columns.value = await getTableStructure(props.tableName)
 }
 
 const loadTableData = async () => {
-  const result = await getTableData(props.tableName, currentPage.value, pageSize.value, operationId.value)
+  const op =
+    showOperationFilter.value ? globalOperationId.value : null
+  const result = await getTableData(props.tableName, currentPage.value, pageSize.value, op)
   tableData.value = result.records
   total.value = result.total
 }
@@ -148,11 +117,6 @@ const loadTable = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const handleOperationIdChange = () => {
-  currentPage.value = 1
-  loadDataOnly()
 }
 
 /** 仅刷新当前页数据（翻页、改每页条数） */
@@ -244,9 +208,7 @@ watch(
   () => props.tableName,
   () => {
     currentPage.value = 1
-    operationId.value = null
     loadTable()
-    loadOperationIds()
   },
   { immediate: true }
 )
@@ -258,6 +220,16 @@ watch(
       currentPage.value = 1
       loadTable()
     }
+  }
+)
+
+/** 与 DataView 顶部「作战 ID」全局筛选联动 */
+watch(
+  globalOperationId,
+  () => {
+    if (!showOperationFilter.value) return
+    currentPage.value = 1
+    loadDataOnly()
   }
 )
 </script>
@@ -272,26 +244,5 @@ watch(
     }
   }
 
-  .filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    padding: 6px 10px;
-    background: #f5f7fa;
-    border-radius: 4px;
-    border: 1px solid #e4e8ef;
-
-    .filter-label {
-      font-size: 13px;
-      color: #606266;
-      font-weight: 500;
-    }
-
-    .filter-hint {
-      font-size: 12px;
-      color: #909399;
-    }
-  }
 }
 </style>
