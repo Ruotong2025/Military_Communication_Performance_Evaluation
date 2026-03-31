@@ -803,13 +803,22 @@ function renderDimWeightChart() {
   const src = collectiveResult.value ?? weightPreview.value
   if (!dimWeightChartRef.value || !src?.dimensionWeights) return
 
+  if (dimWeightChart) {
+    const dom = dimWeightChart.getDom()
+    if (!dom?.isConnected) {
+      dimWeightChart.dispose()
+      dimWeightChart = null
+    }
+  }
   if (!dimWeightChart) {
     dimWeightChart = echarts.init(dimWeightChartRef.value)
   }
 
   const dimWeights = src.dimensionWeights
   const dims = Object.keys(dimWeights)
-  const values = dims.map(d => Number(dimWeights[d] * 100).toFixed(2))
+  const values = dims.map((d) =>
+    Number((Number(dimWeights[d]) || 0) * 100).toFixed(2)
+  )
 
   const option = {
     title: {
@@ -852,20 +861,30 @@ function renderDimWeightChart() {
       }
     }]
   }
-  dimWeightChart.setOption(option)
+  dimWeightChart.setOption(option, true)
+  dimWeightChart.resize()
 }
 
 function renderIndWeightChart() {
   const src = collectiveResult.value ?? weightPreview.value
   if (!indWeightChartRef.value || !src?.indicatorWeights) return
 
+  if (indWeightChart) {
+    const dom = indWeightChart.getDom()
+    if (!dom?.isConnected) {
+      indWeightChart.dispose()
+      indWeightChart = null
+    }
+  }
   if (!indWeightChart) {
     indWeightChart = echarts.init(indWeightChartRef.value)
   }
 
   const indWeights = src.indicatorWeights
   const indicators = Object.keys(indWeights).sort()
-  const values = indicators.map(ind => Number(indWeights[ind] * 100).toFixed(2))
+  const values = indicators.map((ind) =>
+    Number((Number(indWeights[ind]) || 0) * 100).toFixed(2)
+  )
 
   const colors = []
   const colorMap = {
@@ -918,7 +937,8 @@ function renderIndWeightChart() {
       label: { show: false }
     }]
   }
-  indWeightChart.setOption(option)
+  indWeightChart.setOption(option, true)
+  indWeightChart.resize()
 }
 
 async function loadData() {
@@ -1130,6 +1150,7 @@ async function loadAvailableExperts() {
 function onEvaluationIdChange() {
   weightPreview.value = null
   collectiveResult.value = null
+  disposeCollectiveCharts()
 }
 
 async function previewWeights() {

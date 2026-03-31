@@ -40,4 +40,4 @@ nohup ./java17/bin/java -Xms512m -Xmx1024m -jar app.jar --spring.profiles.active
 ```
 
 netstat -ano | findstr :8080
-taskkill /PID 22260 /F
+taskkill /PID 17356 /F
