@@ -83,65 +83,45 @@ public class AHPService {
     }
 
     /**
-     * 计算权重（特征向量法）
-     * 使用幂法求最大特征值对应的特征向量
+     * 计算权重（特征值法 - 列和归一化/算术平均法）
+     * 步骤：
+     *   1. 将判断矩阵每一列归一化（元素/列和）
+     *   2. 按行求算术平均，即得权重向量
+     *   3. 最后归一化，确保权重和为1
      */
     private double[] calculateWeights(double[][] matrix) {
         int n = matrix.length;
-        double[] weights = new double[n];
-        
-        // 初始化特征向量为全1
-        double[] vector = new double[n];
-        Arrays.fill(vector, 1.0);
-        
-        // 迭代计算（幂法）
-        for (int iter = 0; iter < 100; iter++) {
-            double[] newVector = new double[n];
-            
-            // 矩阵乘以向量
+
+        // Step 1: 计算每列的列和
+        double[] colSums = new double[n];
+        for (int j = 0; j < n; j++) {
+            double sum = 0;
             for (int i = 0; i < n; i++) {
-                double sum = 0;
-                for (int j = 0; j < n; j++) {
-                    sum += matrix[i][j] * vector[j];
-                }
-                newVector[i] = sum;
+                sum += matrix[i][j];
             }
-            
-            // 归一化
-            double norm = 0;
-            for (double v : newVector) {
-                norm += v;
-            }
-            for (int i = 0; i < n; i++) {
-                newVector[i] /= norm;
-            }
-            
-            // 检查收敛
-            boolean converged = true;
-            for (int i = 0; i < n; i++) {
-                if (Math.abs(newVector[i] - vector[i]) > 1e-6) {
-                    converged = false;
-                    break;
-                }
-            }
-            
-            vector = newVector;
-            
-            if (converged) {
-                break;
-            }
+            colSums[j] = sum;
         }
-        
-        // 最终归一化
-        double sum = 0;
-        for (double v : vector) {
-            sum += v;
-        }
+
+        // Step 2: 列归一化后按行求算术平均
+        double[] rawWeights = new double[n];
         for (int i = 0; i < n; i++) {
-            weights[i] = vector[i] / sum;
+            double rowSum = 0;
+            for (int j = 0; j < n; j++) {
+                if (colSums[j] > 0) {
+                    rowSum += matrix[i][j] / colSums[j];
+                }
+            }
+            rawWeights[i] = rowSum / n;
         }
-        
-        return weights;
+
+        // Step 3: 归一化，使权重和为1
+        double total = 0;
+        for (double w : rawWeights) total += w;
+        if (total > 0) {
+            for (int i = 0; i < n; i++) rawWeights[i] /= total;
+        }
+
+        return rawWeights;
     }
 
     /**

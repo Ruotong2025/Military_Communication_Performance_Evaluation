@@ -14,7 +14,10 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:8080',
-        changeOrigin: true
+        changeOrigin: true,
+        // 与批量模拟 AHP 等长耗时接口对齐，避免开发环境代理先断开导致前端一直 loading
+        timeout: 300000,
+        proxyTimeout: 300000
       }
     }
   },

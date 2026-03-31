@@ -41,7 +41,7 @@ public class MatrixCalculationRequest {
     public static class MatrixEntry {
         /** 比较对标识，如 "安全性_可靠性" 或 "密钥泄露_被侦察" */
         private String key;
-        /** 标度值 (1/9 ~ 9) */
+        /** 正互反标度 aᵢⱼ∈[1/9,9]：&gt;1 行比列重要，&lt;1 行不如列重要 */
         private Double score;
         /** 把握度 (0~1)，可选 */
         private Double confidence;

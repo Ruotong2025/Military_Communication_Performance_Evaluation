@@ -48,7 +48,7 @@ export const indicatorMetaByDimension = {
   效能影响: [
     { key: '战损率得分', code: '6.1', shortLabel: '战损率', description: '通信装备在作战行动中遭受毁伤的比例' },
     { key: '任务完成率得分', code: '6.2', shortLabel: '任务完成率', description: '通信保障任务成功完成的次数与总任务次数的比值' },
-    { key: '效费比得分', code: '6.3', shortLabel: '效费比', description: '通信保障任务达成效果与所投入资源成本的比值' }
+    { key: '致盲率得分', code: '6.3', shortLabel: '致盲率', description: '通信装备在作战行动中遭受致盲攻击导致失效的比例' }
   ]
 }
 
@@ -69,10 +69,16 @@ export function getIndicatorMeta(dim, key) {
   return indicatorMetaByDimension[dim]?.find((m) => m.key === key)
 }
 
-/** 矩阵表头/行名：编号 + 简称 */
+/** 矩阵表头/行名：编号 + 简称（半角空格，全项目统一） */
 export function indicatorDisplayLabel(dim, key) {
   const m = getIndicatorMeta(dim, key)
-  return m ? `${m.code}\u00A0${m.shortLabel}` : key.replace(/得分$/, '')
+  return m ? `${m.code} ${m.shortLabel}` : key.replace(/得分$/, '')
+}
+
+/** 旭日图等仅需文字块时：仅简称，避免与维度内圈样式混杂 */
+export function indicatorShortLabel(dim, key) {
+  const m = getIndicatorMeta(dim, key)
+  return m ? m.shortLabel : key.replace(/得分$/, '')
 }
 
 /** 悬停：编号 + 释义全文 */
@@ -117,8 +123,8 @@ export const indicatorComparisons = {
   ],
   效能影响: [
     { key: '战损率得分_任务完成率得分', itemA: '战损率得分', itemB: '任务完成率得分', defaultScore: 0.50 },
-    { key: '战损率得分_效费比得分', itemA: '战损率得分', itemB: '效费比得分', defaultScore: 1.00 },
-    { key: '任务完成率得分_效费比得分', itemA: '任务完成率得分', itemB: '效费比得分', defaultScore: 2.00 }
+    { key: '战损率得分_致盲率得分', itemA: '战损率得分', itemB: '致盲率得分', defaultScore: 1.00 },
+    { key: '任务完成率得分_致盲率得分', itemA: '任务完成率得分', itemB: '致盲率得分', defaultScore: 2.00 }
   ]
 }
 
@@ -137,11 +143,18 @@ export const dimensionDescriptions = {
   可靠性: '网络与业务连续运行能力，含故障恢复、通信可用性等。',
   传输能力: '带宽、时延、误码、呼叫建立、吞吐量与频谱效率等传输质量相关指标。',
   抗干扰能力: '在干扰环境下维持链路质量的能力，如信干噪比、余量与可达距离。',
-  效能影响: '通信对作战任务结果的直接影响，如战损、任务完成与投入产出（效费比）等。'
+  效能影响: '通信对作战任务结果的直接影响，如战损、任务完成与致盲率等。'
 }
 
-/** 默认把握度（0~1） */
+/** 默认把握度（0~1），用于说明与「有把握」档位参照 */
 export const defaultConfidence = 0.8
+
+/** 新专家或无已存数据时，矩阵上三角默认把握度（刻意小于 0.6，表示尚未形成把握） */
+export const defaultBlankConfidence = 0.55
+
+/** Saaty 正互反标度范围：上三角 aᵢⱼ∈[1/9, 9]；>1 表示行比列重要，<1 表示行不如列重要（如 0.33≈1/3） */
+export const AHP_SCORE_MIN = 1 / 9
+export const AHP_SCORE_MAX = 9
 
 /**
  * Saaty 1～9 标度完整说明（页面顶部表格）

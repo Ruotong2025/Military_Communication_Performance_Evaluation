@@ -14,24 +14,70 @@
 
     <el-container class="main-container">
       <!-- 左侧导航栏 -->
-      <el-aside width="220px" class="app-aside">
+      <el-aside width="240px" class="app-aside">
         <el-menu
           :default-active="activeMenu"
+          :default-openeds="defaultOpenSubmenus"
           class="navy-menu"
           @select="handleMenuSelect"
         >
-          <el-menu-item index="data">
-            <el-icon><DataAnalysis /></el-icon>
-            <span>军事作战模拟数据</span>
+          <el-menu-item index="simulation-training">
+            <el-icon><Guide /></el-icon>
+            <span>模拟训练评估系统导航</span>
           </el-menu-item>
-          <el-menu-item index="evaluation">
-            <el-icon><TrendCharts /></el-icon>
-            <span>效能评估分析</span>
-          </el-menu-item>
-          <el-menu-item index="expert">
-            <el-icon><User /></el-icon>
-            <span>专家可信度评估</span>
-          </el-menu-item>
+
+          <el-sub-menu index="sub-simulation-data">
+            <template #title>
+              <el-icon><FolderOpened /></el-icon>
+              <span>模拟训练数据准备</span>
+            </template>
+            <el-menu-item index="simulation-training/data">
+              <el-icon><DataAnalysis /></el-icon>
+              <span>军事作战模拟数据</span>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="sub-simulation-weights">
+            <template #title>
+              <el-icon><Operation /></el-icon>
+              <span>模拟训练权重确定</span>
+            </template>
+            <el-menu-item index="simulation-training/weights/expert">
+              <el-icon><User /></el-icon>
+              <span>专家可信度评估</span>
+            </el-menu-item>
+            <el-menu-item index="simulation-training/weights/evaluation">
+              <el-icon><TrendCharts /></el-icon>
+              <span>专家 AHP 打分</span>
+            </el-menu-item>
+            <el-menu-item index="simulation-training/weights/ahp-dispersion">
+              <el-icon><DataLine /></el-icon>
+              <span>权重离散度分析</span>
+            </el-menu-item>
+            <el-menu-item index="simulation-training/weights/aggregation-scoring">
+              <el-icon><Flag /></el-icon>
+              <span>权重集结打分</span>
+            </el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="sub-simulation-results">
+            <template #title>
+              <el-icon><Histogram /></el-icon>
+              <span>评估结果计算</span>
+            </template>
+            <el-menu-item index="simulation-training/results/comprehensive-scoring">
+              <el-icon><CircleCheck /></el-icon>
+              <span>综合打分</span>
+            </el-menu-item>
+            <el-menu-item index="simulation-training/results/penalty-factor">
+              <el-icon><Warning /></el-icon>
+              <span>惩罚因子分析</span>
+            </el-menu-item>
+            <el-menu-item index="simulation-training/results/cost-effectiveness">
+              <el-icon><Coin /></el-icon>
+              <span>效费分析</span>
+            </el-menu-item>
+          </el-sub-menu>
         </el-menu>
       </el-aside>
 
@@ -44,22 +90,51 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Trophy, Setting, DataAnalysis, TrendCharts, User } from '@element-plus/icons-vue'
+import {
+  Trophy,
+  Setting,
+  DataAnalysis,
+  TrendCharts,
+  User,
+  DataLine,
+  Guide,
+  FolderOpened,
+  Operation,
+  Flag,
+  Histogram,
+  CircleCheck,
+  Warning,
+  Coin
+} from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
-const activeMenu = ref('data')
+const activeMenu = ref('simulation-training')
+
+const defaultOpenSubmenus = computed(() => {
+  const open = []
+  if (route.path.startsWith('/simulation-training/data')) {
+    open.push('sub-simulation-data')
+  }
+  if (route.path.startsWith('/simulation-training/weights')) {
+    open.push('sub-simulation-weights')
+  }
+  if (route.path.startsWith('/simulation-training/results')) {
+    open.push('sub-simulation-results')
+  }
+  return open
+})
 
 const handleMenuSelect = (index) => {
   activeMenu.value = index
   router.push(`/${index}`)
 }
 
-// 监听路由变化
 router.afterEach((to) => {
-  activeMenu.value = to.path.substring(1) || 'data'
+  const p = to.path.replace(/^\//, '') || 'simulation-training'
+  activeMenu.value = p
 })
 </script>
 

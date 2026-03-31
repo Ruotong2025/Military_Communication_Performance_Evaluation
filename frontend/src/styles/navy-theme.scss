@@ -60,6 +60,36 @@ body {
       color: var(--accent-gold);
     }
   }
+
+  .el-sub-menu {
+    .el-sub-menu__title {
+      color: var(--navy-light);
+      font-size: 15px;
+      font-weight: 500;
+
+      &:hover {
+        background-color: var(--navy-secondary) !important;
+        color: white;
+      }
+
+      .el-icon {
+        color: var(--navy-light);
+        font-size: 18px;
+      }
+    }
+
+    &.is-opened > .el-sub-menu__title {
+      color: white;
+    }
+
+    .el-menu {
+      background-color: rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .el-menu-item {
+      padding-left: 48px !important;
+    }
+  }
 }
 
 .el-button--primary {

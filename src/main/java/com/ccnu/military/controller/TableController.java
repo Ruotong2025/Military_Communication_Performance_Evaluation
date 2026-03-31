@@ -49,18 +49,31 @@ public class TableController {
         }
     }
 
+    @GetMapping("/distinct-operation-ids")
+    @Operation(summary = "作战ID列表", description = "作战基础信息表中不重复的 operation_id，供模拟数据页下拉筛选")
+    public ApiResponse<List<Long>> listDistinctOperationIds() {
+        try {
+            return ApiResponse.success("查询成功", tableService.listDistinctOperationIds());
+        } catch (Exception e) {
+            log.error("查询作战ID列表失败", e);
+            return ApiResponse.error(500, e.getMessage());
+        }
+    }
+
     @GetMapping("/data/{tableName}")
-    @Operation(summary = "获取表数据", description = "分页查询指定表的数据")
+    @Operation(summary = "获取表数据", description = "分页查询指定表的数据；模拟四表可传 operationId 按作战筛选")
     public ApiResponse<PageResult> getTableData(
             @Parameter(description = "表名", example = "during_battle_communications")
             @PathVariable String tableName,
             @Parameter(description = "页码", example = "1")
             @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页大小", example = "20")
-            @RequestParam(defaultValue = "20") int size) {
-        log.info("API调用: 获取表数据 - {} (page={}, size={})", tableName, page, size);
+            @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "作战ID，可选；仅 records_* 四表有效")
+            @RequestParam(required = false) String operationId) {
+        log.info("API调用: 获取表数据 - {} (page={}, size={}, operationId={})", tableName, page, size, operationId);
         try {
-            PageResult result = tableService.getTableData(tableName, page, size);
+            PageResult result = tableService.getTableData(tableName, page, size, operationId);
             return ApiResponse.success("查询成功", result);
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(400, e.getMessage());

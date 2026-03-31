@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+import java.util.ArrayList;
+
 /**
  * AHP层次分析法服务（支持直接矩阵计算）
  */
@@ -29,7 +31,7 @@ public class ExpertAHPService {
         DIMENSION_INDICATORS.put("可靠性", new String[]{"崩溃比例得分", "恢复能力得分", "通信可用得分"});
         DIMENSION_INDICATORS.put("传输能力", new String[]{"带宽得分", "呼叫建立得分", "传输时延得分", "误码率得分", "吞吐量得分", "频谱效率得分"});
         DIMENSION_INDICATORS.put("抗干扰能力", new String[]{"信干噪比得分", "抗干扰余量得分", "通信距离得分"});
-        DIMENSION_INDICATORS.put("效能影响", new String[]{"战损率得分", "任务完成率得分", "效费比得分"});
+        DIMENSION_INDICATORS.put("效能影响", new String[]{"战损率得分", "任务完成率得分", "致盲率得分"});
     }
 
     /**
@@ -86,48 +88,46 @@ public class ExpertAHPService {
     }
 
     /**
-     * 计算特征向量权重（幂法）
+     * 计算特征向量权重（特征值法 - 列和归一化/算术平均法）
+     * 步骤：
+     *   1. 将判断矩阵每一列归一化（元素/列和）
+     *   2. 按行求算术平均，即得权重向量
+     *   3. 最后再归一化，确保权重和为1
+     * 此法等价于先求最大特征值对应的特征向量，在正互反矩阵下近似最优。
      */
     public double[] calculateWeights(double[][] matrix) {
         int n = matrix.length;
-        double[] vector = new double[n];
-        Arrays.fill(vector, 1.0);
-        
-        // 幂迭代
-        for (int iter = 0; iter < 100; iter++) {
-            double[] newVector = new double[n];
+
+        // Step 1: 计算每列的列和
+        double[] colSums = new double[n];
+        for (int j = 0; j < n; j++) {
+            double sum = 0;
             for (int i = 0; i < n; i++) {
-                double sum = 0;
-                for (int j = 0; j < n; j++) {
-                    sum += matrix[i][j] * vector[j];
-                }
-                newVector[i] = sum;
+                sum += matrix[i][j];
             }
-            
-            // 归一化
-            double norm = 0;
-            for (double v : newVector) {
-                norm += v;
-            }
-            if (norm > 0) {
-                for (int i = 0; i < n; i++) {
-                    newVector[i] /= norm;
-                }
-            }
-            
-            // 检查收敛
-            boolean converged = true;
-            for (int i = 0; i < n; i++) {
-                if (Math.abs(newVector[i] - vector[i]) > 1e-8) {
-                    converged = false;
-                    break;
-                }
-            }
-            vector = newVector;
-            if (converged) break;
+            colSums[j] = sum;
         }
-        
-        return vector;
+
+        // Step 2: 列归一化后按行求算术平均
+        double[] rawWeights = new double[n];
+        for (int i = 0; i < n; i++) {
+            double rowSum = 0;
+            for (int j = 0; j < n; j++) {
+                if (colSums[j] > 0) {
+                    rowSum += matrix[i][j] / colSums[j];
+                }
+            }
+            rawWeights[i] = rowSum / n;
+        }
+
+        // Step 3: 归一化，使权重和为1
+        double total = 0;
+        for (double w : rawWeights) total += w;
+        if (total > 0) {
+            for (int i = 0; i < n; i++) rawWeights[i] /= total;
+        }
+
+        return rawWeights;
     }
 
     /**
@@ -209,35 +209,62 @@ public class ExpertAHPService {
      */
     public MatrixCalculationResult calculateAll(MatrixCalculationRequest request) {
         MatrixCalculationResult result = new MatrixCalculationResult();
-        
+
         // 1. 计算维度层
         MatrixCalculationResult.MatrixResult dimResult = calculateSingleMatrix(
-                DIMENSIONS, 
+                DIMENSIONS,
                 request.getDimensionMatrix()
         );
         result.setDimensionResult(dimResult);
-        log.info("维度层AHP计算完成 - CR={}, 一致性={}", 
+        log.info("维度层AHP计算完成 - CR={}, 一致性={}",
                 String.format("%.4f", dimResult.getCr()), dimResult.isConsistent());
-        
+
         // 2. 计算各维度指标层
         Map<String, MatrixCalculationResult.MatrixResult> indicatorResults = new LinkedHashMap<>();
         Map<String, List<MatrixCalculationRequest.MatrixEntry>> reqIndicators = request.getIndicatorMatrices();
-        
+
         for (Map.Entry<String, String[]> entry : DIMENSION_INDICATORS.entrySet()) {
             String dimName = entry.getKey();
             String[] indicators = entry.getValue();
-            
-            List<MatrixCalculationRequest.MatrixEntry> dimEntries = 
+
+            List<MatrixCalculationRequest.MatrixEntry> dimEntries =
                     (reqIndicators != null) ? reqIndicators.get(dimName) : null;
-            
+
             MatrixCalculationResult.MatrixResult indResult = calculateSingleMatrix(indicators, dimEntries);
             indicatorResults.put(dimName, indResult);
-            
-            log.info("指标层[{}]AHP计算完成 - CR={}, 一致性={}", 
+
+            log.info("指标层[{}]AHP计算完成 - CR={}, 一致性={}",
                     dimName, String.format("%.4f", indResult.getCr()), indResult.isConsistent());
         }
         result.setIndicatorResults(indicatorResults);
-        
+
+        // 3. 计算综合权重（维度权重 × 指标权重）
+        List<MatrixCalculationResult.CombinedWeight> combinedWeights = new ArrayList<>();
+        Map<String, Double> dimWeightMap = dimResult.getWeightMap();
+
+        for (Map.Entry<String, MatrixCalculationResult.MatrixResult> indEntry : indicatorResults.entrySet()) {
+            String dimName = indEntry.getKey();
+            MatrixCalculationResult.MatrixResult indResult = indEntry.getValue();
+            double dimWeight = dimWeightMap.getOrDefault(dimName, 0.0);
+            Map<String, Double> indWeightMap = indResult.getWeightMap();
+
+            for (Map.Entry<String, Double> wEntry : indWeightMap.entrySet()) {
+                String indName = wEntry.getKey();
+                double indWeight = wEntry.getValue();
+                double combined = dimWeight * indWeight;
+
+                MatrixCalculationResult.CombinedWeight cw = new MatrixCalculationResult.CombinedWeight();
+                cw.setDimension(dimName);
+                cw.setIndicator(indName);
+                cw.setDimensionWeight(dimWeight);
+                cw.setIndicatorWeight(indWeight);
+                cw.setCombinedWeight(combined);
+                combinedWeights.add(cw);
+            }
+        }
+        result.setCombinedWeights(combinedWeights);
+
+        log.info("综合权重计算完成，共 {} 个二级指标", combinedWeights.size());
         return result;
     }
 

@@ -21,12 +21,16 @@ npm run dev
 
 ## 二、上传到服务器
 
+
+
 ```bash
 .\scripts\windows\build-all.ps1
 
 scp -P 1122 deploy.zip user4@172.0.249.12:/opt/military-evaluation/
 !Hzsfdxlzl!
 
+ssh user4@172.0.249.12 -p 1122
+!Hzsfdxlzl!
 cd /opt/military-evaluation
 unzip -o deploy.zip
 chmod +x *.sh
@@ -34,3 +38,6 @@ pkill -f app.jar
 
 nohup ./java17/bin/java -Xms512m -Xmx1024m -jar app.jar --spring.profiles.active=prod > app.log 2>&1 &
 ```
+
+netstat -ano | findstr :8080
+taskkill /PID 22260 /F

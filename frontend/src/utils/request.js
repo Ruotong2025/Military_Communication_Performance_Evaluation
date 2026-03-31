@@ -28,7 +28,13 @@ request.interceptors.response.use(
   },
   error => {
     console.error('Request Error:', error)
-    return Promise.reject(error)
+    const d = error.response?.data
+    const serverMsg =
+      (typeof d === 'string' && d) ||
+      d?.message ||
+      d?.error ||
+      error.message
+    return Promise.reject(new Error(serverMsg || '网络或服务器错误'))
   }
 )
 

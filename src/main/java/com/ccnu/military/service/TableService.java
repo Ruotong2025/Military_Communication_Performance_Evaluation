@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.Arrays;
@@ -30,11 +31,30 @@ public class TableService {
         "records_military_operation_info",
         "records_military_communication_info",
         "records_link_maintenance_events",
-        "records_security_events"
+        "records_security_events",
+        "expert_ahp_comparison_score",
+        "expert_ahp_individual_weights"
     ));
 
     // 业务要求：基础表不允许按行删除
     private static final String BASE_TABLE = "records_military_operation_info";
+
+    /** 支持按 operation_id 筛选的模拟四表 */
+    private static final Set<String> OPERATION_FILTERABLE_TABLES = new HashSet<>(Arrays.asList(
+            "records_military_operation_info",
+            "records_military_communication_info",
+            "records_link_maintenance_events",
+            "records_security_events"
+    ));
+
+    /**
+     * 作战基础信息表中出现的作战 ID（降序），供下拉筛选
+     */
+    public List<Long> listDistinctOperationIds() {
+        String sql = "SELECT DISTINCT operation_id FROM records_military_operation_info "
+                + "WHERE operation_id IS NOT NULL ORDER BY operation_id DESC";
+        return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getLong("operation_id"));
+    }
 
     /**
      * 获取表结构信息
@@ -67,30 +87,45 @@ public class TableService {
     }
 
     /**
-     * 获取表数据（分页）
+     * 获取表数据（分页）；可选按作战 ID（operation_id）筛选（仅模拟四表）
      */
-    public PageResult getTableData(String tableName, int page, int size) {
+    public PageResult getTableData(String tableName, int page, int size, String operationId) {
         validateTableName(tableName);
-        
-        // 计算偏移量
+
         int offset = (page - 1) * size;
-        
-        // 查询总记录数
-        String countSql = "SELECT COUNT(*) FROM " + tableName;
-        Long total = jdbcTemplate.queryForObject(countSql, Long.class);
-        
-        // 查询数据
-        String dataSql = String.format(
-            "SELECT * FROM %s LIMIT %d OFFSET %d",
-            tableName, size, offset
-        );
-        
-        List<Map<String, Object>> records = jdbcTemplate.queryForList(dataSql);
-        
-        // 计算总页数
-        int totalPages = (int) Math.ceil((double) total / size);
-        
-        return new PageResult(records, total, page, size, totalPages);
+        boolean filter = StringUtils.hasText(operationId);
+        if (filter && !OPERATION_FILTERABLE_TABLES.contains(tableName)) {
+            throw new IllegalArgumentException("该表不支持按作战ID筛选: " + tableName);
+        }
+
+        Object opParam = null;
+        if (filter) {
+            String trimmed = operationId.trim();
+            try {
+                opParam = Long.parseLong(trimmed);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("作战ID须为数字: " + trimmed);
+            }
+        }
+
+        String countSql = "SELECT COUNT(*) FROM `" + tableName + "`";
+        String dataSql = "SELECT * FROM `" + tableName + "`";
+        Long total;
+        List<Map<String, Object>> records;
+
+        if (filter) {
+            countSql += " WHERE operation_id = ?";
+            dataSql += " WHERE operation_id = ? LIMIT ? OFFSET ?";
+            total = jdbcTemplate.queryForObject(countSql, Long.class, opParam);
+            records = jdbcTemplate.queryForList(dataSql, opParam, size, offset);
+        } else {
+            dataSql += " LIMIT ? OFFSET ?";
+            total = jdbcTemplate.queryForObject(countSql, Long.class);
+            records = jdbcTemplate.queryForList(dataSql, size, offset);
+        }
+
+        int totalPages = total == null || total == 0 ? 0 : (int) Math.ceil((double) total / size);
+        return new PageResult(records, total != null ? total : 0L, page, size, totalPages);
     }
 
     /**

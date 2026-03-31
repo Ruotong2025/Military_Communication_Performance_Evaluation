@@ -16,15 +16,6 @@ export function getTableStructure(tableName) {
   });
 }
 
-// 获取表数据
-export function getTableData(tableName, page = 1, size = 20) {
-  return request({
-    url: `/table/data/${tableName}`,
-    method: "get",
-    params: { page, size },
-  });
-}
-
 // 删除表中的一行（按主键）
 export function deleteTableRow(tableName, row) {
   return request({
@@ -144,6 +135,43 @@ export function calculateExpertAHP(payload) {
     url: "/evaluation/expert-ahp/calculate",
     method: "post",
     data: payload,
+  });
+}
+
+/** 按专家查询已保存的 AHP 比较打分 */
+export function getExpertAhpScores(expertId) {
+  return request({
+    url: "/evaluation/expert-ahp/scores",
+    method: "get",
+    params: { expertId },
+  });
+}
+
+/** 按专家查询已保存的 AHP 层次权重快照 */
+export function getExpertAhpIndividualWeights(expertId) {
+  return request({
+    url: "/evaluation/expert-ahp/individual-weights",
+    method: "get",
+    params: { expertId },
+  });
+}
+
+/** 保存当前矩阵为该专家的 AHP 比较打分（覆盖写入） */
+export function saveExpertAhpScores(payload) {
+  return request({
+    url: "/evaluation/expert-ahp/scores",
+    method: "post",
+    data: payload,
+  });
+}
+
+/** 为多名专家批量生成模拟 AHP 打分并入库 */
+export function simulateExpertAhpScores(payload) {
+  return request({
+    url: "/evaluation/expert-ahp/scores/simulate",
+    method: "post",
+    data: payload,
+    timeout: 300000,
   });
 }
 
@@ -290,5 +318,84 @@ export function generateAndEvaluate(payload) {
     url: "/expert/mock/generate-and-evaluate",
     method: "post",
     data: payload,
+  });
+}
+
+// ============================================================
+// 专家集结计算 API（对比打分层集结）
+// ============================================================
+
+/** 获取所有评估批次ID */
+export function getCollectiveEvaluationIds() {
+  return request({
+    url: "/evaluation/collective/evaluation-ids",
+    method: "get",
+  });
+}
+
+/** 预览集结权重（不保存） */
+export function previewCollectiveWeights(params) {
+  return request({
+    url: "/evaluation/collective/weights-preview",
+    method: "get",
+    params,
+  });
+}
+
+/** 执行集结计算并保存 */
+export function executeCollectiveCalculation(payload) {
+  return request({
+    url: "/evaluation/collective/calculate",
+    method: "post",
+    data: payload,
+    timeout: 60000,
+  });
+}
+
+/** 查询已保存的集结综合结果（只读，不重新计算） */
+export function getCollectiveResults(evaluationId) {
+  return request({
+    url: "/evaluation/collective/results",
+    method: "get",
+    params: { evaluationId },
+  });
+}
+
+/** 计算并保存综合结果：集结二级权重 × 该批次归一化 score（「加载综合结果」按钮） */
+export function computeCollectiveResults(evaluationId) {
+  return request({
+    url: "/evaluation/collective/results/compute",
+    method: "post",
+    params: { evaluationId },
+    timeout: 60000,
+  });
+}
+
+/** 删除指定批次的集结结果 */
+export function deleteCollectiveResults(evaluationId) {
+  return request({
+    url: `/evaluation/collective/results/${evaluationId}`,
+    method: "delete",
+  });
+}
+
+/** 作战基础信息表中不重复的 operation_id 列表 */
+export function getDistinctOperationIds() {
+  return request({
+    url: "/table/distinct-operation-ids",
+    method: "get",
+  });
+}
+
+/** 分页查询表数据（支持 operationId 筛选） */
+export function getTableData(tableName, page = 1, size = 20, operationId = null) {
+  const params = { page, size }
+  if (operationId) {
+    params.operationId = operationId
+  }
+  return request({
+    url: `/table/data/${tableName}`,
+    method: "get",
+    params,
   });
 }

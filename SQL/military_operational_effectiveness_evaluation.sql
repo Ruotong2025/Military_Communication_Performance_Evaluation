@@ -153,8 +153,8 @@ CREATE TABLE `ahp_expert_military_operation_effect_weights`  (
   `effect_damage_rate_confidence` decimal(5, 2) NULL DEFAULT NULL COMMENT '战损率把握度',
   `effect_mission_completion_rate_weight` decimal(5, 2) NULL DEFAULT NULL COMMENT '任务完成率权重',
   `effect_mission_completion_rate_confidence` decimal(5, 2) NULL DEFAULT NULL COMMENT '任务完成率把握度',
-  `effect_cost_effectiveness_weight` decimal(5, 2) NULL DEFAULT NULL COMMENT '效费比权重',
-  `effect_cost_effectiveness_confidence` decimal(5, 2) NULL DEFAULT NULL COMMENT '效费比把握度',
+  `effect_blind_rate_weight` decimal(5, 2) NULL DEFAULT NULL COMMENT '致盲率权重',
+  `effect_blind_rate_confidence` decimal(5, 2) NULL DEFAULT NULL COMMENT '致盲率把握度',
   `remarks` text CHARACTER SET utf8mb4  NULL COMMENT '备注（可选）',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -235,7 +235,7 @@ INSERT INTO `ahp_final_weights` VALUES (156, 'AHP-2026-001', '2026-03-13', 'reso
 INSERT INTO `ahp_final_weights` VALUES (157, 'AHP-2026-001', '2026-03-13', 'resource_manpower_requirement', '人力需求', 'resource_manpower_requirement_weight', 'resource', 0.048769, 0.487689, 0.048438, 1.8808, -0.119182, 0.000000, 1, 10);
 INSERT INTO `ahp_final_weights` VALUES (158, 'AHP-2026-001', '2026-03-13', 'effect_damage_rate', '毁伤率', 'effect_damage_rate_weight', 'effect', 0.038529, 0.385288, 0.037387, 2.9832, -0.008379, -0.014446, 1, 10);
 INSERT INTO `ahp_final_weights` VALUES (159, 'AHP-2026-001', '2026-03-13', 'effect_mission_completion_rate', '任务完成率', 'effect_mission_completion_rate_weight', 'effect', 0.040196, 0.401958, 0.039640, 2.9832, -0.008379, -0.014446, 1, 10);
-INSERT INTO `ahp_final_weights` VALUES (160, 'AHP-2026-001', '2026-03-13', 'effect_cost_effectiveness', '效费比', 'effect_cost_effectiveness_weight', 'effect', 0.021275, 0.212754, 0.022973, 2.9832, -0.008379, -0.014446, 1, 10);
+INSERT INTO `ahp_final_weights` VALUES (160, 'AHP-2026-001', '2026-03-13', 'effect_blind_rate', '致盲率', 'effect_blind_rate_weight', 'effect', 0.021275, 0.212754, 0.022973, 2.9832, -0.008379, -0.014446, 1, 10);
 
 -- ----------------------------
 -- Table structure for cost_evaluation
