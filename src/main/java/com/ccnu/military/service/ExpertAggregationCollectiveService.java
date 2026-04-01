@@ -109,6 +109,20 @@ public class ExpertAggregationCollectiveService {
     }
 
     /**
+     * 根据批次ID获取作战任务ID列表（从score表直接查询，不依赖预存结果）
+     */
+    public List<String> getOperationIdsByEvaluationId(String evaluationId) {
+        if (!StringUtils.hasText(evaluationId)) {
+            throw new IllegalArgumentException("评估批次不能为空");
+        }
+        return jdbcTemplate.queryForList(
+                "SELECT DISTINCT operation_id FROM score_military_comm_effect WHERE evaluation_id = ? ORDER BY operation_id ASC",
+                String.class,
+                evaluationId.trim()
+        );
+    }
+
+    /**
      * 权重预览（仅计算并返回集结权重，不保存）
      */
     public CollectiveWeightPreview previewWeights(CollectiveCalculateRequest request) {

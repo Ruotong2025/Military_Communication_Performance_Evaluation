@@ -108,6 +108,18 @@ public class ExpertAggregationCollectiveController {
         }
     }
 
+    @Operation(summary = "根据批次ID获取作战任务ID列表", description = "从score表直接查询，无需预存加权结果，用于效费分析页面自动填充作战任务")
+    @GetMapping("/operation-ids")
+    public ApiResponse<List<String>> getOperationIdsByEvaluationId(@RequestParam String evaluationId) {
+        try {
+            List<String> ids = collectiveService.getOperationIdsByEvaluationId(evaluationId);
+            return ApiResponse.success(ids);
+        } catch (Exception e) {
+            log.error("获取作战任务ID列表失败", e);
+            return ApiResponse.error("获取失败: " + e.getMessage());
+        }
+    }
+
     @Operation(summary = "删除指定批次的加权评估结果")
     @DeleteMapping("/results/{evaluationId}")
     public ApiResponse<Void> deleteWeightedResults(@PathVariable String evaluationId) {

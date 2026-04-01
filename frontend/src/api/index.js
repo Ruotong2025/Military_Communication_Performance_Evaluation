@@ -379,6 +379,15 @@ export function deleteCollectiveResults(evaluationId) {
   });
 }
 
+/** 根据批次ID获取作战任务ID列表（从score表直接查询，无需预存加权结果） */
+export function getOperationIdsByEvaluationId(evaluationId) {
+  return request({
+    url: "/evaluation/collective/operation-ids",
+    method: "get",
+    params: { evaluationId },
+  });
+}
+
 /** 作战基础信息表中不重复的 operation_id 列表 */
 export function getDistinctOperationIds() {
   return request({
@@ -397,5 +406,152 @@ export function getTableData(tableName, page = 1, size = 20, operationId = null)
     url: `/table/data/${tableName}`,
     method: "get",
     params,
+  });
+}
+
+// ============================================================
+// 效费分析 API
+// ============================================================
+
+/**
+ * 获取成本指标配置
+ */
+export function getCostIndicators() {
+  return request({
+    url: "/evaluation/cost-effectiveness/indicators",
+    method: "get",
+  });
+}
+
+/**
+ * 获取指标类别
+ */
+export function getCostCategories() {
+  return request({
+    url: "/evaluation/cost-effectiveness/categories",
+    method: "get",
+  });
+}
+
+/**
+ * 按类别获取指标
+ */
+export function getCostIndicatorsByCategory(category) {
+  return request({
+    url: "/evaluation/cost-effectiveness/indicators/by-category",
+    method: "get",
+    params: { category },
+  });
+}
+
+/**
+ * 获取效费分析结果
+ */
+export function getCostEffectivenessResults(evaluationId) {
+  return request({
+    url: "/evaluation/cost-effectiveness/results",
+    method: "get",
+    params: { evaluationId },
+  });
+}
+
+/**
+ * 执行效费分析计算
+ */
+export function calculateCostEffectiveness(requestData) {
+  return request({
+    url: "/evaluation/cost-effectiveness/calculate",
+    method: "post",
+    data: requestData,
+  });
+}
+
+/**
+ * 删除效费分析结果
+ */
+export function deleteCostEffectivenessResults(evaluationId) {
+  return request({
+    url: "/evaluation/cost-effectiveness/results",
+    method: "delete",
+    params: { evaluationId },
+  });
+}
+
+/**
+ * 获取作战任务原始成本数据预览（选择批次后自动加载）
+ */
+export function getCostRawDataPreview(evaluationId, operationIds) {
+  return request({
+    url: "/evaluation/cost-effectiveness/raw-data-preview",
+    method: "get",
+    params: { evaluationId, operationIds },
+    paramsSerializer: {
+      serialize: (params) => {
+        const parts = []
+        if (params.evaluationId != null) {
+          parts.push(`evaluationId=${encodeURIComponent(params.evaluationId)}`)
+        }
+        if (params.operationIds && Array.isArray(params.operationIds)) {
+          params.operationIds.forEach(id => {
+            parts.push(`operationIds=${encodeURIComponent(id)}`)
+          })
+        }
+        return parts.join('&')
+      }
+    }
+  });
+}
+
+// ============================================================
+// 惩罚模型计算 API（原有）
+// ============================================================
+
+/**
+ * 保存惩罚计算结果
+ * @param {string} evaluationId - 评估批次ID
+ * @param {Array} results - 惩罚计算结果列表
+ */
+export function savePenaltyResults(evaluationId, results) {
+  return request({
+    url: "/evaluation/penalty/results",
+    method: "post",
+    params: { evaluationId },
+    data: results,
+  });
+}
+
+/**
+ * 查询惩罚计算结果
+ * @param {string} evaluationId - 评估批次ID
+ */
+export function getPenaltyResults(evaluationId) {
+  return request({
+    url: "/evaluation/penalty/results",
+    method: "get",
+    params: { evaluationId },
+  });
+}
+
+/**
+ * 检查惩罚结果是否存在
+ * @param {string} evaluationId - 评估批次ID
+ */
+export function hasPenaltyResults(evaluationId) {
+  return request({
+    url: "/evaluation/penalty/results/exists",
+    method: "get",
+    params: { evaluationId },
+  });
+}
+
+/**
+ * 删除惩罚计算结果
+ * @param {string} evaluationId - 评估批次ID
+ */
+export function deletePenaltyResults(evaluationId) {
+  return request({
+    url: "/evaluation/penalty/results",
+    method: "delete",
+    params: { evaluationId },
   });
 }
