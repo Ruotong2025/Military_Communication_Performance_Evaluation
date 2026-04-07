@@ -39,7 +39,8 @@ import {
   Flag,
   CircleCheck,
   Warning,
-  PieChart
+  PieChart,
+  EditPen
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -54,8 +55,14 @@ const entryCards = [
   {
     path: '/simulation-training/weights/expert',
     title: '专家可信度评估',
-    desc: '权重确定：专家可信度与把握度。',
+    desc: '模拟训练数据准备：专家可信度与把握度。',
     icon: User
+  },
+  {
+    path: '/simulation-training/equipment-evaluation',
+    title: '装备操作评估',
+    desc: '装备操作定量指标计算与专家定性评估录入。',
+    icon: EditPen
   },
   {
     path: '/simulation-training/weights/evaluation',

@@ -75,7 +75,7 @@
         </el-tag>
       </div>
 
-      <!-- 四张模拟表共用作战 ID 筛选：选一次后切换 Tab 无需重选 -->
+      <!-- 模拟表共用作战 ID 筛选：选一次后切换 Tab 无需重选 -->
       <div v-if="globalOperationIds.length" class="global-operation-filter">
         <span class="filter-label">作战ID：</span>
         <el-select
@@ -92,7 +92,7 @@
             :value="id"
           />
         </el-select>
-        <span v-if="globalOperationId" class="filter-hint">四张表与下方「作战选择」均按此 ID 筛选</span>
+        <span v-if="globalOperationId" class="filter-hint">各模拟表与下方「作战选择」均按此 ID 筛选</span>
       </div>
 
       <!-- 四表 Tab：lazy 仅挂载当前页；table-name 固定，避免四个表格同时抢同一 activeTab 重复请求 -->
@@ -112,9 +112,17 @@
         <el-tab-pane label="安全事件" name="records_security_events" lazy>
           <DynamicTable table-name="records_security_events" :refresh-tick="tableRefreshTick" />
         </el-tab-pane>
+
+        <el-tab-pane label="进攻操作记录" name="records_comm_attack_operation" lazy>
+          <DynamicTable table-name="records_comm_attack_operation" :refresh-tick="tableRefreshTick" />
+        </el-tab-pane>
+
+        <el-tab-pane label="防御操作记录" name="records_comm_defense_operation" lazy>
+          <DynamicTable table-name="records_comm_defense_operation" :refresh-tick="tableRefreshTick" />
+        </el-tab-pane>
       </el-tabs>
 
-      <!-- 效能指标计算：放在四张模拟表下方 -->
+      <!-- 效能指标计算：放在模拟表下方 -->
       <div class="metrics-section">
         <MetricsCalculation ref="metricsCalculationRef" />
       </div>

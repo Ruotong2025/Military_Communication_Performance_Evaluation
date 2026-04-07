@@ -502,6 +502,27 @@ export function getCostRawDataPreview(evaluationId, operationIds) {
   });
 }
 
+/**
+ * 保存指标权重配置
+ */
+export function saveCostIndicatorWeights(weights) {
+  return request({
+    url: "/evaluation/cost-effectiveness/weights/save",
+    method: "post",
+    data: weights,
+  });
+}
+
+/**
+ * 重置为两层等权权重
+ */
+export function resetCostWeights() {
+  return request({
+    url: "/evaluation/cost-effectiveness/weights/reset",
+    method: "post",
+  });
+}
+
 // ============================================================
 // 惩罚模型计算 API（原有）
 // ============================================================
@@ -553,5 +574,186 @@ export function deletePenaltyResults(evaluationId) {
     url: "/evaluation/penalty/results",
     method: "delete",
     params: { evaluationId },
+  });
+}
+
+// ============================================================
+// 装备操作评估 API（定量指标）
+// ============================================================
+
+/**
+ * 获取定量指标配置列表
+ */
+export function getQtIndicators() {
+  return request({
+    url: "/equipment/qt/indicators",
+    method: "get",
+  });
+}
+
+/**
+ * 计算定量指标
+ */
+export function calculateQtMetrics(payload) {
+  return request({
+    url: "/equipment/qt/calculate",
+    method: "post",
+    data: payload,
+  });
+}
+
+/**
+ * 生成归一化得分
+ */
+export function normalizeQtScores(evaluationBatchId) {
+  return request({
+    url: "/equipment/qt/normalize",
+    method: "post",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 获取定量评估批次列表
+ */
+export function getQtBatches() {
+  return request({
+    url: "/equipment/qt/batches",
+    method: "get",
+  });
+}
+
+/**
+ * 获取批次下的定量评估记录
+ */
+export function getQtRecords(evaluationBatchId) {
+  return request({
+    url: "/equipment/qt/records",
+    method: "get",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 删除定量评估批次
+ */
+export function deleteQtBatch(evaluationBatchId) {
+  return request({
+    url: "/equipment/qt/batches",
+    method: "delete",
+    params: { evaluationBatchId },
+  });
+}
+
+// ============================================================
+// 装备操作评估 API（定性指标）
+// ============================================================
+
+/**
+ * 获取定性指标配置列表
+ */
+export function getQlIndicators() {
+  return request({
+    url: "/equipment/ql/indicators",
+    method: "get",
+  });
+}
+
+/**
+ * 获取指定指标的参考数据
+ */
+export function getQlReferenceData(operationId, indicatorKey) {
+  return request({
+    url: `/equipment/ql/reference/${operationId}/${indicatorKey}`,
+    method: "get",
+  });
+}
+
+/**
+ * 专家提交定性评分
+ */
+export function submitQlEvaluation(payload) {
+  return request({
+    url: "/equipment/ql/submit",
+    method: "post",
+    data: payload,
+  });
+}
+
+/**
+ * 批量模拟定性评分（覆盖当前批次·作战下各专家已有记录）
+ */
+export function simulateQlBatch(payload) {
+  return request({
+    url: "/equipment/ql/simulate-batch",
+    method: "post",
+    data: payload,
+    timeout: 120000,
+  });
+}
+
+/**
+ * 获取定性评估批次列表
+ */
+export function getQlBatches() {
+  return request({
+    url: "/equipment/ql/batches",
+    method: "get",
+  });
+}
+
+/**
+ * 获取某评估批次下可选作战（与指标计算批次一致；不传批次则返回全部作战）
+ */
+export function getQlOperationsForBatch(evaluationBatchId) {
+  return request({
+    url: "/equipment/ql/operations-for-batch",
+    method: "get",
+    params: evaluationBatchId ? { evaluationBatchId } : {},
+  });
+}
+
+/**
+ * 获取批次下的定性评估记录
+ */
+export function getQlRecords(evaluationBatchId, operationId) {
+  const params = { evaluationBatchId };
+  if (operationId) params.operationId = operationId;
+  return request({
+    url: "/equipment/ql/records",
+    method: "get",
+    params,
+  });
+}
+
+/**
+ * 删除定性评估批次
+ */
+export function deleteQlBatch(evaluationBatchId) {
+  return request({
+    url: "/equipment/ql/batches",
+    method: "delete",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 获取专家列表（用于定性评估选择）- 含可信度评分
+ */
+export function getExpertsForEvaluation() {
+  return request({
+    url: "/equipment/ql/experts",
+    method: "get",
+  });
+}
+
+/**
+ * 获取指定专家在指定批次的定性评估记录（用于二次打开回显）
+ */
+export function getQlRecordForEdit(evaluationBatchId, operationId, expertId) {
+  return request({
+    url: "/equipment/ql/record-for-edit",
+    method: "get",
+    params: { evaluationBatchId, operationId, expertId },
   });
 }

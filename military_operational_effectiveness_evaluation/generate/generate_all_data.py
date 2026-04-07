@@ -1086,9 +1086,13 @@ class DataGenerator:
             self.generate_records_communication_info(records_count, quality, dispersion, mode, overrides)
             self.generate_records_link_maintenance(records_count, quality, dispersion, mode, overrides)
             self.generate_records_security_events(records_count, quality, dispersion, mode, overrides)
+            self.generate_records_comm_attack_operation(records_count, quality, dispersion, mode)
+            self.generate_records_comm_defense_operation(records_count, quality, dispersion, mode)
 
             print("\n" + "=" * 80)
             print("         所有数据生成完成！")
+            print("  （包含：专家可信度、AHP权重、装备评分、成本评估、")
+            print("         records_*六表含进攻/防御操作记录）")
             print("=" * 80)
 
         except Error as e:
@@ -1121,8 +1125,10 @@ class DataGenerator:
             self.generate_records_communication_info(records_count, quality, dispersion, mode, overrides)
             self.generate_records_link_maintenance(records_count, quality, dispersion, mode, overrides)
             self.generate_records_security_events(records_count, quality, dispersion, mode, overrides)
+            self.generate_records_comm_attack_operation(records_count, quality, dispersion, mode)
+            self.generate_records_comm_defense_operation(records_count, quality, dispersion, mode)
             print("\n" + "=" * 80)
-            print("         作战模拟四表生成完成！")
+            print("         作战模拟四表及攻防操作记录生成完成！")
             print("=" * 80)
         except Error as e:
             print(f"\n数据库错误: {e}")
@@ -1131,6 +1137,206 @@ class DataGenerator:
         finally:
             self.close()
             print("\n数据库连接已关闭")
+
+    # ── 进攻操作记录 ────────────────────────────────────────────────────────────
+    def generate_records_comm_attack_operation(self, count=10, quality='medium', dispersion='medium', mode='overwrite'):
+        """生成 records_comm_attack_operation（进攻操作记录）
+
+        operation_type: jamming_target_lock / jamming_effect / spoofing_signal
+        每条作战生成 3~8 条进攻操作
+        """
+        print("\n" + "=" * 80)
+        print("【进攻】生成进攻操作记录 (records_comm_attack_operation)")
+        print("=" * 80)
+
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("SELECT DISTINCT operation_id FROM records_military_operation_info ORDER BY operation_id")
+        op_ids = [r['operation_id'] for r in cursor.fetchall()]
+        cursor.close()
+
+        if not op_ids:
+            print("  未找到作战基础数据，请先运行 generate_records_operation_info()")
+            return
+
+        if mode == 'overwrite':
+            cursor = self.connection.cursor()
+            cursor.execute("DELETE FROM records_comm_attack_operation")
+            self.connection.commit()
+            cursor.close()
+            print("  [覆盖模式] 已清空旧数据")
+
+        insert = """
+            INSERT INTO records_comm_attack_operation (
+                operation_id, operation_type, start_time_ms, end_time_ms,
+                operator_id, target_node, target_communication_id,
+                jamming_power_dbm, jamming_frequency_hz, effect_assessment,
+                spoofing_signal_type, spoofing_success, notes
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """
+
+        op_types = ['jamming_target_lock', 'jamming_effect', 'spoofing_signal']
+        op_id_list = [f'OP-{i:02d}' for i in range(1, 11)]
+        target_nodes = [f'NODE-{i:02d}' for i in range(1, 21)]
+        jam_powers = [round(random.uniform(-90, -60), 2) for _ in range(5)]
+        jam_freqs = [round(random.uniform(100e6, 500e6), 2) for _ in range(5)]
+        effect_texts = [
+            '通信质量降级30%', '通信质量降级50%', '通信质量降级80%',
+            '完全中断', '部分干扰', '信号压制', '目标失锁'
+        ]
+        spoof_types = ['敌方指挥', '虚假指令', '伪装友军', '错误频点']
+        operators = [f'OPR-{i:02d}' for i in range(1, 11)]
+
+        total_rows = 0
+        for op_id in op_ids:
+            rows = random.randint(3, 8)
+            for _ in range(rows):
+                op_type = random.choice(op_types)
+                start_ms = random.randint(0, 3600000)
+
+                if op_type == 'jamming_target_lock':
+                    end_ms = start_ms + random.randint(500, 3000)
+                    jamming_power = random.choice(jam_powers)
+                    jamming_freq = random.choice(jam_freqs)
+                    target_node = random.choice(target_nodes)
+                    effect_assessment = random.choice(effect_texts) if random.random() < 0.6 else None
+                    spoofing_signal_type = None
+                    spoofing_success = None
+                elif op_type == 'jamming_effect':
+                    end_ms = start_ms + random.randint(1000, 10000)
+                    jamming_power = random.choice(jam_powers)
+                    jamming_freq = random.choice(jam_freqs)
+                    target_node = random.choice(target_nodes)
+                    effect_assessment = random.choice(effect_texts)
+                    spoofing_signal_type = None
+                    spoofing_success = None
+                else:  # spoofing_signal
+                    end_ms = start_ms + random.randint(2000, 8000)
+                    jamming_power = None
+                    jamming_freq = None
+                    target_node = None
+                    effect_assessment = None
+                    spoofing_signal_type = random.choice(spoof_types)
+                    spoofing_success = 1 if random.random() < 0.75 else 0
+
+                operator_id = random.choice(operators)
+                notes = random.choice(['正常执行', '目标变更', '功率调整', '频率切换', ''])
+
+                cursor = self.connection.cursor()
+                cursor.execute(insert, (
+                    op_id, op_type, start_ms, end_ms,
+                    operator_id, target_node, None,
+                    jamming_power, jamming_freq, effect_assessment,
+                    spoofing_signal_type, spoofing_success, notes
+                ))
+                total_rows += 1
+
+        self.connection.commit()
+        cursor.close()
+        print(f"  >> 成功{'覆盖' if mode == 'overwrite' else '追加'}生成 {total_rows} 条进攻操作记录")
+
+    # ── 防御操作记录 ────────────────────────────────────────────────────────────
+    def generate_records_comm_defense_operation(self, count=10, quality='medium', dispersion='medium', mode='overwrite'):
+        """生成 records_comm_defense_operation（防御操作记录）
+
+        operation_type: detection_awareness / anti_jamming / anti_deception
+        每条作战生成 3~8 条防御操作
+        """
+        print("\n" + "=" * 80)
+        print("【防御】生成防御操作记录 (records_comm_defense_operation)")
+        print("=" * 80)
+
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("SELECT DISTINCT operation_id FROM records_military_operation_info ORDER BY operation_id")
+        op_ids = [r['operation_id'] for r in cursor.fetchall()]
+        cursor.close()
+
+        if not op_ids:
+            print("  未找到作战基础数据，请先运行 generate_records_operation_info()")
+            return
+
+        if mode == 'overwrite':
+            cursor = self.connection.cursor()
+            cursor.execute("DELETE FROM records_comm_defense_operation")
+            self.connection.commit()
+            cursor.close()
+            print("  [覆盖模式] 已清空旧数据")
+
+        insert = """
+            INSERT INTO records_comm_defense_operation (
+                operation_id, operation_type, start_time_ms, end_time_ms,
+                operator_id, detection_time_ms, detection_method,
+                jamming_detected, anti_jamming_actions, anti_jamming_success,
+                suspicious_signal_detected, verification_method, verification_result,
+                notes
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """
+
+        op_types = ['detection_awareness', 'anti_jamming', 'anti_deception']
+        operators = [f'OPR-{i:02d}' for i in range(1, 11)]
+        detection_methods = ['仪表检测', '耳听', '告警', '目视', '协同感知']
+        jam_actions = ['跳频', '扩频', '增功率', '切换频点', '启用备份链路', '改变调制方式']
+        verify_methods = ['询问上级', '信号特征比对', '频谱分析', '交叉验证']
+        verify_results = ['确认为敌', '误判', '存疑待查', '正常信号']
+
+        total_rows = 0
+        for op_id in op_ids:
+            rows = random.randint(3, 8)
+            for _ in range(rows):
+                op_type = random.choice(op_types)
+                start_ms = random.randint(0, 3600000)
+
+                if op_type == 'detection_awareness':
+                    end_ms = start_ms + random.randint(500, 5000)
+                    detection_time_ms = random.randint(100, 2000)
+                    detection_method = random.choice(detection_methods)
+                    jamming_detected = None
+                    anti_jamming_actions = None
+                    anti_jamming_success = None
+                    suspicious_signal_detected = None
+                    verification_method = None
+                    verification_result = None
+                elif op_type == 'anti_jamming':
+                    end_ms = start_ms + random.randint(1000, 8000)
+                    detection_time_ms = random.randint(200, 3000)
+                    detection_method = random.choice(detection_methods)
+                    jamming_detected = 1
+                    anti_jamming_actions = random.choice(jam_actions)
+                    anti_jamming_success = 1 if random.random() < 0.80 else 0
+                    suspicious_signal_detected = None
+                    verification_method = None
+                    verification_result = None
+                else:  # anti_deception
+                    end_ms = start_ms + random.randint(2000, 10000)
+                    detection_time_ms = random.randint(500, 4000)
+                    detection_method = random.choice(detection_methods)
+                    jamming_detected = None
+                    anti_jamming_actions = None
+                    anti_jamming_success = None
+                    suspicious_signal_detected = 1
+                    verification_method = random.choice(verify_methods)
+                    verification_result = random.choice(verify_results)
+                    # 根据结果决定真假阳性
+                    if random.random() < 0.70:
+                        verification_result = '确认为敌'
+                    else:
+                        verification_result = random.choice(['误判', '存疑待查', '正常信号'])
+
+                operator_id = random.choice(operators)
+                notes = random.choice(['正常处置', '上报指挥', '协同处置', ''])
+
+                cursor = self.connection.cursor()
+                cursor.execute(insert, (
+                    op_id, op_type, start_ms, end_ms,
+                    operator_id, detection_time_ms, detection_method,
+                    jamming_detected, anti_jamming_actions, anti_jamming_success,
+                    suspicious_signal_detected, verification_method, verification_result,
+                    notes
+                ))
+                total_rows += 1
+
+        self.connection.commit()
+        cursor.close()
+        print(f"  >> 成功{'覆盖' if mode == 'overwrite' else '追加'}生成 {total_rows} 条防御操作记录")
 
 
 def main():

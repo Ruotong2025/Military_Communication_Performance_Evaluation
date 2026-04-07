@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -138,6 +139,36 @@ public class CostEffectivenessController {
         } catch (Exception e) {
             log.error("删除评估结果失败", e);
             return ApiResponse.error("删除失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 保存指标权重配置（用户手动修改后调用）
+     */
+    @Operation(summary = "保存指标权重配置", description = "保存用户手动修改的指标权重")
+    @PostMapping("/weights/save")
+    public ApiResponse<Void> saveWeights(@RequestBody Map<String, BigDecimal> weights) {
+        try {
+            costEffectivenessService.saveIndicatorWeights(weights);
+            return ApiResponse.success("权重保存成功", null);
+        } catch (Exception e) {
+            log.error("保存权重配置失败", e);
+            return ApiResponse.error("保存失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 重置为两层等权权重
+     */
+    @Operation(summary = "重置为两层等权权重", description = "将所有指标权重重置为两层等权计算值")
+    @PostMapping("/weights/reset")
+    public ApiResponse<Map<String, BigDecimal>> resetWeights() {
+        try {
+            Map<String, BigDecimal> weights = costEffectivenessService.resetToEqualWeights();
+            return ApiResponse.success(weights);
+        } catch (Exception e) {
+            log.error("重置权重失败", e);
+            return ApiResponse.error("重置失败: " + e.getMessage());
         }
     }
 }

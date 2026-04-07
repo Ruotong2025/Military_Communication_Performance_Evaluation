@@ -1,5 +1,8 @@
 <template>
   <div class="metrics-calculation">
+    <el-tabs v-model="activeMainTab" class="main-tabs">
+      <!-- ====== Tab1: 效能指标 ====== -->
+      <el-tab-pane label="效能指标" name="efficacy">
 
     <!-- ====== 第一步：效能指标计算 ====== -->
     <el-card class="config-card">
@@ -340,11 +343,165 @@
     <el-empty v-if="!calculating && evaluationBatches.length === 0" description="暂无评估批次，请先点击「计算指标」生成原始指标数据">
       <template #image><el-icon :size="60"><DataAnalysis /></el-icon></template>
     </el-empty>
+      </el-tab-pane>
+
+      <!-- ====== Tab2: 装备操作指标 ====== -->
+      <el-tab-pane label="装备操作指标" name="equipment">
+        <div class="equipment-tab-intro">
+          <el-alert title="装备操作指标计算说明" type="info" :closable="false">
+            <ul style="margin: 6px 0 0; padding-left: 18px;">
+              <li>定量指标（14项）：从 <code>records_*</code> 表自动聚合计算原始值，再做 Min-Max 归一化</li>
+              <li>定性指标（5项）：请在左侧菜单「模拟训练数据准备 → 专家定性数据评估」或「装备操作评估」页面录入</li>
+              <li>批次切换：每次「计算指标」会生成新批次；历史批次可下拉查看</li>
+            </ul>
+          </el-alert>
+        </div>
+
+        <!-- 作战选择 + 计算按钮 -->
+        <el-card class="config-card" style="margin-top: 16px">
+          <template #header>
+            <div class="card-header">
+              <el-icon class="header-icon"><Setting /></el-icon>
+              <span>定量指标计算</span>
+            </div>
+          </template>
+          <el-form :inline="true" :model="eqForm" label-width="90px">
+            <el-form-item label="作战选择">
+              <el-select v-model="eqForm.operationIds" multiple clearable filterable
+                placeholder="留空则计算全部作战" collapse-tags collapse-tags-tooltip :max-collapse-tags="5"
+                style="width: 380px">
+                <el-option v-for="op in eqAvailableOperations" :key="op.operation_id"
+                  :label="`${op.operation_id} - ${op.notes || '作战'}`" :value="op.operation_id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="handleEqCalculate" :loading="eqCalculating" :icon="VideoPlay">计算指标</el-button>
+              <el-button @click="handleEqRefresh" :icon="Refresh">刷新</el-button>
+              <el-button type="primary" plain @click="router.push('/simulation-training/equipment-evaluation')">
+                专家定性数据评估
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
+        <!-- 批次切换 -->
+        <el-card v-if="eqBatches.length > 0" class="results-card" style="margin-top: 12px">
+          <template #header>
+            <div class="batch-toolbar">
+              <span class="batch-label">评估批次</span>
+              <el-select v-model="eqSelectedBatchId" placeholder="切换批次" filterable style="min-width: 300px">
+                <el-option v-for="b in eqBatches" :key="b.evaluation_batch_id"
+                  :label="formatEqBatchLabel(b)" :value="b.evaluation_batch_id" />
+              </el-select>
+              <el-tag type="info">共 {{ eqBatches.length }} 个批次</el-tag>
+              <el-button type="danger" plain size="small" :disabled="!eqSelectedBatchId"
+                @click="handleEqDeleteBatch">删除当前批次</el-button>
+            </div>
+          </template>
+
+          <!-- 定量指标口径说明 -->
+          <div class="metrics-legend">
+            <div class="legend-title">定量指标口径说明（14 项）</div>
+            <el-collapse>
+              <el-collapse-item title="与库内 equipment_qt_indicator_def 一致的 14 项（随配置变化）" name="eq-pre">
+                <ul class="legend-list">
+                  <!-- 战前 系统性能 -->
+                  <li><strong>组网时长</strong>（战前·系统性能）：<code>records_military_operation_info</code> 的 <code>AVG(avg_network_setup_time_ms)</code>，ms，越小越好</li>
+                  <!-- 战中 操作响应 -->
+                  <li><strong>应急处理</strong>（战中·操作响应）：<code>AVG(operator_reaction_ms)</code>，ms，越小越好</li>
+                  <!-- 战中 通信保障操作 -->
+                  <li><strong>链路维持</strong>（战中·通信保障操作）：由通信时长与 <code>records_link_maintenance_events</code> 中断时长计算的可用比例，%，越大越好</li>
+                  <li><strong>业务开通</strong>（战中·通信保障操作）：<code>AVG(call_setup_ms)</code>，ms，越小越好</li>
+                  <li><strong>应急抢通</strong>（战中·通信保障操作）：抢通成功记录的 <code>AVG(recovery_duration_ms)</code>，ms，越小越好</li>
+                  <!-- 战中 系统性能 -->
+                  <li><strong>连通率</strong>（战中·系统性能）：<code>(total_node_count - isolated_node_count) / total_node_count</code>，%，越大越好</li>
+                  <li><strong>任务可靠度</strong>（战中·系统性能）：<code>comm_success=1</code> 条数 / 总条数，%，越大越好</li>
+                  <!-- 战后 维修与反馈 -->
+                  <li><strong>返修率</strong>（战后·维修与反馈）：维修失败占比，%，越小越好</li>
+                  <li><strong>抢修能力</strong>（战后·维修与反馈）：链路故障恢复成功次数 / 总中断次数，%，越大越好</li>
+                  <!-- 战中 通信进攻操作 -->
+                  <li><strong>干扰目标锁定耗时</strong>（战中·通信进攻操作）：<code>records_comm_attack_operation</code> 干扰锁定类记录的耗时均值，ms，越小越好</li>
+                  <li><strong>干扰效能达成</strong>（战中·通信进攻操作）：干扰有效次数 / 总干扰次数，%，越大越好</li>
+                  <!-- 战中 通信防御操作 -->
+                  <li><strong>信号截获感知</strong>（战中·通信防御操作）：<code>records_comm_defense_operation</code> 的感知耗时均值，ms，越小越好</li>
+                  <li><strong>抗干扰操作</strong>（战中·通信防御操作）：抗干扰成功次数 / 总抗干扰次数，%，越大越好</li>
+                  <li><strong>防骗反骗</strong>（战中·通信防御操作）：识别可疑欺骗信号成功次数 / 可疑信号出现次数，%，越大越好</li>
+                </ul>
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+
+          <!-- 定量指标计算结果 -->
+          <div v-if="eqSelectedBatchId && eqRecords.length > 0">
+            <div class="section-title" style="margin-top: 12px">
+              <el-icon><Document /></el-icon> 定量指标原始值
+              <el-tag type="success" style="margin-left: 8px">{{ eqRecords.length }} 条作战记录</el-tag>
+            </div>
+            <el-table :data="eqRecords" border stripe max-height="400" size="small">
+              <el-table-column prop="operation_id" label="作战ID" width="100" align="center" fixed="left">
+                <template #default="{ row }"><el-tag type="primary" size="small">{{ row.operation_id }}</el-tag></template>
+              </el-table-column>
+              <el-table-column v-for="ind in eqIndicators" :key="ind.indicator_key"
+                :label="ind.indicator_name" :prop="`raw_${ind.indicator_key}`" width="130" align="center">
+                <template #default="{ row }">
+                  {{ formatEqValue(row.raw_data?.[ind.indicator_key], ind.unit) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="composite_score" label="综合得分" width="110" align="center">
+                <template #default="{ row }">
+                  <span :class="getEqScoreClass(row.composite_score)">
+                    {{ row.composite_score != null ? row.composite_score.toFixed(4) : '—' }}
+                  </span>
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <!-- 归一化得分 -->
+            <div class="score-actions" style="margin-top: 16px">
+              <el-button type="success" @click="handleEqNormalize" :loading="eqNormalizing" :icon="VideoPlay">
+                生成归一化得分
+              </el-button>
+            </div>
+
+            <div v-if="eqNormalizedRecords.length > 0" class="section-title" style="margin-top: 12px">
+              <el-icon><TrendCharts /></el-icon> 归一化得分（0~1，越大越好）
+            </div>
+            <el-table v-if="eqNormalizedRecords.length > 0" :data="eqNormalizedRecords" border stripe max-height="400" size="small">
+              <el-table-column prop="operation_id" label="作战ID" width="100" align="center" fixed="left">
+                <template #default="{ row }"><el-tag type="primary" size="small">{{ row.operation_id }}</el-tag></template>
+              </el-table-column>
+              <el-table-column v-for="ind in eqIndicators" :key="ind.indicator_key"
+                :label="ind.indicator_name" :prop="`norm_${ind.indicator_key}`" width="130" align="center">
+                <template #default="{ row }">
+                  <span :class="getEqScoreClass(row.norm_data?.[ind.indicator_key])">
+                    {{ row.norm_data?.[ind.indicator_key] != null ? row.norm_data[ind.indicator_key].toFixed(3) : '—' }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="composite_score" label="综合得分" width="110" align="center">
+                <template #default="{ row }">
+                  <span :class="getEqScoreClass(row.composite_score)">
+                    {{ row.composite_score != null ? row.composite_score.toFixed(4) : '—' }}
+                  </span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <el-empty v-else-if="eqSelectedBatchId" description="该批次暂无计算记录，请点击「计算指标」" :image-size="80" />
+        </el-card>
+
+        <el-empty v-if="eqBatches.length === 0" description="暂无定量评估批次，请先生成作战模拟数据后点击「计算指标」">
+          <template #image><el-icon :size="60"><DataAnalysis /></el-icon></template>
+        </el-empty>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, nextTick, computed } from "vue";
+import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   Setting,
@@ -363,9 +520,18 @@ import {
   getScoreData,
   getScoreChartData,
   generateScore,
+  getQtIndicators,
+  calculateQtMetrics,
+  normalizeQtScores,
+  getQtBatches,
+  getQtRecords,
+  deleteQtBatch,
 } from "@/api";
 import { globalOperationId } from "@/composables/useGlobalOperationFilter";
 import * as echarts from "echarts";
+
+const router = useRouter();
+const activeMainTab = ref("efficacy");
 
 const availableOperations = ref([]);
 const calculatedData = ref([]);
@@ -379,6 +545,191 @@ const scoreGenerated = ref(false);
 const chartRef = ref(null);
 const chartType = ref("line");
 let chartInstance = null;
+
+// ==================== 装备操作指标 Tab ====================
+const eqAvailableOperations = ref([]);
+const eqIndicators = ref([]);
+const eqBatches = ref([]);
+const eqSelectedBatchId = ref(null);
+const eqRecords = ref([]);
+const eqNormalizedRecords = ref([]);
+const eqCalculating = ref(false);
+const eqNormalizing = ref(false);
+
+const eqForm = ref({
+  operationIds: [],
+});
+
+async function loadEqOperations() {
+  try {
+    const data = await getAvailableOperations();
+    eqAvailableOperations.value = Array.isArray(data) ? data.filter(op => op && op.operation_id != null) : [];
+  } catch (e) {
+    console.error("加载作战ID失败", e);
+  }
+}
+
+async function loadEqIndicators() {
+  try {
+    const data = await getQtIndicators();
+    eqIndicators.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error("加载定量指标配置失败", e);
+  }
+}
+
+async function loadEqBatches() {
+  try {
+    const data = await getQtBatches();
+    eqBatches.value = Array.isArray(data) ? data.filter(x => x && x.evaluation_batch_id != null) : [];
+    if (!eqSelectedBatchId.value && eqBatches.value.length > 0) {
+      eqSelectedBatchId.value = eqBatches.value[0].evaluation_batch_id;
+    }
+  } catch (e) {
+    console.error("加载批次失败", e);
+  }
+}
+
+async function loadEqRecords() {
+  if (!eqSelectedBatchId.value) {
+    eqRecords.value = [];
+    eqNormalizedRecords.value = [];
+    return;
+  }
+  try {
+    const data = await getQtRecords(eqSelectedBatchId.value);
+    eqRecords.value = Array.isArray(data) ? data : [];
+    const normKey = (r) => r.normalized_scores ?? r.normalized_data;
+    eqNormalizedRecords.value = eqRecords.value
+      .filter((r) => {
+        const n = normKey(r);
+        return n && typeof n === "object" && Object.keys(n).length > 0;
+      })
+      .map((r) => ({ ...r, norm_data: normKey(r) }));
+  } catch (e) {
+    eqRecords.value = [];
+    eqNormalizedRecords.value = [];
+  }
+}
+
+async function handleEqCalculate() {
+  eqCalculating.value = true;
+  try {
+    const ids =
+      eqForm.value.operationIds && eqForm.value.operationIds.length > 0
+        ? eqForm.value.operationIds
+        : eqAvailableOperations.value.map((op) => op.operation_id);
+    if (!ids.length) {
+      ElMessage.warning("暂无作战 ID，请先在页面顶部生成模拟数据");
+      return;
+    }
+    const payload = {
+      operationIds: ids,
+      evaluationBatchId: null,
+    };
+    const res = await calculateQtMetrics(payload);
+    if (res && res.success) {
+      ElMessage.success(res.message || "计算成功");
+      eqSelectedBatchId.value = res.evaluationBatchId;
+      await loadEqBatches();
+      await loadEqRecords();
+      // 自动生成归一化
+      if (res.evaluationBatchId) {
+        await normalizeQtScores(res.evaluationBatchId);
+        await loadEqRecords();
+      }
+    } else {
+      ElMessage.error(res?.message || "计算失败");
+    }
+  } catch (e) {
+    ElMessage.error(e?.message || "计算失败");
+  } finally {
+    eqCalculating.value = false;
+  }
+}
+
+async function handleEqNormalize() {
+  if (!eqSelectedBatchId.value) {
+    ElMessage.warning("请先选择批次");
+    return;
+  }
+  eqNormalizing.value = true;
+  try {
+    const res = await normalizeQtScores(eqSelectedBatchId.value);
+    if (res && res.success) {
+      ElMessage.success(res.message || "归一化成功");
+      await loadEqRecords();
+    } else {
+      ElMessage.error(res?.message || "归一化失败");
+    }
+  } catch (e) {
+    ElMessage.error(e?.message || "归一化失败");
+  } finally {
+    eqNormalizing.value = false;
+  }
+}
+
+async function handleEqDeleteBatch() {
+  if (!eqSelectedBatchId.value) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定删除批次「${eqSelectedBatchId.value}」？此操作不可恢复。`,
+      "删除批次", { type: "warning" }
+    );
+    await deleteQtBatch(eqSelectedBatchId.value);
+    ElMessage.success("已删除");
+    eqSelectedBatchId.value = null;
+    eqRecords.value = [];
+    eqNormalizedRecords.value = [];
+    await loadEqBatches();
+  } catch (e) {
+    if (e !== "cancel") {
+      ElMessage.error(e?.message || "删除失败");
+    }
+  }
+}
+
+function handleEqRefresh() {
+  loadEqOperations();
+  loadEqBatches().then(() => {
+    loadEqRecords();
+  });
+}
+
+function formatEqBatchLabel(b) {
+  if (!b) return "";
+  return `${b.evaluation_batch_id}（${b.row_count || 0} 条）`;
+}
+
+function formatEqValue(value, unit) {
+  if (value == null) return "—";
+  const num = Number(value);
+  if (unit === "%") return num.toFixed(2) + "%";
+  if (unit === "ms") return num.toFixed(0) + " ms";
+  return num.toFixed(2);
+}
+
+function getEqScoreClass(score) {
+  if (score == null) return "";
+  if (score >= 0.8) return "text-success";
+  if (score >= 0.5) return "text-warning";
+  return "text-danger";
+}
+
+watch(eqSelectedBatchId, () => {
+  loadEqRecords();
+});
+
+// 初始化装备操作指标数据
+async function initEquipmentTab() {
+  await Promise.all([loadEqOperations(), loadEqIndicators(), loadEqBatches()]);
+}
+
+watch(activeMainTab, (tab) => {
+  if (tab === "equipment") {
+    initEquipmentTab();
+  }
+});
 
 const form = ref({
   operationIds: [],
@@ -921,278 +1272,287 @@ const getAlertClass = (value, min, max, reverse = false) => {
 </script>
 
 <style scoped lang="scss">
-.metrics-calculation {
-  .metrics-legend {
-    margin-bottom: 16px;
-    padding: 12px 14px;
-    background: #f8fafc;
-    border: 1px solid #e4eaf3;
-    border-radius: 8px;
+  .main-tabs {
+    :deep(.el-tabs__header) {
+      margin-bottom: 16px;
+    }
+  }
 
-    .legend-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: #1a1a2e;
-      margin-bottom: 8px;
+  .metrics-calculation {
+    .equipment-tab-intro {
+      margin-bottom: 0;
     }
 
-    .legend-intro {
+    .metrics-legend {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px solid #e4eaf3;
+      border-radius: 8px;
+
+      .legend-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: #1a1a2e;
+        margin-bottom: 8px;
+      }
+
+      .legend-intro {
+        font-size: 13px;
+        color: #606266;
+        line-height: 1.6;
+        margin: 0 0 10px;
+      }
+
+      .legend-collapse {
+        border: none;
+        --el-collapse-header-height: 44px;
+      }
+
+      .legend-list {
+        margin: 0;
+        padding-left: 1.25rem;
+        font-size: 13px;
+        line-height: 1.75;
+        color: #303133;
+
+        li {
+          margin-bottom: 6px;
+        }
+
+        code {
+          font-size: 12px;
+          padding: 0 4px;
+          background: #eef2f7;
+          border-radius: 3px;
+        }
+      }
+    }
+
+    .select-with-hint {
+      width: 100%;
+    }
+
+    .field-hint {
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+      line-height: 1.5;
+    }
+
+    .config-card {
+      margin-bottom: 20px;
+    }
+
+    .results-card {
+      margin-bottom: 20px;
+    }
+
+    .score-card {
+      margin-bottom: 20px;
+    }
+
+    .score-hint {
+      padding: 12px 14px;
+      background: #f0f9eb;
+      border: 1px solid #c2e7b0;
+      border-radius: 6px;
+      margin-bottom: 16px;
       font-size: 13px;
       color: #606266;
-      line-height: 1.6;
-      margin: 0 0 10px;
-    }
 
-    .legend-collapse {
-      border: none;
-      --el-collapse-header-height: 44px;
-    }
-
-    .legend-list {
-      margin: 0;
-      padding-left: 1.25rem;
-      font-size: 13px;
-      line-height: 1.75;
-      color: #303133;
-
-      li {
-        margin-bottom: 6px;
-      }
-
-      code {
-        font-size: 12px;
-        padding: 0 4px;
-        background: #eef2f7;
-        border-radius: 3px;
-      }
-    }
-  }
-
-  .select-with-hint {
-    width: 100%;
-  }
-
-  .field-hint {
-    margin: 8px 0 0;
-    font-size: 12px;
-    color: var(--el-text-color-secondary);
-    line-height: 1.5;
-  }
-
-  .config-card {
-    margin-bottom: 20px;
-  }
-
-  .results-card {
-    margin-bottom: 20px;
-  }
-
-  .score-card {
-    margin-bottom: 20px;
-  }
-
-  .score-hint {
-    padding: 12px 14px;
-    background: #f0f9eb;
-    border: 1px solid #c2e7b0;
-    border-radius: 6px;
-    margin-bottom: 16px;
-    font-size: 13px;
-    color: #606266;
-
-    p {
-      margin: 0 0 6px;
-      font-weight: 500;
-    }
-
-    ul {
-      margin: 0;
-      padding-left: 20px;
-    }
-
-    li {
-      line-height: 1.8;
-    }
-
-    .score-formula {
-      margin-bottom: 12px;
-
-      code {
-        font-size: 12px;
-        padding: 2px 6px;
-        background: #fff;
-        border-radius: 4px;
-        border: 1px solid #dcdfe6;
-      }
-    }
-
-    .direction-lists {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin-top: 10px;
-
-      @media (max-width: 900px) {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .direction-block {
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid #e4eaf3;
-      background: #fff;
-
-      ol {
-        margin: 8px 0 0;
-        padding-left: 1.25rem;
-        font-size: 12px;
-        line-height: 1.85;
-        color: #303133;
-      }
-
-      .direction-title {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-        color: #606266;
+      p {
+        margin: 0 0 6px;
         font-weight: 500;
       }
+
+      ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      li {
+        line-height: 1.8;
+      }
+
+      .score-formula {
+        margin-bottom: 12px;
+
+        code {
+          font-size: 12px;
+          padding: 2px 6px;
+          background: #fff;
+          border-radius: 4px;
+          border: 1px solid #dcdfe6;
+        }
+      }
+
+      .direction-lists {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-top: 10px;
+
+        @media (max-width: 900px) {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .direction-block {
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #e4eaf3;
+        background: #fff;
+
+        ol {
+          margin: 8px 0 0;
+          padding-left: 1.25rem;
+          font-size: 12px;
+          line-height: 1.85;
+          color: #303133;
+        }
+
+        .direction-title {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          color: #606266;
+          font-weight: 500;
+        }
+      }
+
+      .direction-positive {
+        border-left: 3px solid #67c23a;
+      }
+
+      .direction-negative {
+        border-left: 3px solid #f56c6c;
+      }
     }
 
-    .direction-positive {
-      border-left: 3px solid #67c23a;
+    .score-actions {
+      margin-bottom: 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
     }
 
-    .direction-negative {
-      border-left: 3px solid #f56c6c;
+    .score-waiting-hint {
+      margin: 24px 0;
+      text-align: center;
     }
 
-  }
-
-  .score-actions {
-    margin-bottom: 16px;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-  }
-
-  .score-waiting-hint {
-    margin: 24px 0;
-    text-align: center;
-  }
-
-  .results-header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .batch-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .batch-label {
-    font-size: 13px;
-    color: var(--el-text-color-secondary);
-    white-space: nowrap;
-  }
-
-  .batch-hint-bar {
-    margin: 8px 0 0;
-    font-size: 13px;
-    color: var(--el-text-color-secondary);
-    line-height: 1.5;
-  }
-
-  .batch-select {
-    min-width: 280px;
-    max-width: 520px;
-  }
-
-  .batch-hint {
-    margin: 0 0 12px;
-    font-size: 13px;
-    color: var(--el-text-color-secondary);
-  }
-
-  .card-header {
-    display: flex;
-    align-items: center;
-    font-size: 16px;
-
-    .header-icon {
-      font-size: 20px;
-      margin-right: 8px;
-      color: var(--el-color-primary);
+    .results-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
     }
-  }
 
-  .section-title {
-    display: flex;
-    align-items: center;
-    font-size: 15px;
-    font-weight: 600;
-    color: #1a3a5c;
-    margin-bottom: 12px;
-    gap: 6px;
-
-    .el-icon {
-      color: var(--el-color-primary);
-      font-size: 18px;
+    .batch-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
     }
-  }
 
-  .metrics-result-table {
-    width: 100%;
+    .batch-label {
+      font-size: 13px;
+      color: var(--el-text-color-secondary);
+      white-space: nowrap;
+    }
 
-    :deep(.el-table__header-wrapper thead tr:first-child th.el-table__cell) {
-      background: #e8f1fc;
+    .batch-hint-bar {
+      margin: 8px 0 0;
+      font-size: 13px;
+      color: var(--el-text-color-secondary);
+      line-height: 1.5;
+    }
+
+    .batch-select {
+      min-width: 280px;
+      max-width: 520px;
+    }
+
+    .batch-hint {
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--el-text-color-secondary);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      font-size: 16px;
+
+      .header-icon {
+        font-size: 20px;
+        margin-right: 8px;
+        color: var(--el-color-primary);
+      }
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      font-size: 15px;
       font-weight: 600;
       color: #1a3a5c;
-    }
-  }
+      margin-bottom: 12px;
+      gap: 6px;
 
-  .chart-scroll-wrap {
-    width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: 4px;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .chart-container {
-    width: 100%;
-    height: 460px;
-    border: 1px solid #e4eaf3;
-    border-radius: 8px;
-    padding: 8px;
-    background: #fff;
-    box-sizing: border-box;
-  }
-
-  :deep(.el-table) {
-    .text-success {
-      color: #67c23a;
-      font-weight: 600;
+      .el-icon {
+        color: var(--el-color-primary);
+        font-size: 18px;
+      }
     }
 
-    .text-warning {
-      color: #e6a23c;
-      font-weight: 600;
+    .metrics-result-table {
+      width: 100%;
+
+      :deep(.el-table__header-wrapper thead tr:first-child th.el-table__cell) {
+        background: #e8f1fc;
+        font-weight: 600;
+        color: #1a3a5c;
+      }
     }
 
-    .text-danger {
-      color: #f56c6c;
-      font-weight: 600;
+    .chart-scroll-wrap {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .chart-container {
+      width: 100%;
+      height: 460px;
+      border: 1px solid #e4eaf3;
+      border-radius: 8px;
+      padding: 8px;
+      background: #fff;
+      box-sizing: border-box;
+    }
+
+    :deep(.el-table) {
+      .text-success {
+        color: #67c23a;
+        font-weight: 600;
+      }
+
+      .text-warning {
+        color: #e6a23c;
+        font-weight: 600;
+      }
+
+      .text-danger {
+        color: #f56c6c;
+        font-weight: 600;
+      }
     }
   }
-}
 </style>

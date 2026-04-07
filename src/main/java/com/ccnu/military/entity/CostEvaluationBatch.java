@@ -48,6 +48,10 @@ public class CostEvaluationBatch {
     @Column(name = "active_indicators", columnDefinition = "json")
     private String activeIndicators;
 
+    /** 参评作战ID列表快照 JSON */
+    @Column(name = "operation_ids", columnDefinition = "json")
+    private String operationIds;
+
     /** 全局最小值快照 JSON */
     @Column(name = "global_min_values", columnDefinition = "json")
     private String globalMinValues;
@@ -68,6 +72,44 @@ public class CostEvaluationBatch {
     /** 已完成数量 */
     @Column(name = "completed_count")
     private Integer completedCount = 0;
+
+    // ========== 汇总计算结果（写入 batch 表，便于追溯每次评估的最终输出）==========
+
+    /** 批次平均成本指数 C（所有作战的均值，归一化到 0~1） */
+    @Column(name = "avg_cost_index", precision = 8, scale = 6)
+    private BigDecimal avgCostIndex;
+
+    /** 批次平均效能得分 E */
+    @Column(name = "avg_effectiveness_score", precision = 10, scale = 6)
+    private BigDecimal avgEffectivenessScore;
+
+    /** 批次平均效费比 R = E/C */
+    @Column(name = "avg_cost_effectiveness_ratio", precision = 12, scale = 6)
+    private BigDecimal avgCostEffectivenessRatio;
+
+    /** 成本指数最小值 */
+    @Column(name = "min_cost_index", precision = 8, scale = 6)
+    private BigDecimal minCostIndex;
+
+    /** 成本指数最大值 */
+    @Column(name = "max_cost_index", precision = 8, scale = 6)
+    private BigDecimal maxCostIndex;
+
+    /** 效费比最小值 */
+    @Column(name = "min_cost_effectiveness_ratio", precision = 12, scale = 6)
+    private BigDecimal minCostEffectivenessRatio;
+
+    /** 效费比最大值 */
+    @Column(name = "max_cost_effectiveness_ratio", precision = 12, scale = 6)
+    private BigDecimal maxCostEffectivenessRatio;
+
+    /** 各类成本汇总 JSON（批次整体各维度加权成本占比） */
+    @Column(name = "category_summary", columnDefinition = "json")
+    private String categorySummary;
+
+    /** 权重配置快照 JSON */
+    @Column(name = "weights_config", columnDefinition = "json")
+    private String weightsConfig;
 
     /** 备注 */
     @Column(name = "remarks", columnDefinition = "text")

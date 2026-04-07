@@ -70,12 +70,14 @@ const total = ref(0)
 const deleting = ref(false)
 const canDeleteRows = computed(() => props.tableName !== 'records_military_operation_info')
 
-/** 作战ID筛选 */
+/** 作战ID筛选（与后端 TableService.OPERATION_FILTERABLE_TABLES 一致） */
 const OPERATION_FILTERABLE = new Set([
   'records_military_operation_info',
   'records_military_communication_info',
   'records_link_maintenance_events',
-  'records_security_events'
+  'records_security_events',
+  'records_comm_attack_operation',
+  'records_comm_defense_operation'
 ])
 const showOperationFilter = computed(() => OPERATION_FILTERABLE.has(props.tableName))
 

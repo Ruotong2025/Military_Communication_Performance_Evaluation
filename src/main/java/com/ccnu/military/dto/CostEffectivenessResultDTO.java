@@ -54,6 +54,12 @@ public class CostEffectivenessResultDTO {
     /** 权重快照 */
     private Map<String, BigDecimal> weightsSnapshot;
 
+    /** 归一化边界（min/max per indicator） */
+    private Map<String, Map<String, BigDecimal>> normalizationBounds;
+
+    /** 方向调整后的成本分量（归一化后，效益型已反向，0~1） */
+    private Map<String, BigDecimal> effectiveNormalized;
+
     /** 创建时间 */
     private String createdAt;
 

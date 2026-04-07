@@ -78,6 +78,7 @@ CREATE TABLE `cost_evaluation_record` (
   -- 原始指标数据（JSON格式存储所有指标原始值）
   `raw_indicators`    json           DEFAULT NULL            COMMENT '原始指标数据 { "cost_personnel_total": 12000, ... }',
   `normalized_indicators` json       DEFAULT NULL            COMMENT '归一化后指标数据 { "cost_personnel_total": 0.45, ... }',
+  `effective_normalized` json       DEFAULT NULL            COMMENT '方向调整后的成本分量（效益型已反向，0~1）',
 
   -- 权重快照（存储计算时的权重配置）
   `weights_snapshot`  json           DEFAULT NULL            COMMENT '权重快照 { "cost_personnel_total": 0.15, ... }',
@@ -117,6 +118,9 @@ CREATE TABLE `cost_evaluation_batch` (
   -- 使用的指标配置快照
   `active_indicators` json           DEFAULT NULL            COMMENT '启用的指标列表（JSON数组）',
 
+  -- 参评作战ID列表快照（用于追溯每次评估的输入数据）
+  `operation_ids`      json           DEFAULT NULL            COMMENT '本次评估参评的作战ID列表（JSON数组）',
+
   -- 全局归一化边界（用于跨批次比较）
   `global_min_values` json           DEFAULT NULL            COMMENT '全局最小值快照 { indicator_key: min_value }',
   `global_max_values` json           DEFAULT NULL            COMMENT '全局最大值快照 { indicator_key: max_value }',
@@ -125,6 +129,17 @@ CREATE TABLE `cost_evaluation_batch` (
   `status`            enum('pending','computing','completed','failed') DEFAULT 'pending' COMMENT '批次状态',
   `operation_count`   int            DEFAULT 0               COMMENT '该批次作战任务数量',
   `completed_count`   int            DEFAULT 0               COMMENT '已完成评估数量',
+
+  -- ========== 汇总计算结果（写入批次表，便于追溯每次评估的最终输出）==========
+  `avg_cost_index`     decimal(8, 6)  DEFAULT NULL            COMMENT '批次平均成本指数 C（所有作战均值，归一化到 0~1）',
+  `avg_effectiveness_score` decimal(10, 6) DEFAULT NULL       COMMENT '批次平均效能得分 E',
+  `avg_cost_effectiveness_ratio` decimal(12, 6) DEFAULT NULL  COMMENT '批次平均效费比 R = E/C',
+  `min_cost_index`    decimal(8, 6)  DEFAULT NULL            COMMENT '成本指数最小值',
+  `max_cost_index`    decimal(8, 6)  DEFAULT NULL            COMMENT '成本指数最大值',
+  `min_cost_effectiveness_ratio` decimal(12, 6) DEFAULT NULL  COMMENT '效费比最小值',
+  `max_cost_effectiveness_ratio` decimal(12, 6) DEFAULT NULL  COMMENT '效费比最大值',
+  `category_summary`  json           DEFAULT NULL            COMMENT '各类成本汇总（批次整体各维度加权成本占比）',
+  `weights_config`    json           DEFAULT NULL            COMMENT '本次评估使用的权重配置快照',
 
   -- 备注
   `remarks`           text           DEFAULT NULL            COMMENT '备注',
@@ -142,28 +157,66 @@ CREATE TABLE `cost_evaluation_batch` (
 -- 初始化成本指标配置数据
 -- 从 records_military_operation_info 表映射
 -- ----------------------------
-INSERT INTO `cost_indicator_config` (`indicator_key`, `indicator_name`, `category`, `indicator_type`, `source_table`, `source_field`, `unit`, `description`, `sort_order`, `is_active`, `weight`) VALUES
+INSERT IGNORE INTO `cost_indicator_config`
+  (`indicator_key`, `indicator_name`, `indicator_name_en`, `category`, `sub_category`,
+   `indicator_type`, `source_table`, `source_field`, `source_expression`,
+   `normalization_min`, `normalization_max`, `use_actual_range`,
+   `weight`, `is_active`, `sort_order`,
+   `unit`, `unit_abbrev`, `description`)
+VALUES
 -- 人力成本指标
-('cost_personnel_command', '指挥人员数量', '人力成本', 'cost', 'records_military_operation_info', 'command_personnel_count', '人', '各级指挥员及参谋人员编制数量', 1, 1, 0.05),
-('cost_personnel_operator', '操作人员数量', '人力成本', 'cost', 'records_military_operation_info', 'operator_personnel_count', '人', '直接操作主战装备的人员编制数量', 2, 1, 0.05),
-('cost_personnel_maintenance', '维修人员数量', '人力成本', 'cost', 'records_military_operation_info', 'maintenance_personnel_count', '人', '从事装备维修保障的人员编制数量', 3, 1, 0.04),
-('cost_personnel_experience', '操作人员平均工作经验', '人力成本', 'benefit', 'records_military_operation_info', 'avg_experience_years', '年', '操作人员掌握主战装备的平均年限', 4, 1, 0.03),
-('cost_personnel_maintenance_hours', '年度维修工时', '人力成本', 'cost', 'records_military_operation_info', 'annual_maintenance_hours', '小时', '战役级装备维修机构投入的年总维修工时', 5, 1, 0.03),
-('cost_personnel_training', '人均培训频次', '人力成本', 'benefit', 'records_military_operation_info', 'avg_training_frequency_per_year', '次/年', '人均参与重大演训活动的频次', 6, 1, 0.03),
+('cost_personnel_command', '指挥人员数量', NULL, '人力成本', NULL, 'cost', 'records_military_operation_info', 'command_personnel_count', NULL, NULL, NULL, 1, 0.05, 1, 1, '人', NULL, '各级指挥员及参谋人员编制数量'),
+('cost_personnel_operator', '操作人员数量', NULL, '人力成本', NULL, 'cost', 'records_military_operation_info', 'operator_personnel_count', NULL, NULL, NULL, 1, 0.05, 1, 2, '人', NULL, '直接操作主战装备的人员编制数量'),
+('cost_personnel_maintenance', '维修人员数量', NULL, '人力成本', NULL, 'cost', 'records_military_operation_info', 'maintenance_personnel_count', NULL, NULL, NULL, 1, 0.04, 1, 3, '人', NULL, '从事装备维修保障的人员编制数量'),
+('cost_personnel_experience', '操作人员平均工作经验', NULL, '人力成本', NULL, 'cost', 'records_military_operation_info', 'avg_experience_years', NULL, NULL, NULL, 1, 0.03, 1, 4, '年', NULL, '操作人员掌握主战装备的平均年限'),
+('cost_personnel_maintenance_hours', '年度维修工时', NULL, '人力成本', NULL, 'cost', 'records_military_operation_info', 'annual_maintenance_hours', NULL, NULL, NULL, 1, 0.03, 1, 5, '小时', NULL, '战役级装备维修机构投入的年总维修工时'),
+('cost_personnel_training', '人均培训频次', NULL, '人力成本', NULL, 'cost', 'records_military_operation_info', 'avg_training_frequency_per_year', NULL, NULL, NULL, 1, 0.03, 1, 6, '次/年', NULL, '人均参与重大演训活动的频次'),
 
 -- 装备成本指标
-('cost_equipment_total', '总装备数量', '装备成本', 'cost', 'records_military_operation_info', 'total_equipment_count', '辆/台/架', '各类主战装备实有总数', 10, 1, 0.06),
-('cost_equipment_damaged', '受损装备数量', '装备成本', 'cost', 'records_military_operation_info', 'damaged_equipment_count', '辆/台/架', '未恢复的受损装备数量', 11, 1, 0.04),
-('cost_equipment_new_ratio', '新装备占比', '装备成本', 'benefit', 'records_military_operation_info', 'new_equipment_ratio', '%', '服役不足5年的装备占比', 12, 1, 0.03),
+('cost_equipment_total', '总装备数量', NULL, '装备成本', NULL, 'cost', 'records_military_operation_info', 'total_equipment_count', NULL, NULL, NULL, 1, 0.06, 1, 10, '辆/台/架', NULL, '各类主战装备实有总数'),
+('cost_equipment_damaged', '受损装备数量', NULL, '装备成本', NULL, 'cost', 'records_military_operation_info', 'damaged_equipment_count', NULL, NULL, NULL, 1, 0.04, 1, 11, '辆/台/架', NULL, '未恢复的受损装备数量'),
+('cost_equipment_new_ratio', '新装备占比', NULL, '装备成本', NULL, 'cost', 'records_military_operation_info', 'new_equipment_ratio', NULL, NULL, NULL, 1, 0.03, 1, 12, '%', NULL, '服役不足5年的装备占比'),
 
 -- 能源成本指标
-('cost_energy_power', '整体功耗', '能源成本', 'cost', 'records_military_operation_info', 'total_power_consumption_kw', 'kW', '通信装备整体功率消耗', 20, 1, 0.04),
-('cost_energy_electricity', '年度耗电量', '能源成本', 'cost', 'records_military_operation_info', 'annual_electricity_consumption_kwh', 'kWh', '年度总耗电量', 21, 1, 0.04),
-('cost_energy_fuel', '年度耗油量', '能源成本', 'cost', 'records_military_operation_info', 'annual_fuel_consumption_liters', '升', '年度总耗油量', 22, 1, 0.04),
-('cost_energy_spectrum', '频谱储备', '能源成本', 'benefit', 'records_military_operation_info', 'spectrum_reserve_mhz', 'MHz', '预留可用频段总带宽', 23, 1, 0.02),
+('cost_energy_power', '整体功耗', NULL, '能源成本', NULL, 'cost', 'records_military_operation_info', 'total_power_consumption_kw', NULL, NULL, NULL, 1, 0.04, 1, 20, 'kW', NULL, '通信装备整体功率消耗'),
+('cost_energy_electricity', '年度耗电量', NULL, '能源成本', NULL, 'cost', 'records_military_operation_info', 'annual_electricity_consumption_kwh', NULL, NULL, NULL, 1, 0.04, 1, 21, 'kWh', NULL, '年度总耗电量'),
+('cost_energy_fuel', '年度耗油量', NULL, '能源成本', NULL, 'cost', 'records_military_operation_info', 'annual_fuel_consumption_liters', NULL, NULL, NULL, 1, 0.04, 1, 22, '升', NULL, '年度总耗油量'),
+('cost_energy_spectrum', '频谱储备', NULL, '能源成本', NULL, 'cost', 'records_military_operation_info', 'spectrum_reserve_mhz', NULL, NULL, NULL, 1, 0.02, 1, 23, 'MHz', NULL, '预留可用频段总带宽'),
 
 -- 备件物流成本指标
-('cost_spare_satisfaction', '备件满足率', '备件物流', 'benefit', 'records_military_operation_info', 'spare_parts_satisfaction_rate', '%', '备件即时满足率', 30, 1, 0.03),
-('cost_spare_transport', '日均投送吨公里', '备件物流', 'cost', 'records_military_operation_info', 'total_transport_distance_km', '吨·公里', '每日备件运输总工作量', 31, 1, 0.02);
+('cost_spare_satisfaction', '备件满足率', NULL, '备件物流', NULL, 'cost', 'records_military_operation_info', 'spare_parts_satisfaction_rate', NULL, NULL, NULL, 1, 0.03, 1, 30, '%', NULL, '备件即时满足率'),
+('cost_spare_transport', '日均投送吨公里', NULL, '备件物流', NULL, 'cost', 'records_military_operation_info', 'total_transport_distance_km', NULL, NULL, NULL, 1, 0.02, 1, 31, '吨·公里', NULL, '每日备件运输总工作量');
+
+-- ============================================================
+-- 增量迁移脚本（已有 cost_evaluation_record 表的环境执行）
+-- 如果 cost_evaluation_record 已存在，执行以下 ALTER TABLE 追加新字段
+-- ============================================================
+-- ALTER TABLE `cost_evaluation_record`
+--   ADD COLUMN `effective_normalized` json DEFAULT NULL COMMENT '方向调整后的成本分量（效益型已反向，0~1）' AFTER `normalized_indicators`;
+
+-- ALTER TABLE `cost_evaluation_batch`
+--   ADD COLUMN `operation_ids`      json           DEFAULT NULL COMMENT '本次评估参评的作战ID列表（JSON数组）' AFTER `active_indicators`,
+--   ADD COLUMN `avg_cost_index`     decimal(8, 6)  DEFAULT NULL COMMENT '批次平均成本指数 C' AFTER `completed_count`,
+--   ADD COLUMN `avg_effectiveness_score` decimal(10, 6) DEFAULT NULL COMMENT '批次平均效能得分 E' AFTER `avg_cost_index`,
+--   ADD COLUMN `avg_cost_effectiveness_ratio` decimal(12, 6) DEFAULT NULL COMMENT '批次平均效费比 R' AFTER `avg_effectiveness_score`,
+--   ADD COLUMN `min_cost_index`     decimal(8, 6)  DEFAULT NULL COMMENT '成本指数最小值' AFTER `avg_cost_effectiveness_ratio`,
+--   ADD COLUMN `max_cost_index`     decimal(8, 6)  DEFAULT NULL COMMENT '成本指数最大值' AFTER `min_cost_index`,
+--   ADD COLUMN `min_cost_effectiveness_ratio` decimal(12, 6) DEFAULT NULL COMMENT '效费比最小值' AFTER `max_cost_index`,
+--   ADD COLUMN `max_cost_effectiveness_ratio` decimal(12, 6) DEFAULT NULL COMMENT '效费比最大值' AFTER `min_cost_effectiveness_ratio`,
+--   ADD COLUMN `category_summary`   json           DEFAULT NULL COMMENT '各类成本汇总（批次整体各维度加权成本占比）' AFTER `max_cost_effectiveness_ratio`,
+--   ADD COLUMN `weights_config`     json           DEFAULT NULL COMMENT '本次评估使用的权重配置快照' AFTER `category_summary`;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- ============================================================
+-- 批量更新已有指标为成本型（direction: 统一为 cost 类型）
+-- 所有指标方向统一：数值越大，成本越高
+-- ============================================================
+UPDATE `cost_indicator_config` SET `indicator_type` = 'cost'
+WHERE `indicator_key` IN (
+  'cost_personnel_experience',
+  'cost_personnel_training',
+  'cost_equipment_new_ratio',
+  'cost_energy_spectrum',
+  'cost_spare_satisfaction'
+);

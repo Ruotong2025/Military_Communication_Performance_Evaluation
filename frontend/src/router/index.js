@@ -8,6 +8,7 @@ import SimulationTrainingHome from '../views/SimulationTrainingHome.vue'
 import ComprehensiveScoringView from '../views/ComprehensiveScoringView.vue'
 import PenaltyFactorAnalysisView from '../views/PenaltyFactorAnalysisView.vue'
 import CostEffectivenessAnalysisView from '../views/CostEffectivenessAnalysisView.vue'
+import ExpertEquipmentEvaluation from '../views/ExpertEquipmentEvaluation.vue'
 
 const routes = [
   {
@@ -88,6 +89,11 @@ const routes = [
         path: 'results/cost-effectiveness',
         name: 'ResultsCostEffectiveness',
         component: CostEffectivenessAnalysisView
+      },
+      {
+        path: 'equipment-evaluation',
+        name: 'EquipmentEvaluation',
+        component: ExpertEquipmentEvaluation
       }
     ]
   }

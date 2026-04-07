@@ -32,6 +32,12 @@ public class TableService {
         "records_military_communication_info",
         "records_link_maintenance_events",
         "records_security_events",
+        "records_comm_attack_operation",
+        "records_comm_defense_operation",
+        "equipment_qt_indicator_def",
+        "equipment_ql_indicator_def",
+        "equipment_qt_evaluation_record",
+        "equipment_ql_evaluation_record",
         "expert_ahp_comparison_score",
         "expert_ahp_individual_weights"
     ));
@@ -39,12 +45,14 @@ public class TableService {
     // 业务要求：基础表不允许按行删除
     private static final String BASE_TABLE = "records_military_operation_info";
 
-    /** 支持按 operation_id 筛选的模拟四表 */
+    /** 支持按 operation_id 筛选的模拟表 */
     private static final Set<String> OPERATION_FILTERABLE_TABLES = new HashSet<>(Arrays.asList(
             "records_military_operation_info",
             "records_military_communication_info",
             "records_link_maintenance_events",
-            "records_security_events"
+            "records_security_events",
+            "records_comm_attack_operation",
+            "records_comm_defense_operation"
     ));
 
     /**
@@ -87,7 +95,7 @@ public class TableService {
     }
 
     /**
-     * 获取表数据（分页）；可选按作战 ID（operation_id）筛选（仅模拟四表）
+     * 获取表数据（分页）；可选按作战 ID（operation_id）筛选（仅白名单内模拟表）
      */
     public PageResult getTableData(String tableName, int page, int size, String operationId) {
         validateTableName(tableName);

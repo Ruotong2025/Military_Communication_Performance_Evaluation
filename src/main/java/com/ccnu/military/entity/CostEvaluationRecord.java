@@ -61,11 +61,15 @@ public class CostEvaluationRecord {
     @Column(name = "normalized_indicators", columnDefinition = "json")
     private String normalizedIndicators;
 
+    /** 方向调整后的成本分量 JSON（效益型已反向，0~1） */
+    @Column(name = "effective_normalized", columnDefinition = "json")
+    private String effectiveNormalized;
+
     /** 权重快照 JSON */
     @Column(name = "weights_snapshot", columnDefinition = "json")
     private String weightsSnapshot;
 
-    /** 归一化边界快照 JSON */
+    /** 归一化边界快照 JSON（globalMin/globalMax，用于追溯归一化参数） */
     @Column(name = "normalization_bounds", columnDefinition = "json")
     private String normalizationBounds;
 

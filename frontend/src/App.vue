@@ -35,6 +35,14 @@
               <el-icon><DataAnalysis /></el-icon>
               <span>军事作战模拟数据</span>
             </el-menu-item>
+            <el-menu-item index="simulation-training/weights/expert">
+              <el-icon><User /></el-icon>
+              <span>专家可信度评估</span>
+            </el-menu-item>
+            <el-menu-item index="simulation-training/equipment-evaluation">
+              <el-icon><EditPen /></el-icon>
+              <span>专家定性数据评估</span>
+            </el-menu-item>
           </el-sub-menu>
 
           <el-sub-menu index="sub-simulation-weights">
@@ -42,10 +50,6 @@
               <el-icon><Operation /></el-icon>
               <span>模拟训练权重确定</span>
             </template>
-            <el-menu-item index="simulation-training/weights/expert">
-              <el-icon><User /></el-icon>
-              <span>专家可信度评估</span>
-            </el-menu-item>
             <el-menu-item index="simulation-training/weights/evaluation">
               <el-icon><TrendCharts /></el-icon>
               <span>专家 AHP 打分</span>
@@ -106,7 +110,8 @@ import {
   Histogram,
   CircleCheck,
   Warning,
-  Coin
+  Coin,
+  EditPen
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -115,10 +120,17 @@ const activeMenu = ref('simulation-training')
 
 const defaultOpenSubmenus = computed(() => {
   const open = []
-  if (route.path.startsWith('/simulation-training/data')) {
+  if (
+    route.path.startsWith('/simulation-training/data') ||
+    route.path.startsWith('/simulation-training/equipment-evaluation') ||
+    route.path.startsWith('/simulation-training/weights/expert')
+  ) {
     open.push('sub-simulation-data')
   }
-  if (route.path.startsWith('/simulation-training/weights')) {
+  if (
+    route.path.startsWith('/simulation-training/weights') &&
+    !route.path.startsWith('/simulation-training/weights/expert')
+  ) {
     open.push('sub-simulation-weights')
   }
   if (route.path.startsWith('/simulation-training/results')) {
