@@ -350,9 +350,9 @@
         <div class="equipment-tab-intro">
           <el-alert title="装备操作指标计算说明" type="info" :closable="false">
             <ul style="margin: 6px 0 0; padding-left: 18px;">
-              <li>定量指标（14项）：从 <code>records_*</code> 表自动聚合计算原始值，再做 Min-Max 归一化</li>
-              <li>定性指标（5项）：请在左侧菜单「模拟训练数据准备 → 专家定性数据评估」或「装备操作评估」页面录入</li>
-              <li>批次切换：每次「计算指标」会生成新批次；历史批次可下拉查看</li>
+              <li>定量指标：从 <code>records_*</code> 表自动聚合原始值，表格按<strong>一级维度</strong>（系统性能、操作响应、通信保障操作、维修与反馈、通信进攻/防御操作等）分组列示，再做 Min-Max 归一化</li>
+              <li>定性指标：请在左侧菜单「模拟训练数据准备 → 专家定性数据评估」或「装备操作评估」页面录入</li>
+              <li>批次切换：每次「计算指标」会生成新批次；历史批次可下拉查看；生成归一化后底部提供<strong>效果指标折线图</strong>对比各作战</li>
             </ul>
           </el-alert>
         </div>
@@ -441,11 +441,23 @@
               <el-table-column prop="operation_id" label="作战ID" width="100" align="center" fixed="left">
                 <template #default="{ row }"><el-tag type="primary" size="small">{{ row.operation_id }}</el-tag></template>
               </el-table-column>
-              <el-table-column v-for="ind in eqIndicators" :key="ind.indicator_key"
-                :label="ind.indicator_name" :prop="`raw_${ind.indicator_key}`" width="130" align="center">
-                <template #default="{ row }">
-                  {{ formatEqValue(row.raw_data?.[ind.indicator_key], ind.unit) }}
-                </template>
+              <el-table-column
+                v-for="grp in eqIndicatorDimensionGroups"
+                :key="'raw-dim-' + grp.dimension"
+                :label="grp.dimension"
+                align="center"
+              >
+                <el-table-column
+                  v-for="ind in grp.indicators"
+                  :key="ind.indicator_key"
+                  :label="ind.indicator_name"
+                  min-width="118"
+                  align="center"
+                >
+                  <template #default="{ row }">
+                    {{ formatEqValue(row.raw_data?.[ind.indicator_key], ind.unit) }}
+                  </template>
+                </el-table-column>
               </el-table-column>
               <el-table-column prop="composite_score" label="综合得分" width="110" align="center">
                 <template #default="{ row }">
@@ -470,13 +482,25 @@
               <el-table-column prop="operation_id" label="作战ID" width="100" align="center" fixed="left">
                 <template #default="{ row }"><el-tag type="primary" size="small">{{ row.operation_id }}</el-tag></template>
               </el-table-column>
-              <el-table-column v-for="ind in eqIndicators" :key="ind.indicator_key"
-                :label="ind.indicator_name" :prop="`norm_${ind.indicator_key}`" width="130" align="center">
-                <template #default="{ row }">
-                  <span :class="getEqScoreClass(row.norm_data?.[ind.indicator_key])">
-                    {{ row.norm_data?.[ind.indicator_key] != null ? row.norm_data[ind.indicator_key].toFixed(3) : '—' }}
-                  </span>
-                </template>
+              <el-table-column
+                v-for="grp in eqIndicatorDimensionGroups"
+                :key="'norm-dim-' + grp.dimension"
+                :label="grp.dimension"
+                align="center"
+              >
+                <el-table-column
+                  v-for="ind in grp.indicators"
+                  :key="ind.indicator_key"
+                  :label="ind.indicator_name"
+                  min-width="118"
+                  align="center"
+                >
+                  <template #default="{ row }">
+                    <span :class="getEqScoreClass(row.norm_data?.[ind.indicator_key])">
+                      {{ row.norm_data?.[ind.indicator_key] != null ? row.norm_data[ind.indicator_key].toFixed(3) : '—' }}
+                    </span>
+                  </template>
+                </el-table-column>
               </el-table-column>
               <el-table-column prop="composite_score" label="综合得分" width="110" align="center">
                 <template #default="{ row }">
@@ -486,6 +510,18 @@
                 </template>
               </el-table-column>
             </el-table>
+
+            <!-- 效果指标：各作战归一化得分折线对比 -->
+            <div v-if="eqNormalizedRecords.length > 0" class="section-title eq-effect-chart-title">
+              <el-icon><TrendCharts /></el-icon>
+              效果指标 — 归一化得分折线图
+              <el-tag type="warning" style="margin-left: 8px">横轴为各定量指标（按一级维度分组顺序），纵轴 0～1</el-tag>
+            </div>
+            <div
+              v-if="eqNormalizedRecords.length > 0"
+              ref="eqEffectChartRef"
+              class="eq-effect-chart"
+            />
           </div>
 
           <el-empty v-else-if="eqSelectedBatchId" description="该批次暂无计算记录，请点击「计算指标」" :image-size="80" />
@@ -555,10 +591,153 @@ const eqRecords = ref([]);
 const eqNormalizedRecords = ref([]);
 const eqCalculating = ref(false);
 const eqNormalizing = ref(false);
+const eqEffectChartRef = ref(null);
+let eqEffectChartInstance = null;
+
+/** 一级维度列顺序（与库表 equipment_qt_indicator_def.dimension 及业务口径一致） */
+const EQ_DIMENSION_ORDER = [
+  "系统性能",
+  "操作响应",
+  "通信保障操作",
+  "维修与反馈",
+  "通信进攻操作",
+  "通信防御操作",
+];
 
 const eqForm = ref({
   operationIds: [],
 });
+
+/** 按一级维度分组后的定量指标（用于表头二级分组与折线图横轴顺序） */
+const eqIndicatorDimensionGroups = computed(() => {
+  const list = eqIndicators.value || [];
+  const byDim = new Map();
+  for (const ind of list) {
+    const d =
+      ind.dimension != null && String(ind.dimension).trim() !== ""
+        ? String(ind.dimension).trim()
+        : "其他";
+    if (!byDim.has(d)) byDim.set(d, []);
+    byDim.get(d).push(ind);
+  }
+  for (const arr of byDim.values()) {
+    arr.sort((a, b) => (Number(a.display_order) || 0) - (Number(b.display_order) || 0));
+  }
+  const used = new Set();
+  const orderedDims = [];
+  for (const d of EQ_DIMENSION_ORDER) {
+    if (byDim.has(d) && byDim.get(d).length) {
+      orderedDims.push(d);
+      used.add(d);
+    }
+  }
+  const rest = [...byDim.keys()]
+    .filter((d) => !used.has(d))
+    .sort((a, b) => a.localeCompare(b, "zh-CN"));
+  for (const d of rest) {
+    if (byDim.get(d).length) orderedDims.push(d);
+  }
+  return orderedDims.map((dimension) => ({
+    dimension,
+    indicators: byDim.get(dimension) || [],
+  }));
+});
+
+function getEqEffectFlatIndicators() {
+  return eqIndicatorDimensionGroups.value.flatMap((g) => g.indicators);
+}
+
+function renderEqEffectChart() {
+  if (activeMainTab.value !== "equipment") return;
+  if (!eqEffectChartRef.value || !eqNormalizedRecords.value.length) {
+    if (eqEffectChartInstance) {
+      eqEffectChartInstance.dispose();
+      eqEffectChartInstance = null;
+    }
+    return;
+  }
+  const flat = getEqEffectFlatIndicators();
+  if (!flat.length) {
+    if (eqEffectChartInstance) {
+      eqEffectChartInstance.dispose();
+      eqEffectChartInstance = null;
+    }
+    return;
+  }
+
+  if (eqEffectChartInstance) {
+    eqEffectChartInstance.dispose();
+    eqEffectChartInstance = null;
+  }
+  eqEffectChartInstance = echarts.init(eqEffectChartRef.value);
+
+  const categories = flat.map((ind) => ind.indicator_name);
+  const sorted = [...eqNormalizedRecords.value].sort((a, b) =>
+    String(a.operation_id).localeCompare(String(b.operation_id), undefined, { numeric: true }),
+  );
+
+  const colors = [
+    "#5470c6", "#91cc75", "#fac858", "#ee6666", "#73c0de",
+    "#3ba272", "#fc8452", "#9a60b4", "#ea7ccc", "#1d6eac",
+  ];
+
+  const series = sorted.map((row, idx) => ({
+    name: `作战 ${row.operation_id}`,
+    type: "line",
+    smooth: true,
+    symbolSize: 6,
+    data: flat.map((ind) => {
+      const v = row.norm_data?.[ind.indicator_key];
+      return v != null && Number.isFinite(Number(v)) ? Number(v) : null;
+    }),
+    itemStyle: { color: colors[idx % colors.length] },
+  }));
+
+  const option = {
+    backgroundColor: "#fff",
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "line" },
+    },
+    legend: {
+      type: "scroll",
+      top: 6,
+      data: series.map((s) => s.name),
+    },
+    grid: {
+      left: 56,
+      right: 28,
+      top: sorted.length > 5 ? 76 : 56,
+      bottom: "24%",
+      containLabel: false,
+    },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0, filterMode: "none" },
+      { type: "slider", xAxisIndex: 0, height: 22, bottom: 6, filterMode: "none" },
+    ],
+    xAxis: {
+      type: "category",
+      data: categories,
+      axisLabel: {
+        interval: 0,
+        rotate: 38,
+        fontSize: 11,
+        hideOverlap: false,
+      },
+    },
+    yAxis: {
+      type: "value",
+      min: 0,
+      max: 1,
+      name: "归一化得分",
+      axisLabel: { formatter: (v) => Number(v).toFixed(2) },
+    },
+    series,
+  };
+
+  eqEffectChartInstance.setOption(option, true);
+  nextTick(() => eqEffectChartInstance?.resize());
+}
 
 async function loadEqOperations() {
   try {
@@ -727,9 +906,20 @@ async function initEquipmentTab() {
 
 watch(activeMainTab, (tab) => {
   if (tab === "equipment") {
-    initEquipmentTab();
+    initEquipmentTab().then(() => nextTick(() => renderEqEffectChart()));
+  } else if (eqEffectChartInstance) {
+    eqEffectChartInstance.dispose();
+    eqEffectChartInstance = null;
   }
 });
+
+watch(
+  () => [eqNormalizedRecords.value, eqIndicatorDimensionGroups.value, activeMainTab.value],
+  () => {
+    nextTick(() => renderEqEffectChart());
+  },
+  { deep: true },
+);
 
 const form = ref({
   operationIds: [],
@@ -1223,6 +1413,7 @@ watch(chartMinWidthPx, () => {
 
 function onWindowResize() {
   chartInstance?.resize();
+  eqEffectChartInstance?.resize();
 }
 
 onMounted(() => {
@@ -1245,6 +1436,10 @@ onUnmounted(() => {
   if (chartInstance) {
     chartInstance.dispose();
     chartInstance = null;
+  }
+  if (eqEffectChartInstance) {
+    eqEffectChartInstance.dispose();
+    eqEffectChartInstance = null;
   }
 });
 
@@ -1536,6 +1731,21 @@ const getAlertClass = (value, min, max, reverse = false) => {
       padding: 8px;
       background: #fff;
       box-sizing: border-box;
+    }
+
+    .eq-effect-chart-title {
+      margin-top: 20px;
+    }
+
+    .eq-effect-chart {
+      width: 100%;
+      height: 430px;
+      margin-top: 4px;
+      border: 1px solid #e4eaf3;
+      border-radius: 8px;
+      padding: 8px;
+      box-sizing: border-box;
+      background: #fff;
     }
 
     :deep(.el-table) {
