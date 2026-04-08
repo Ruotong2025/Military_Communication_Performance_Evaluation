@@ -3,9 +3,11 @@ package com.ccnu.military.service;
 import com.ccnu.military.entity.EquipmentQlEvaluationRecord;
 import com.ccnu.military.entity.EquipmentQlIndicatorDef;
 import com.ccnu.military.entity.ExpertBaseInfo;
+import com.ccnu.military.entity.QlAggregationResult;
 import com.ccnu.military.repository.EquipmentQlEvaluationRecordRepository;
 import com.ccnu.military.repository.EquipmentQlIndicatorDefRepository;
 import com.ccnu.military.repository.ExpertBaseInfoRepository;
+import com.ccnu.military.repository.QlAggregationResultRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,6 +37,7 @@ public class EquipmentQlEvaluationService {
     private final EquipmentQlIndicatorDefRepository qlDefRepository;
     private final EquipmentQlEvaluationRecordRepository qlRecordRepository;
     private final ExpertBaseInfoRepository expertRepository;
+    private final QlAggregationResultRepository qlAggResultRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -731,6 +734,440 @@ public class EquipmentQlEvaluationService {
             return objectMapper.readValue(json, new TypeReference<List<String>>() {});
         } catch (Exception e) {
             return new ArrayList<>();
+        }
+    }
+
+    // ==================== 定性指标集结（γ 与质心式 4-21；λ 为各人把握度/100，不归一化） ====================
+
+    /**
+     * 专家定性指标集结（单作战或全部作战）。
+     *
+     * 请求参数：
+     *   evaluationBatchId  必填
+     *   operationId        必填（支持 "ALL" 返回按作战分组的结构）
+     *   wAlpha             可选，默认 0.5（权威度权重，与 wLambda 一并按比例归一化使和为 1）
+     *   wLambda            可选，默认 0.5（把握度权重）
+     *
+     * 返回结构参考 {@link #qualitativeAggregate} 文档注释。
+     */
+    public Map<String, Object> qualitativeAggregate(Map<String, Object> payload) {
+        Map<String, Object> err = new LinkedHashMap<>();
+        try {
+            String batchId = payload.get("evaluationBatchId") != null
+                    ? String.valueOf(payload.get("evaluationBatchId")).trim() : "";
+            String operationIdRaw = payload.get("operationId") != null
+                    ? String.valueOf(payload.get("operationId")).trim() : "";
+            boolean isAll = "ALL".equalsIgnoreCase(operationIdRaw) || "__ALL__".equals(operationIdRaw);
+
+            if (batchId.isEmpty()) {
+                err.put("success", false);
+                err.put("message", "请选择评估批次");
+                return err;
+            }
+            if (!isAll && operationIdRaw.isEmpty()) {
+                err.put("success", false);
+                err.put("message", "请选择作战ID");
+                return err;
+            }
+
+            double wAlphaIn = Math.max(0.0, coalesceDouble(payload.get("wAlpha"), 0.5));
+            double wLambdaIn = Math.max(0.0, coalesceDouble(payload.get("wLambda"), 0.5));
+            double[] nw = normalizeAlphaLambdaWeights(wAlphaIn, wLambdaIn);
+            double wAlpha = nw[0];
+            double wLambda = nw[1];
+            boolean saveResult = Boolean.TRUE.equals(payload.get("saveResult"));
+
+            // 1. 拉取所有定性评分记录（按 batchId，可选 operationId）
+            List<EquipmentQlEvaluationRecord> allRecords;
+            if (isAll) {
+                allRecords = qlRecordRepository.findByEvaluationBatchIdOrderByOperationId(batchId);
+            } else {
+                allRecords = qlRecordRepository.findByEvaluationBatchIdAndOperationIdOrderByExpertId(batchId, operationIdRaw);
+            }
+            if (allRecords.isEmpty()) {
+                err.put("success", false);
+                err.put("message", "该批次下没有定性评估记录");
+                return err;
+            }
+
+            // 2. 拉取等级区间定义
+            Map<String, double[]> gradeIntervalMap = buildGradeIntervalMap();
+
+            // 3. 拉取所有参与专家的权威度（alpha）
+            Set<Long> expertIds = allRecords.stream()
+                    .map(EquipmentQlEvaluationRecord::getExpertId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            Map<Long, Double> alphaMap = buildAlphaMap(expertIds);
+
+            // 4. 拉取定性指标定义（按 key → name）
+            Map<String, String> indicatorNameMap = new LinkedHashMap<>();
+            for (EquipmentQlIndicatorDef def : qlDefRepository.findByEnabledTrueOrderByDisplayOrderAsc()) {
+                indicatorNameMap.put(def.getIndicatorKey(), def.getIndicatorName());
+            }
+
+            // 5. 分组：按 operationId
+            Map<String, List<EquipmentQlEvaluationRecord>> byOp = allRecords.stream()
+                    .collect(Collectors.groupingBy(r -> r.getOperationId() != null ? r.getOperationId() : ""));
+
+            // 6. 按作战分别计算或合并计算
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("evaluationBatchId", batchId);
+            result.put("weights", Map.of("wAlpha", wAlpha, "wLambda", wLambda));
+            result.put("weightsInput", Map.of("wAlpha", wAlphaIn, "wLambda", wLambdaIn));
+            result.put("warnings", new ArrayList<String>());
+
+            if (isAll) {
+                List<Map<String, Object>> byOperationList = new ArrayList<>();
+                byOp.forEach((opId, records) -> {
+                    if (opId == null || opId.isBlank()) return;
+                    Map<String, Object> opResult = computeOneOperation(batchId, opId, records,
+                            alphaMap, gradeIntervalMap, indicatorNameMap, wAlpha, wLambda, result);
+                    byOperationList.add(opResult);
+                });
+                result.put("byOperation", byOperationList);
+                result.put("success", true);
+                result.put("message", "集结成功（共" + byOperationList.size() + "个作战）");
+            } else {
+                List<EquipmentQlEvaluationRecord> records = byOp.getOrDefault(operationIdRaw, Collections.emptyList());
+                Map<String, Object> opResult = computeOneOperation(batchId, operationIdRaw, records,
+                        alphaMap, gradeIntervalMap, indicatorNameMap, wAlpha, wLambda, result);
+                result.put("operationId", operationIdRaw);
+                result.put("indicators", opResult.get("indicators"));
+                result.put("success", true);
+                result.put("message", "集结成功");
+            }
+
+            // 持久化集结结果（可选）
+            int savedCount = 0;
+            if (saveResult) {
+                if (isAll) {
+                    for (Map<String, Object> opResult : (List<Map<String, Object>>) result.get("byOperation")) {
+                        savedCount += persistAggregationResult(batchId, (String) opResult.get("operationId"),
+                                (List<Map<String, Object>>) opResult.get("indicators"), wAlpha, wLambda,
+                                (List<String>) result.get("warnings"));
+                    }
+                } else {
+                    savedCount = persistAggregationResult(batchId, operationIdRaw,
+                            (List<Map<String, Object>>) result.get("indicators"), wAlpha, wLambda,
+                            (List<String>) result.get("warnings"));
+                }
+                result.put("saved", true);
+                result.put("savedCount", savedCount);
+            }
+
+            return result;
+
+        } catch (Exception e) {
+            log.error("定性指标集结失败", e);
+            err.put("success", false);
+            err.put("message", "集结失败: " + e.getMessage());
+            return err;
+        }
+    }
+
+    /**
+     * 对单个作战的数据进行集结计算。
+     * 公式（把握度不做跨专家归一化）：
+     *   α_norm = α_k / 100
+     *   λ_kj ∈ [0,1] = 把握度百分数 / 100
+     *   γ_kj   = wAlpha·α_norm + wLambda·λ_kj
+     *   (4-21) x*_j = Σγ_kj·(a2-a1)·(a1+a2)/2 / Σγ_kj·(a2-a1)
+     */
+    private Map<String, Object> computeOneOperation(
+            String batchId,
+            String operationId,
+            List<EquipmentQlEvaluationRecord> records,
+            Map<Long, Double> alphaMap,
+            Map<String, double[]> gradeIntervalMap,
+            Map<String, String> indicatorNameMap,
+            double wAlpha,
+            double wLambda,
+            Map<String, Object> parentResult) {
+
+        // 按指标 key 分组：indicatorKey → [{expertId, gradeCode, confidence, expertName}]
+        Map<String, List<Map<String, Object>>> byIndicator = new LinkedHashMap<>();
+        for (EquipmentQlEvaluationRecord rec : records) {
+            Long expertId = rec.getExpertId();
+            Map<String, Map<String, Object>> scores = parseScores(rec.getScores());
+            for (Map.Entry<String, Map<String, Object>> entry : scores.entrySet()) {
+                String ik = entry.getKey();
+                Map<String, Object> scoreEntry = entry.getValue();
+                Object gradeCodeObj = scoreEntry.get("gradeCode");
+                Object confObj = scoreEntry.get("confidence");
+                if (gradeCodeObj == null) continue;
+                String gradeCode = String.valueOf(gradeCodeObj).trim();
+                double lambdaRaw = confObj != null ? ((Number) confObj).doubleValue() : 0.0;
+                double lambdaNorm = lambdaRaw / 100.0; // 0~100 → 0~1
+
+                byIndicator.computeIfAbsent(ik, k -> new ArrayList<>()).add(
+                        Map.of(
+                                "expertId", expertId,
+                                "expertName", rec.getExpertName() != null ? rec.getExpertName() : "",
+                                "alphaRaw", alphaMap.getOrDefault(expertId, 0.0),
+                                "lambdaRaw", lambdaRaw,
+                                "lambdaNorm", lambdaNorm,
+                                "gradeCode", gradeCode
+                        )
+                );
+            }
+        }
+
+        List<Map<String, Object>> indicatorResults = new ArrayList<>();
+        @SuppressWarnings("unchecked")
+        List<String> warnings = (List<String>) parentResult.get("warnings");
+
+        for (Map.Entry<String, List<Map<String, Object>>> indEntry : byIndicator.entrySet()) {
+            String indicatorKey = indEntry.getKey();
+            String indicatorName = indicatorNameMap.getOrDefault(indicatorKey, indicatorKey);
+            List<Map<String, Object>> experts = indEntry.getValue();
+
+            // 把握度 λ∈[0,1] 为各人百分数/100，不做跨专家归一化
+            List<Map<String, Object>> expertsWithNorm = new ArrayList<>();
+            boolean allLambdaZero = experts.stream()
+                    .allMatch(ex -> ((Double) ex.get("lambdaNorm")) <= 0);
+            if (allLambdaZero) {
+                warnings.add("指标【" + indicatorName + "】所有专家把握度均为0，已跳过");
+                continue;
+            }
+            for (Map<String, Object> e : experts) {
+                double lambda01 = (Double) e.get("lambdaNorm"); // 0~1，把握度/100
+                double alphaRaw = (Double) e.get("alphaRaw");
+                double alphaNorm = alphaRaw / 100.0;
+                double gamma = wAlpha * alphaNorm + wLambda * lambda01;
+                String gradeCode = (String) e.get("gradeCode");
+                double[] interval = gradeIntervalMap.getOrDefault(gradeCode, new double[]{70.0, 75.0});
+                double a1 = interval[0];
+                double a2 = interval[1];
+                double midpoint = (a1 + a2) / 2.0;
+                double intervalLen = a2 - a1;
+                double weightedMidpoint = gamma * intervalLen * midpoint;
+
+                Map<String, Object> eDetail = new LinkedHashMap<>(e);
+                eDetail.put("alphaNorm", Math.round(alphaNorm * 1e6) / 1e6);
+                eDetail.put("lambda01", Math.round(lambda01 * 1e6) / 1e6);
+                eDetail.put("gamma", Math.round(gamma * 1e6) / 1e6);
+                eDetail.put("a1", a1);
+                eDetail.put("a2", a2);
+                eDetail.put("midpoint", midpoint);
+                eDetail.put("intervalLength", intervalLen);
+                eDetail.put("weightedMidpoint", Math.round(weightedMidpoint * 1e6) / 1e6);
+                expertsWithNorm.add(eDetail);
+            }
+
+            // (4-21) 质心
+            double numerator = expertsWithNorm.stream()
+                    .mapToDouble(e -> (Double) e.get("weightedMidpoint")).sum();
+            double denominator = expertsWithNorm.stream()
+                    .mapToDouble(e -> (Double) e.get("gamma") * (Double) e.get("intervalLength")).sum();
+            Double xStar = null;
+            String mappedGrade = null;
+            if (denominator > 0) {
+                xStar = Math.round(numerator / denominator * 1e4) / 1e4;
+                mappedGrade = resolveGradeByNumericValue(xStar);
+            } else {
+                warnings.add("指标【" + indicatorName + "】集结分母为0，已跳过");
+            }
+
+            Map<String, Object> indResult = new LinkedHashMap<>();
+            indResult.put("indicatorKey", indicatorKey);
+            indResult.put("indicatorName", indicatorName);
+            indResult.put("xStar", xStar);
+            indResult.put("mappedGrade", mappedGrade);
+            indResult.put("denominator", Math.round(denominator * 1e6) / 1e6);
+            indResult.put("expertCount", expertsWithNorm.size());
+            indResult.put("details", expertsWithNorm);
+            indicatorResults.add(indResult);
+        }
+
+        Map<String, Object> opResult = new LinkedHashMap<>();
+        opResult.put("operationId", operationId);
+        opResult.put("indicators", indicatorResults);
+        return opResult;
+    }
+
+    /**
+     * 从 evaluation_grade_definition 构建 gradeCode → [min, max] 映射。
+     */
+    private Map<String, double[]> buildGradeIntervalMap() {
+        Map<String, double[]> map = new LinkedHashMap<>();
+        try {
+            String sql = "SELECT grade_code, min_score, max_score FROM evaluation_grade_definition";
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+            for (Map<String, Object> row : rows) {
+                String code = String.valueOf(row.get("grade_code"));
+                BigDecimal minBd = (BigDecimal) row.get("min_score");
+                BigDecimal maxBd = (BigDecimal) row.get("max_score");
+                if (minBd != null && maxBd != null) {
+                    map.put(code, new double[]{minBd.doubleValue(), maxBd.doubleValue()});
+                }
+            }
+        } catch (Exception e) {
+            log.warn("查等级区间定义失败: {}", e.getMessage());
+        }
+        if (map.isEmpty()) {
+            // fallback：15档
+            map.put("A+", new double[]{95.0, 100.0});
+            map.put("A",  new double[]{90.0, 95.0});
+            map.put("A-", new double[]{85.0, 90.0});
+            map.put("B+", new double[]{80.0, 85.0});
+            map.put("B",  new double[]{75.0, 80.0});
+            map.put("B-", new double[]{70.0, 75.0});
+            map.put("C+", new double[]{65.0, 70.0});
+            map.put("C",  new double[]{60.0, 65.0});
+            map.put("C-", new double[]{55.0, 60.0});
+            map.put("D+", new double[]{47.0, 55.0});
+            map.put("D",  new double[]{39.0, 47.0});
+            map.put("D-", new double[]{30.0, 39.0});
+            map.put("E+", new double[]{20.0, 30.0});
+            map.put("E",  new double[]{10.0, 20.0});
+            map.put("E-", new double[]{0.0,  10.0});
+        }
+        return map;
+    }
+
+    /**
+     * 批量查询专家权威度（alpha）。
+     */
+    private Map<Long, Double> buildAlphaMap(Set<Long> expertIds) {
+        Map<Long, Double> map = new LinkedHashMap<>();
+        if (expertIds == null || expertIds.isEmpty()) return map;
+        List<String> placeholders = Collections.nCopies(expertIds.size(), "?");
+        String sql = "SELECT expert_id, total_score FROM expert_credibility_evaluation_score "
+                + "WHERE expert_id IN (" + String.join(",", placeholders) + ")";
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, expertIds.toArray());
+            for (Map<String, Object> row : rows) {
+                Object idObj = row.get("expert_id");
+                Long id = idObj instanceof Number ? ((Number) idObj).longValue() : Long.valueOf(String.valueOf(idObj));
+                BigDecimal bd = (BigDecimal) row.get("total_score");
+                double score = bd != null ? bd.doubleValue() : 0.0;
+                map.put(id, score);
+            }
+        } catch (Exception e) {
+            log.warn("查专家权威度失败: {}", e.getMessage());
+        }
+        // 未查到权威度的专家默认 0
+        for (Long id : expertIds) {
+            map.putIfAbsent(id, 0.0);
+        }
+        return map;
+    }
+
+    private static double clampWeight(double v) {
+        return Math.min(1.0, Math.max(0.0, v));
+    }
+
+    /**
+     * 将 w_α、w_λ 归一化到非负且和为 1（用于 γ = w_α·(α/100) + w_λ·λ）。
+     * 若二者均为 0 或和为 0，则退回 0.5、0.5。
+     */
+    private static double[] normalizeAlphaLambdaWeights(double wAlpha, double wLambda) {
+        double a = Math.max(0.0, wAlpha);
+        double l = Math.max(0.0, wLambda);
+        double s = a + l;
+        if (s <= 1e-12) {
+            return new double[]{0.5, 0.5};
+        }
+        return new double[]{a / s, l / s};
+    }
+
+    /**
+     * 将集结结果持久化到 ql_aggregation_result 表（Upsert 策略：相同 batch+operation+indicator 覆盖）。
+     * 返回写入的记录数。
+     */
+    private int persistAggregationResult(
+            String batchId,
+            String operationId,
+            List<Map<String, Object>> indicators,
+            double wAlpha,
+            double wLambda,
+            List<String> warnings) {
+        if (indicators == null || indicators.isEmpty()) return 0;
+        int count = 0;
+        for (Map<String, Object> ind : indicators) {
+            String indicatorKey = (String) ind.get("indicatorKey");
+            String indicatorName = (String) ind.get("indicatorName");
+            Object xStarObj = ind.get("xStar");
+            Double xStar = xStarObj != null ? ((Number) xStarObj).doubleValue() : null;
+            String mappedGrade = (String) ind.get("mappedGrade");
+            Object denomObj = ind.get("denominator");
+            Double denominator = denomObj != null ? ((Number) denomObj).doubleValue() : null;
+            Integer expertCount = (Integer) ind.get("expertCount");
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> details = (List<Map<String, Object>>) ind.get("details");
+            List<Long> expertIdList = details != null
+                    ? details.stream().map(e -> ((Number) e.get("expertId")).longValue()).collect(Collectors.toList())
+                    : Collections.emptyList();
+
+            Optional<QlAggregationResult> existingOpt = qlAggResultRepository
+                    .findByEvaluationBatchIdAndOperationIdAndIndicatorKey(batchId, operationId, indicatorKey);
+
+            QlAggregationResult entity;
+            if (existingOpt.isPresent()) {
+                entity = existingOpt.get();
+            } else {
+                entity = new QlAggregationResult();
+                entity.setEvaluationBatchId(batchId);
+                entity.setOperationId(operationId);
+                entity.setIndicatorKey(indicatorKey);
+            }
+            entity.setIndicatorName(indicatorName);
+            if (xStar != null) entity.setXStar(BigDecimal.valueOf(xStar).setScale(4, RoundingMode.HALF_UP));
+            entity.setMappedGrade(mappedGrade);
+            if (denominator != null) entity.setDenominator(BigDecimal.valueOf(denominator).setScale(6, RoundingMode.HALF_UP));
+            entity.setExpertCount(expertCount != null ? expertCount : 0);
+            try {
+                entity.setExpertIds(objectMapper.writeValueAsString(expertIdList));
+                entity.setWeightSnapshot(objectMapper.writeValueAsString(Map.of("wAlpha", wAlpha, "wLambda", wLambda)));
+                entity.setWarnings(objectMapper.writeValueAsString(warnings));
+            } catch (JsonProcessingException e) {
+                log.warn("序列化 JSON 失败: {}", e.getMessage());
+            }
+            qlAggResultRepository.save(entity);
+            count++;
+        }
+        return count;
+    }
+
+    /**
+     * 查询已存储的集结结果（供综合评分页面直接引用）。
+     */
+    public List<Map<String, Object>> getStoredAggregationResults(String batchId, String operationId) {
+        if (batchId == null || batchId.isBlank() || operationId == null || operationId.isBlank()) {
+            return Collections.emptyList();
+        }
+        return qlAggResultRepository
+                .findByEvaluationBatchIdAndOperationId(batchId, operationId)
+                .stream()
+                .map(this::convertAggResultToMap)
+                .collect(Collectors.toList());
+    }
+
+    private Map<String, Object> convertAggResultToMap(QlAggregationResult r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", r.getId());
+        m.put("evaluationBatchId", r.getEvaluationBatchId());
+        m.put("operationId", r.getOperationId());
+        m.put("indicatorKey", r.getIndicatorKey());
+        m.put("indicatorName", r.getIndicatorName());
+        m.put("xStar", r.getXStar());
+        m.put("mappedGrade", r.getMappedGrade());
+        m.put("denominator", r.getDenominator());
+        m.put("expertCount", r.getExpertCount());
+        m.put("expertIds", parseJsonList(r.getExpertIds()));
+        m.put("weightSnapshot", parseJsonObject(r.getWeightSnapshot()));
+        m.put("warnings", parseJsonList(r.getWarnings()));
+        m.put("createdAt", r.getCreatedAt());
+        return m;
+    }
+
+    private Map<String, Object> parseJsonObject(String json) {
+        if (json == null || json.isBlank()) return Collections.emptyMap();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            return Collections.emptyMap();
         }
     }
 }

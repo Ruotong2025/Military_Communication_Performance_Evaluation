@@ -131,4 +131,37 @@ public class EquipmentQlController {
         }
         return ApiResponse.success("获取成功", record);
     }
+
+    /**
+     * 专家定性指标集结：
+     * - λ_kj ∈ [0,1] = 把握度百分数/100（不做跨专家归一化）
+     * - wAlpha、wLambda 请求值非负，服务端按比例归一使 wAlpha+wLambda=1 后计算 γ_kj = wAlpha·(α_k/100) + wLambda·λ_kj
+     * - 群体结论质心 x*_j（文献式 4-21）= Σγ_kj·(a2-a1)·midpoint / Σγ_kj·(a2-a1)
+     *
+     * 支持批量（operationId=ALL）对批次内每个作战分别集结。
+     * 请求体参数 saveResult=true 时将结果写入 ql_aggregation_result 表。
+     */
+    @PostMapping("/qualitative-aggregation")
+    public ApiResponse<Map<String, Object>> qualitativeAggregation(@RequestBody Map<String, Object> payload) {
+        Map<String, Object> result = evaluationService.qualitativeAggregate(payload);
+        Boolean success = (Boolean) result.get("success");
+        if (Boolean.TRUE.equals(success)) {
+            return ApiResponse.success((String) result.get("message"), result);
+        }
+        return ApiResponse.error(400, (String) result.get("message"));
+    }
+
+    /**
+     * 查询已存储的集结结果（从 ql_aggregation_result 表）。
+     */
+    @GetMapping("/aggregation-result")
+    public ApiResponse<List<Map<String, Object>>> getStoredAggregationResult(
+            @RequestParam String evaluationBatchId,
+            @RequestParam String operationId) {
+        List<Map<String, Object>> results = evaluationService.getStoredAggregationResults(evaluationBatchId, operationId);
+        if (results.isEmpty()) {
+            return ApiResponse.error(404, "未找到该批次+作战的集结结果，请先执行集结并保存");
+        }
+        return ApiResponse.success("查询成功", results);
+    }
 }

@@ -757,3 +757,31 @@ export function getQlRecordForEdit(evaluationBatchId, operationId, expertId) {
     params: { evaluationBatchId, operationId, expertId },
   });
 }
+
+/**
+ * 专家定性指标集结（γ = w_α·α/100 + w_λ·λ，λ 为把握度/100；质心式 4-21）。
+ * 请求参数：
+ *   evaluationBatchId  必填
+ *   operationId       必填（支持 "ALL" 批量）
+ *   wAlpha            可选，默认 0.5（权威度权重）
+ *   wLambda           可选，默认 0.5（把握度权重）
+ *   saveResult        可选，默认 false（是否持久化到 ql_aggregation_result 表）
+ */
+export function getQlQualitativeAggregation(params) {
+  return request({
+    url: "/equipment/ql/qualitative-aggregation",
+    method: "post",
+    data: params,
+  });
+}
+
+/**
+ * 查询已存储的集结结果
+ */
+export function getStoredQlAggregationResult(evaluationBatchId, operationId) {
+  return request({
+    url: "/equipment/ql/aggregation-result",
+    method: "get",
+    params: { evaluationBatchId, operationId },
+  });
+}

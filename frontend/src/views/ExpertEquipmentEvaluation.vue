@@ -263,14 +263,210 @@
         </el-table>
         <el-empty v-if="qlRecords.length === 0 && !qlRecordsLoading" description="暂无评分记录" />
       </div>
+
+      <!-- ==================== 专家定性指标的集结 ==================== -->
+      <div class="section-block ql-agg-section">
+        <div class="section-header">
+          <span class="section-title">专家定性指标的集结</span>
+          <span class="section-hint">γ = w_α·(α/100) + w_λ·λ（λ 为各人把握度÷100）；提交计算时自动将 w_α、w_λ 归一化使 <strong>w_α+w_λ=1</strong>。质心 x* 按文献式 4-21。</span>
+        </div>
+
+        <!-- 权重调节 & 刷新 -->
+        <div class="agg-control-bar">
+          <el-form :inline="true" label-width="120px">
+            <el-form-item label="w_α (权威度)">
+              <el-input-number v-model="aggWeights.wAlpha" :min="0" :max="10" :step="0.05" :precision="2" style="width: 110px" />
+              <span class="agg-weight-hint">与 w_λ 为比例系数，计算时归一化为 1</span>
+            </el-form-item>
+            <el-form-item label="w_λ (把握度)">
+              <el-input-number v-model="aggWeights.wLambda" :min="0" :max="10" :step="0.05" :precision="2" style="width: 110px" />
+              <span class="agg-weight-hint">与 w_α 为比例系数，计算时归一化为 1</span>
+            </el-form-item>
+            <el-form-item label="">
+              <el-button type="primary" :icon="Refresh" :loading="aggLoading" @click="loadQualitativeAggregation(false)">
+                计算集结结果
+              </el-button>
+              <el-button type="success" :icon="Refresh" :loading="aggSaving" :disabled="!aggResult || !aggResult.indicators" @click="saveAggregationResult">
+                保存集结结果
+              </el-button>
+            </el-form-item>
+          </el-form>
+          <div v-if="aggResult?.weights" class="agg-weights-effective">
+            本次计算使用（已归一）：w_α = {{ Number(aggResult.weights.wAlpha).toFixed(4) }}，w_λ = {{ Number(aggResult.weights.wLambda).toFixed(4) }}
+            <template v-if="aggResult.weightsInput">
+              <span class="agg-weights-raw">（输入比例 {{ Number(aggResult.weightsInput.wAlpha).toFixed(2) }} : {{ Number(aggResult.weightsInput.wLambda).toFixed(2) }}）</span>
+            </template>
+          </div>
+          <div v-if="aggResult?.warnings?.length > 0" class="agg-warnings">
+            <el-alert
+              v-for="(w, wi) in aggResult.warnings"
+              :key="wi"
+              :title="w"
+              type="warning"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 4px; padding: 6px 12px;"
+            />
+          </div>
+        </div>
+
+        <!-- 批量模式作战切换 -->
+        <div v-if="aggResult?.byOperation?.length > 0" class="agg-op-tabs">
+          <el-radio-group v-model="aggActiveOp" size="small">
+            <el-radio-button
+              v-for="op in aggResult.byOperation"
+              :key="op.operationId"
+              :value="op.operationId"
+            >
+              作战 {{ op.operationId }}
+              <el-badge :value="op.indicators?.length || 0" type="info" style="margin-left: 4px;" />
+            </el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <!-- 集结结果主体 -->
+        <div v-if="currentIndicators.length > 0" class="agg-body agg-body-full">
+          <!-- 群体结论质心主表 -->
+          <div class="agg-centroid-table">
+            <div class="agg-sub-title">群体结论质心 x*（加权平均分）</div>
+            <el-table :data="currentIndicators" border stripe size="small" max-height="320" class="agg-main-table" style="width: 100%">
+              <el-table-column prop="indicatorName" label="指标" min-width="160" fixed />
+              <el-table-column label="质心分 x*" min-width="120" align="center">
+                <template #default="{ row }">
+                  <span v-if="row.xStar != null" class="xstar-val">
+                    {{ Number(row.xStar).toFixed(2) }}
+                  </span>
+                  <span v-else class="xstar-null">—</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="映射等级" min-width="100" align="center">
+                <template #default="{ row }">
+                  <el-tag
+                    v-if="row.mappedGrade"
+                    :type="gradeTagTypeByScore(row.xStar)"
+                    size="small"
+                    effect="dark"
+                  >{{ row.mappedGrade }}</el-tag>
+                  <span v-else>—</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="等级区间" min-width="100" align="center">
+                <template #default="{ row }">
+                  {{ gradeRangeByCode(row.mappedGrade) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="denominator" label="分母 Σγ·L" min-width="120" align="center">
+                <template #default="{ row }">
+                  {{ row.denominator?.toFixed(4) ?? '—' }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="expertCount" label="参与专家" min-width="96" align="center">
+                <template #default="{ row }">
+                  <el-tag type="info" size="small">{{ row.expertCount }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" min-width="128" align="center" fixed="right">
+                <template #default="{ row }">
+                  <el-button
+                    size="small"
+                    :type="aggDetailExpanded[row.indicatorKey] ? 'primary' : 'default'"
+                    @click="toggleDetail(row.indicatorKey)"
+                  >明细</el-button>
+                  <el-button
+                    size="small"
+                    :type="aggDetailExpanded['__chart_' + row.indicatorKey] ? 'primary' : 'default'"
+                    @click="toggleChart(row.indicatorKey)"
+                  >质心图</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <!-- 明细展开（各专家中间量） -->
+          <template v-for="row in currentIndicators" :key="'detail-' + row.indicatorKey">
+            <div v-if="aggDetailExpanded[row.indicatorKey]" class="agg-detail-block">
+              <div class="agg-sub-title agg-sub-title-sm agg-detail-head">
+                <span class="agg-detail-head-title">计算明细 — {{ row.indicatorName }}</span>
+                <span class="agg-formula-hint">
+                  γ = w_α·(α/100) + w_λ·λ（λ∈[0,1]），x* = Σγ·L·中点 / Σγ·L
+                </span>
+              </div>
+              <el-table :data="row.details" class="agg-detail-table" border stripe size="small" max-height="320" style="width: 100%">
+                <el-table-column prop="expertName" label="专家" min-width="96" align="center" show-overflow-tooltip />
+                <el-table-column label="α 权威度" min-width="88" align="center">
+                  <template #default="{ row: dr }">{{ Number(dr.alphaRaw).toFixed(1) }}</template>
+                </el-table-column>
+                <el-table-column label="α_norm" min-width="92" align="center">
+                  <template #default="{ row: dr }">{{ dr.alphaNorm?.toFixed(4) }}</template>
+                </el-table-column>
+                <el-table-column label="λ 把握度(%)" min-width="100" align="center">
+                  <template #default="{ row: dr }">{{ Number(dr.lambdaRaw).toFixed(0) }}%</template>
+                </el-table-column>
+                <el-table-column label="λ (0～1)" min-width="92" align="center">
+                  <template #default="{ row: dr }">{{ (dr.lambda01 != null ? dr.lambda01 : dr.lambdaNorm)?.toFixed(4) }}</template>
+                </el-table-column>
+                <el-table-column label="γ 综合可信度" min-width="112" align="center">
+                  <template #default="{ row: dr }">
+                    <strong style="color:#1a3a5c;">{{ dr.gamma?.toFixed(4) }}</strong>
+                  </template>
+                </el-table-column>
+                <el-table-column label="等级" min-width="76" align="center">
+                  <template #default="{ row: dr }">
+                    <el-tag size="small" :type="gradeTagTypeForCode(dr.gradeCode)">{{ dr.gradeCode }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="[a₁, a₂]" min-width="108" align="center">
+                  <template #default="{ row: dr }">
+                    [{{ Number(dr.a1).toFixed(1) }}, {{ Number(dr.a2).toFixed(1) }}]
+                  </template>
+                </el-table-column>
+                <el-table-column label="中点" min-width="80" align="center">
+                  <template #default="{ row: dr }">{{ Number(dr.midpoint).toFixed(2) }}</template>
+                </el-table-column>
+                <el-table-column label="γ·L·中点" min-width="120" align="center">
+                  <template #default="{ row: dr }">{{ dr.weightedMidpoint?.toFixed(4) }}</template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </template>
+
+          <!-- 质心图展开 -->
+          <template v-for="row in currentIndicators" :key="'chart-' + row.indicatorKey">
+            <div v-if="aggDetailExpanded['__chart_' + row.indicatorKey]" class="agg-chart-block">
+              <div class="agg-sub-title agg-sub-title-sm">
+                加权覆盖函数 — {{ row.indicatorName }}
+                <span class="agg-formula-hint">P̄(x)=Σ γ<sub>k</sub>·p<sub>k</sub>(x)，γ=w<sub>α</sub>·(α/100)+w<sub>λ</sub>·λ（λ 为把握度÷100，不归一）</span>
+              </div>
+              <div :id="'ql-agg-chart-px-' + row.indicatorKey" class="agg-chart-px" />
+              <div v-if="row.details?.length" class="agg-gamma-strip">
+                <span class="agg-gamma-strip-title">各专家综合可信度 γ：</span>
+                <el-tag
+                  v-for="(dr, gi) in row.details"
+                  :key="gi"
+                  type="info"
+                  effect="plain"
+                  class="agg-gamma-tag"
+                >
+                  {{ dr.expertName || ('专家' + (gi + 1)) }}　γ={{ dr.gamma != null ? Number(dr.gamma).toFixed(4) : '—' }}
+                </el-tag>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- 无数据时 -->
+        <el-empty v-if="!aggResult || currentIndicators.length === 0" description="请选择评估批次后点击「计算集结结果」（可选作战；未选时将依据上方评分结果表中的作战ID自动集结）" :image-size="80" />
+      </div>
+
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Guide, Refresh, VideoPlay, MagicStick } from '@element-plus/icons-vue'
+import * as echarts from 'echarts'
 import {
   getQlIndicators,
   getQlBatches,
@@ -280,7 +476,9 @@ import {
   getAvailableOperations,
   getQlOperationsForBatch,
   getQlRecordForEdit,
-  simulateQlBatch
+  simulateQlBatch,
+  getQlQualitativeAggregation,
+  getStoredQlAggregationResult
 } from '@/api'
 
 /** 与 evaluation_grade_definition 一致的 15 档（展示以分数区间为准，与库表 score_range 一致） */
@@ -368,6 +566,25 @@ const availableOperations = ref([])
 const qlSubmitting = ref(false)
 const qlRecordsLoading = ref(false)
 const hasExistingRecord = ref(false)
+
+// ==================== 定性指标集结 ====================
+
+/** 集结权重（前端可调，实时反映到后端） */
+const aggWeights = reactive({ wAlpha: 0.5, wLambda: 0.5 })
+
+/** 集结结果：单作战时 indicators[]；多作战时 byOperation[] */
+const aggResult = ref(null)
+/** 当前选中展开的作战 ID（byOperation 模式下） */
+const aggActiveOp = ref(null)
+/** 明细展开状态：Map<indicatorKey, Boolean> */
+const aggDetailExpanded = ref({})
+/** 质心图 DOM ref（每个指标一个） */
+const aggCharts = ref({})
+const aggChartReady = ref({})
+/** 集结加载中 */
+const aggLoading = ref(false)
+const aggSaving = ref(false)
+const aggCollapse = ref(['detail', 'chart'])
 
 /** 模拟：全局平均范围 [低, 高]、离散度；按指标可单独覆盖 */
 const simGlobalRange = ref([72, 86])
@@ -744,7 +961,304 @@ function formatIndicatorConfidence(raw) {
   return `把握度 ${s}%`
 }
 
-// 初始化
+// ==================== 定性指标集结（γ 与质心式 4-21） ====================
+
+/**
+ * 确定本次集结的作战范围（与上方「评分结果」表一致）：
+ * - 已选「全部作战」→ ALL（本批次每个作战分别集结）
+ * - 已选具体作战 → 该作战下全部专家一次性集结
+ * - 未选作战 → 从当前已加载的 qlRecords 推断：仅一种作战ID则用该作战；多种则 ALL
+ */
+function resolveOperationIdForAggregation() {
+  if (isAllOperationsSelected()) return 'ALL'
+  if (filterForm.operationId != null && String(filterForm.operationId).trim() !== '') {
+    return String(filterForm.operationId).trim()
+  }
+  const ids = [
+    ...new Set(
+      (qlRecords.value || [])
+        .map((r) => r.operation_id)
+        .filter((id) => id != null && String(id).trim() !== '')
+        .map((id) => String(id).trim())
+    )
+  ]
+  if (ids.length === 1) return ids[0]
+  if (ids.length > 1) return 'ALL'
+  return null
+}
+
+async function loadQualitativeAggregation(saveResult = false) {
+  if (!filterForm.batchId) {
+    ElMessage.warning('请先选择评估批次')
+    return
+  }
+  const operationToken = resolveOperationIdForAggregation()
+  if (!operationToken) {
+    ElMessage.warning('无法确定作战范围：请先在下拉框选择作战，或先点击「刷新」加载本批次评分结果后再计算集结')
+    return
+  }
+  aggLoading.value = true
+  try {
+    const params = {
+      evaluationBatchId: filterForm.batchId,
+      operationId: operationToken,
+      wAlpha: aggWeights.wAlpha,
+      wLambda: aggWeights.wLambda,
+      saveResult
+    }
+    const res = await getQlQualitativeAggregation(params)
+    if (res && Array.isArray(res.indicators)) {
+      aggResult.value = res
+      if (res.byOperation && res.byOperation.length > 0) {
+        aggActiveOp.value = res.byOperation[0].operationId
+      }
+    } else if (res && Array.isArray(res.byOperation)) {
+      aggResult.value = res
+      aggActiveOp.value = res.byOperation[0]?.operationId
+    } else {
+      aggResult.value = null
+    }
+    if (res?.weights) {
+      aggWeights.wAlpha = Number(res.weights.wAlpha)
+      aggWeights.wLambda = Number(res.weights.wLambda)
+    }
+    if (saveResult && res?.savedCount > 0) {
+      ElMessage.success(`集结结果已保存（${res.savedCount} 条记录）`)
+    }
+    aggDetailExpanded.value = {}
+    aggChartReady.value = {}
+  } catch (e) {
+    ElMessage.error(e?.message || '集结失败')
+  } finally {
+    aggLoading.value = false
+  }
+}
+
+async function saveAggregationResult() {
+  aggSaving.value = true
+  try {
+    await loadQualitativeAggregation(true)
+  } finally {
+    aggSaving.value = false
+  }
+}
+
+/** 当前展示的 indicators（单作战直接返回，多作战按选中的 op 返回） */
+const currentIndicators = computed(() => {
+  if (!aggResult.value) return []
+  if (aggResult.value.indicators) {
+    return aggResult.value.indicators
+  }
+  if (aggResult.value.byOperation) {
+    const op = aggResult.value.byOperation.find(o => o.operationId === aggActiveOp.value)
+    return op ? op.indicators : []
+  }
+  return []
+})
+
+function gradeTagTypeByScore(score) {
+  if (score == null) return 'info'
+  const s = Number(score)
+  if (s >= 90) return 'success'
+  if (s >= 75) return 'primary'
+  if (s >= 60) return 'warning'
+  return 'danger'
+}
+
+function gradeRangeByCode(code) {
+  const row = gradeStandardRows.find(r => r.code === code)
+  return row ? row.range : '—'
+}
+
+function toggleDetail(key) {
+  aggDetailExpanded.value[key] = !aggDetailExpanded.value[key]
+}
+
+function toggleChart(key) {
+  aggDetailExpanded.value['__chart_' + key] = !aggDetailExpanded.value['__chart_' + key]
+  if (aggDetailExpanded.value['__chart_' + key]) {
+    nextTick(() => renderCentroidChart(key))
+  }
+}
+
+/** 文献式 4-19：在 x 处 P̄(x)=Σ γ_k·p_k(x)，p_k 为区间示性函数 → 分段常值阶梯 */
+function buildWeightedCoverageStepData(details) {
+  const breaks = new Set([0, 100])
+  for (const d of details) {
+    breaks.add(Number(d.a1))
+    breaks.add(Number(d.a2))
+  }
+  const boundaries = [...breaks].sort((a, b) => a - b)
+  const Pvals = []
+  for (let j = 0; j < boundaries.length - 1; j++) {
+    const L = boundaries[j]
+    const R = boundaries[j + 1]
+    const mid = (L + R) / 2
+    let sum = 0
+    for (const d of details) {
+      const a1 = Number(d.a1)
+      const a2 = Number(d.a2)
+      if (mid >= a1 && mid <= a2) sum += Number(d.gamma)
+    }
+    Pvals.push(sum)
+  }
+  const data = []
+  for (let j = 0; j < Pvals.length; j++) {
+    const L = boundaries[j]
+    const R = boundaries[j + 1]
+    const P = Pvals[j]
+    if (j === 0) {
+      data.push([L, P])
+    } else {
+      const Pprev = Pvals[j - 1]
+      if (Math.abs(P - Pprev) > 1e-9) {
+        data.push([L, Pprev])
+        data.push([L, P])
+      }
+    }
+    data.push([R, P])
+  }
+  const maxP = Math.max(...Pvals, 0.01)
+  return { data, maxP, boundaries }
+}
+
+function disposeAggChartsForKey(indicatorKey) {
+  const arr = aggCharts.value[indicatorKey]
+  if (Array.isArray(arr)) {
+    arr.forEach((c) => {
+      if (c && typeof c.dispose === 'function') c.dispose()
+    })
+  } else if (arr && typeof arr.dispose === 'function') {
+    arr.dispose()
+  }
+  delete aggCharts.value[indicatorKey]
+}
+
+/** P̄(x) 阶梯图 + 质心 x* 与 60/80/90 参考线；各专家 γ 在图下方标签展示 */
+function renderCentroidChart(indicatorKey) {
+  const elPx = document.getElementById('ql-agg-chart-px-' + indicatorKey)
+  if (!elPx) return
+  const indicators = currentIndicators.value
+  const ind = indicators.find((i) => i.indicatorKey === indicatorKey)
+  if (!ind) return
+
+  disposeAggChartsForKey(indicatorKey)
+
+  const details = ind.details || []
+  const xStar = ind.xStar != null ? Number(ind.xStar) : null
+
+  elPx.style.height = '300px'
+
+  const markLineRefs = (extra) => ({
+    silent: true,
+    symbol: 'none',
+    data: [
+      { xAxis: 60, lineStyle: { color: '#E6A23C', type: 'dotted', width: 1.5 }, label: { show: true, formatter: '60', color: '#E6A23C', fontSize: 10 } },
+      { xAxis: 80, lineStyle: { color: '#F5D76E', type: 'dotted', width: 1.5 }, label: { show: true, formatter: '80', color: '#c9a227', fontSize: 10 } },
+      { xAxis: 90, lineStyle: { color: '#D4A574', type: 'dotted', width: 1.5 }, label: { show: true, formatter: '90', color: '#a67c52', fontSize: 10 } },
+      ...(xStar != null && !Number.isNaN(xStar)
+        ? [{
+            xAxis: parseFloat(xStar.toFixed(2)),
+            lineStyle: { color: '#E53935', type: 'dashed', width: 2 },
+            label: {
+              show: true,
+              formatter: `x*=${xStar.toFixed(2)}`,
+              color: '#E53935',
+              fontWeight: 'bold',
+              fontSize: 11
+            }
+          }]
+        : []),
+      ...(extra || [])
+    ]
+  })
+
+  const { data: stepData, maxP } = buildWeightedCoverageStepData(details)
+  const chartPx = echarts.init(elPx)
+  chartPx.setOption({
+    legend: { show: false },
+    title: {
+      text: '加权覆盖函数 P̄(x) = Σ γ_k·p_k(x)',
+      subtext: '图中曲线高度为各 x 处覆盖区间专家的 γ 之和；下方为每位专家的 γ 明细',
+      left: 'center',
+      top: 2,
+      textStyle: { fontSize: 13, fontWeight: '600', color: '#1a3a5c' },
+      subtextStyle: { fontSize: 11, color: '#909399' }
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter(params) {
+        const p = Array.isArray(params) ? params[0] : params
+        if (!p) return ''
+        const pt = p.data
+        const xv = Array.isArray(pt) ? pt[0] : p.axisValue
+        const yv = Array.isArray(pt) ? pt[1] : p.value
+        let tip = `x ≈ ${Number(xv).toFixed(2)}<br/>P̄(x) = ${Number(yv).toFixed(4)}（覆盖区间内 γ 之和）`
+        const mid = Number(xv)
+        const covering = details.filter((d) => {
+          const a1 = Number(d.a1)
+          const a2 = Number(d.a2)
+          return mid >= a1 && mid <= a2
+        })
+        if (covering.length) {
+          tip += '<br/><span style="color:#606266;font-size:12px">' + covering.map((d) => `${d.expertName || '—'} <b>γ=${Number(d.gamma).toFixed(4)}</b>`).join('；') + '</span>'
+        }
+        return tip
+      }
+    },
+    grid: { left: 56, right: 24, top: 72, bottom: 36 },
+    xAxis: {
+      type: 'value',
+      min: 0,
+      max: 100,
+      name: '评价值 x',
+      nameLocation: 'middle',
+      nameGap: 24,
+      splitLine: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: Math.max(Math.ceil(maxP * 1.12 * 10) / 10, 0.5),
+      name: 'P̄(x)',
+      splitLine: { show: true, lineStyle: { type: 'dashed', opacity: 0.35 } }
+    },
+    series: [
+      {
+        type: 'line',
+        name: 'P̄(x)',
+        data: stepData,
+        step: false,
+        showSymbol: false,
+        lineStyle: { color: '#409eff', width: 2 },
+        areaStyle: { color: 'rgba(64, 158, 255, 0.14)' },
+        z: 2
+      },
+      {
+        type: 'line',
+        markLine: markLineRefs(),
+        data: [],
+        silent: true,
+        z: 10
+      }
+    ]
+  })
+
+  aggCharts.value[indicatorKey] = chartPx
+  aggChartReady.value[indicatorKey] = true
+}
+
+// 窗口 resize 时重绘图表
+function resizeAggCharts() {
+  Object.values(aggCharts.value).forEach((entry) => {
+    if (Array.isArray(entry)) {
+      entry.forEach((c) => c && c.resize())
+    } else if (entry && entry.resize) {
+      entry.resize()
+    }
+  })
+}
+
 onMounted(async () => {
   await Promise.all([
     loadQlIndicators(),
@@ -752,6 +1266,7 @@ onMounted(async () => {
     loadExperts(),
     loadOperations()
   ])
+  window.addEventListener('resize', resizeAggCharts)
 })
 </script>
 
@@ -1041,6 +1556,188 @@ onMounted(async () => {
     .grade-c { color: #e6a23c; font-weight: 600; }
     .grade-d { color: #f56c6c; font-weight: 600; }
     .grade-e { color: #909399; font-weight: 600; }
+  }
+
+  // ==================== 集结区块 ====================
+  .ql-agg-section {
+    width: 100%;
+    box-sizing: border-box;
+    background: #f0f7ff;
+    border-color: #b3d4fc;
+
+    .agg-control-bar {
+      margin-bottom: 12px;
+
+      :deep(.el-form-item) {
+        margin-bottom: 0;
+      }
+
+      .agg-weight-hint {
+        margin-left: 6px;
+        font-size: 11px;
+        color: #909399;
+      }
+    }
+
+    .agg-weights-effective {
+      font-size: 13px;
+      color: #1a3a5c;
+      margin: 8px 0 4px;
+      padding: 8px 12px;
+      background: #ecf5ff;
+      border-radius: 4px;
+      border-left: 3px solid #409eff;
+
+      .agg-weights-raw {
+        font-size: 12px;
+        color: #909399;
+        margin-left: 6px;
+      }
+    }
+
+    .agg-warnings {
+      margin-top: 8px;
+    }
+
+    .agg-op-tabs {
+      margin-bottom: 12px;
+
+      :deep(.el-radio-group) {
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+    }
+
+    .agg-body {
+      .agg-body-full {
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .agg-centroid-table {
+        width: 100%;
+
+        .agg-sub-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: #1a3a5c;
+          margin-bottom: 8px;
+          padding-left: 4px;
+          border-left: 3px solid var(--accent-gold);
+        }
+      }
+
+      .agg-main-table {
+        width: 100% !important;
+        .xstar-val {
+          font-size: 15px;
+          font-weight: 700;
+          color: #E53935;
+          font-family: 'Courier New', monospace;
+        }
+
+        .xstar-null {
+          color: #c0c4cc;
+        }
+      }
+
+      .agg-detail-block,
+      .agg-chart-block {
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px dashed #d0d9e8;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .agg-detail-head {
+        width: 100%;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        padding: 10px 14px;
+        margin-bottom: 10px;
+        background: linear-gradient(90deg, #e8f2fc 0%, #f7fbff 55%, #fafcff 100%);
+        border-radius: 6px;
+        border: 1px solid #c5d9ed;
+        box-sizing: border-box;
+
+        .agg-detail-head-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: #1a3a5c;
+          white-space: nowrap;
+        }
+
+        .agg-formula-hint {
+          flex: 1 1 260px;
+          text-align: right;
+          line-height: 1.5;
+          font-size: 11px;
+          color: #606266;
+          font-weight: normal;
+          font-family: 'Courier New', monospace;
+        }
+      }
+
+      .agg-detail-table {
+        width: 100% !important;
+      }
+
+      .agg-detail-block :deep(.el-table) {
+        width: 100% !important;
+      }
+
+      .agg-sub-title-sm {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1a3a5c;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .agg-formula-hint {
+          font-size: 11px;
+          color: #909399;
+          font-weight: normal;
+          font-family: 'Courier New', monospace;
+        }
+      }
+
+      .agg-chart-px {
+        width: 100%;
+        height: 300px;
+        min-height: 280px;
+        margin-bottom: 10px;
+      }
+
+      .agg-gamma-strip {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 10px;
+        padding: 10px 12px;
+        background: #f5f9ff;
+        border: 1px solid #d9e8f7;
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.5;
+
+        .agg-gamma-strip-title {
+          color: #606266;
+          font-weight: 600;
+          width: 100%;
+          margin-bottom: 2px;
+        }
+
+        .agg-gamma-tag {
+          margin: 0;
+          font-family: 'Courier New', monospace;
+        }
+      }
+    }
   }
 }
 </style>
