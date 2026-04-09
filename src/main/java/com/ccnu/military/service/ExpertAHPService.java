@@ -281,4 +281,65 @@ public class ExpertAHPService {
     public static Map<String, String[]> getDimensionIndicators() {
         return DIMENSION_INDICATORS;
     }
+
+    // ══════════════════════════════════════════════════════════════
+    // 通用动态计算方法（供 EquipmentAhpService 等复用）
+    // ══════════════════════════════════════════════════════════════
+
+    /**
+     * 动态计算所有矩阵（维度层 + 各指标层）。
+     * 与 calculateAll 完全一致，只是维度/指标从参数传入，不依赖静态常量。
+     */
+    public MatrixCalculationResult calculateAllDynamic(
+            String[] dimensions,
+            Map<String, String[]> dimensionIndicators,
+            MatrixCalculationRequest request) {
+
+        MatrixCalculationResult result = new MatrixCalculationResult();
+
+        MatrixCalculationResult.MatrixResult dimResult = calculateSingleMatrix(
+                dimensions, request.getDimensionMatrix());
+        result.setDimensionResult(dimResult);
+        log.info("维度层AHP计算完成 - CR={}, 一致性={}",
+                String.format("%.4f", dimResult.getCr()), dimResult.isConsistent());
+
+        Map<String, MatrixCalculationResult.MatrixResult> indicatorResults = new LinkedHashMap<>();
+        Map<String, List<MatrixCalculationRequest.MatrixEntry>> reqIndicators = request.getIndicatorMatrices();
+
+        for (Map.Entry<String, String[]> entry : dimensionIndicators.entrySet()) {
+            String dimName = entry.getKey();
+            String[] indicators = entry.getValue();
+            List<MatrixCalculationRequest.MatrixEntry> dimEntries =
+                    (reqIndicators != null) ? reqIndicators.get(dimName) : null;
+            MatrixCalculationResult.MatrixResult indResult = calculateSingleMatrix(indicators, dimEntries);
+            indicatorResults.put(dimName, indResult);
+            log.info("指标层[{}]AHP计算完成 - CR={}, 一致性={}",
+                    dimName, String.format("%.4f", indResult.getCr()), indResult.isConsistent());
+        }
+        result.setIndicatorResults(indicatorResults);
+
+        List<MatrixCalculationResult.CombinedWeight> combinedWeights = new ArrayList<>();
+        Map<String, Double> dimWeightMap = dimResult.getWeightMap();
+        for (Map.Entry<String, MatrixCalculationResult.MatrixResult> indEntry : indicatorResults.entrySet()) {
+            String dimName = indEntry.getKey();
+            MatrixCalculationResult.MatrixResult indResult = indEntry.getValue();
+            double dimWeight = dimWeightMap.getOrDefault(dimName, 0.0);
+            Map<String, Double> indWeightMap = indResult.getWeightMap();
+            for (Map.Entry<String, Double> wEntry : indWeightMap.entrySet()) {
+                String indName = wEntry.getKey();
+                double indWeight = wEntry.getValue();
+                double combined = dimWeight * indWeight;
+                MatrixCalculationResult.CombinedWeight cw = new MatrixCalculationResult.CombinedWeight();
+                cw.setDimension(dimName);
+                cw.setIndicator(indName);
+                cw.setDimensionWeight(dimWeight);
+                cw.setIndicatorWeight(indWeight);
+                cw.setCombinedWeight(combined);
+                combinedWeights.add(cw);
+            }
+        }
+        result.setCombinedWeights(combinedWeights);
+        log.info("综合权重计算完成，共 {} 个二级指标", combinedWeights.size());
+        return result;
+    }
 }

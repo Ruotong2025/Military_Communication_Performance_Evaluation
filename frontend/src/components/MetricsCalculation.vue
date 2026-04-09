@@ -350,7 +350,7 @@
         <div class="equipment-tab-intro">
           <el-alert title="装备操作指标计算说明" type="info" :closable="false">
             <ul style="margin: 6px 0 0; padding-left: 18px;">
-              <li>定量指标：从 <code>records_*</code> 表自动聚合原始值，表格按<strong>一级维度</strong>（系统性能、操作响应、通信保障操作、维修与反馈、通信进攻/防御操作等）分组列示，再做 Min-Max 归一化</li>
+              <li>定量指标：从 <code>records_*</code> 表自动聚合原始值，表格按<strong>一级维度</strong>（系统性能、通信保障操作、维修与反馈、通信进攻/防御操作等）分组列示，再做 Min-Max 归一化</li>
               <li>定性指标：请在左侧菜单「模拟训练数据准备 → 专家定性数据评估」或「装备操作评估」页面录入</li>
               <li>批次切换：每次「计算指标」会生成新批次；历史批次可下拉查看；生成归一化后底部提供<strong>效果指标折线图</strong>对比各作战</li>
             </ul>
@@ -407,8 +407,8 @@
                 <ul class="legend-list">
                   <!-- 战前 系统性能 -->
                   <li><strong>组网时长</strong>（战前·系统性能）：<code>records_military_operation_info</code> 的 <code>AVG(avg_network_setup_time_ms)</code>，ms，越小越好</li>
-                  <!-- 战中 操作响应 -->
-                  <li><strong>应急处理</strong>（战中·操作响应）：<code>AVG(operator_reaction_ms)</code>，ms，越小越好</li>
+                  <!-- 战中 系统性能（原「操作响应」维度已并入） -->
+                  <li><strong>应急处理</strong>（战中·系统性能）：<code>AVG(operator_reaction_ms)</code>，ms，越小越好</li>
                   <!-- 战中 通信保障操作 -->
                   <li><strong>链路维持</strong>（战中·通信保障操作）：由通信时长与 <code>records_link_maintenance_events</code> 中断时长计算的可用比例，%，越大越好</li>
                   <li><strong>业务开通</strong>（战中·通信保障操作）：<code>AVG(call_setup_ms)</code>，ms，越小越好</li>
@@ -594,10 +594,9 @@ const eqNormalizing = ref(false);
 const eqEffectChartRef = ref(null);
 let eqEffectChartInstance = null;
 
-/** 一级维度列顺序（与库表 equipment_qt_indicator_def.dimension 及业务口径一致） */
+/** 一级维度列顺序（与库表 equipment_qt_indicator_def.dimension 及业务口径一致；应急处理已并入系统性能） */
 const EQ_DIMENSION_ORDER = [
   "系统性能",
-  "操作响应",
   "通信保障操作",
   "维修与反馈",
   "通信进攻操作",

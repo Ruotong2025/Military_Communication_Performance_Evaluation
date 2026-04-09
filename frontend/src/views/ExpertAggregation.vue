@@ -52,7 +52,7 @@
       </div>
     </el-card>
 
-    <!-- 参与计算的专家 -->
+    <!-- 参与计算的专家（合并两类来源） -->
     <el-card v-if="isDispersion" class="experts-card" shadow="hover">
       <template #header>
         <span><el-icon><User /></el-icon> 参与计算的专家 (共 {{ participatingExperts?.length || 0 }} 位)</span>
@@ -70,180 +70,340 @@
       </div>
     </el-card>
 
-    <!-- 一级维度权重CV分析 -->
-    <el-card v-if="isDispersion" class="cv-card" shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <span><el-icon><Grid /></el-icon> 一、一级维度权重 CV 分析</span>
+    <!-- ==================== 离散度分析：效能指标 / 装备操作（顶层切换） ==================== -->
+    <div v-if="isDispersion" class="cv-domain-switch-wrap">
+      <el-card class="cv-top-switch-card" shadow="never">
+        <div class="cv-top-switch-row">
+          <span class="cv-top-switch-label">分析域</span>
+          <el-radio-group v-model="activeTopTab" size="large" class="cv-top-radio">
+            <el-radio-button value="effectiveness">效能指标</el-radio-button>
+            <el-radio-button value="equipment">装备操作</el-radio-button>
+          </el-radio-group>
         </div>
-      </template>
+      </el-card>
 
-      <el-row :gutter="20">
-        <!-- 表格 -->
-        <el-col :span="12">
-          <el-table :data="dimensionTableData" border stripe size="small">
-            <el-table-column prop="indicatorName" label="维度" min-width="100" />
-            <el-table-column prop="allMean" label="所有数据均值" align="center" width="120">
-              <template #default="{ row }">
-                {{ (row.allMean * 100).toFixed(2) }}%
-              </template>
-            </el-table-column>
-            <el-table-column prop="filteredMean" label="过滤后均值" align="center" width="120">
-              <template #default="{ row }">
-                {{ (row.filteredMean * 100).toFixed(2) }}%
-              </template>
-            </el-table-column>
-            <el-table-column prop="allCv" label="所有数据CV" align="center" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.allCv)" size="small" effect="dark">
-                  {{ row.allCv.toFixed(2) }}%
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="filteredCv" label="过滤后CV" align="center" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.filteredCv)" size="small" effect="dark">
-                  {{ row.filteredCv.toFixed(2) }}%
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="allLevel" label="所有数据一致性" align="center" width="110">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.allCv)" size="small">
-                  {{ row.allLevel }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="filteredLevel" label="过滤后一致性" align="center" width="110">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.filteredCv)" size="small">
-                  {{ row.filteredLevel }}
-                </el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-col>
+      <div v-show="activeTopTab === 'effectiveness'" class="cv-domain-panel">
+        <!-- 一级维度权重 CV（维度层） -->
+        <el-card class="cv-card cv-domain-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span><el-icon><Grid /></el-icon> 一、一级维度权重 CV 分析</span>
+            </div>
+          </template>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-table :data="dimensionTableData" border stripe size="small">
+                <el-table-column prop="indicatorName" label="维度" min-width="100" />
+                <el-table-column prop="allMean" label="所有数据均值" align="center" width="120">
+                  <template #default="{ row }">
+                    {{ (row.allMean * 100).toFixed(2) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredMean" label="过滤后均值" align="center" width="120">
+                  <template #default="{ row }">
+                    {{ (row.filteredMean * 100).toFixed(2) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allCv" label="所有数据CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small" effect="dark">
+                      {{ row.allCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredCv" label="过滤后CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small" effect="dark">
+                      {{ row.filteredCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allLevel" label="所有数据一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small">{{ row.allLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredLevel" label="过滤后一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small">{{ row.filteredLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-col>
+            <el-col :span="12">
+              <div ref="dimensionChartRef" class="chart-container"></div>
+            </el-col>
+          </el-row>
+        </el-card>
 
-        <!-- 图表 -->
-        <el-col :span="12">
-          <div ref="dimensionChartRef" class="chart-container"></div>
-        </el-col>
-      </el-row>
-    </el-card>
-
-    <!-- 二级指标权重CV分析 -->
-    <el-card v-if="isDispersion" class="cv-card" shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <span><el-icon><List /></el-icon> 二、二级指标权重 CV 分析</span>
-          <el-tag type="info">共 {{ indicatorTableData?.length || 0 }} 个指标</el-tag>
-        </div>
-      </template>
-
-      <!-- 按维度分组 -->
-      <el-tabs v-model="activeDimensionTab" type="border-card">
-        <el-tab-pane
-          v-for="dim in dimensionTabs"
-          :key="dim.code"
-          :label="dim.name"
-          :name="dim.code"
-        >
-          <el-table :data="getIndicatorsByDimension(dim.code)" border stripe size="small" max-height="400">
-            <el-table-column prop="indicatorName" label="指标" min-width="120" />
-            <el-table-column prop="allMean" label="所有数据均值" align="center" width="110">
-              <template #default="{ row }">
-                {{ (row.allMean * 100).toFixed(4) }}%
-              </template>
-            </el-table-column>
-            <el-table-column prop="filteredMean" label="过滤后均值" align="center" width="110">
-              <template #default="{ row }">
-                {{ (row.filteredMean * 100).toFixed(4) }}%
-              </template>
-            </el-table-column>
-            <el-table-column prop="allCv" label="所有数据CV" align="center" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.allCv)" size="small" effect="dark">
-                  {{ row.allCv.toFixed(2) }}%
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="filteredCv" label="过滤后CV" align="center" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.filteredCv)" size="small" effect="dark">
-                  {{ row.filteredCv.toFixed(2) }}%
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="allLevel" label="所有数据一致性" align="center" width="110">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.allCv)" size="small">
-                  {{ row.allLevel }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="filteredLevel" label="过滤后一致性" align="center" width="110">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.filteredCv)" size="small">
-                  {{ row.filteredLevel }}
-                </el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
-
-        <!-- 全部指标 -->
-        <el-tab-pane label="全部指标" name="all">
-          <el-table :data="indicatorTableData" border stripe size="small" max-height="400">
-            <el-table-column prop="dimension" label="维度" width="100" />
-            <el-table-column prop="indicatorName" label="指标" min-width="120" />
-            <el-table-column prop="allMean" label="所有数据均值" align="center" width="110">
-              <template #default="{ row }">
-                {{ (row.allMean * 100).toFixed(4) }}%
-              </template>
-            </el-table-column>
-            <el-table-column prop="filteredMean" label="过滤后均值" align="center" width="110">
-              <template #default="{ row }">
-                {{ (row.filteredMean * 100).toFixed(4) }}%
-              </template>
-            </el-table-column>
-            <el-table-column prop="allCv" label="所有数据CV" align="center" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.allCv)" size="small" effect="dark">
-                  {{ row.allCv.toFixed(2) }}%
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="filteredCv" label="过滤后CV" align="center" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.filteredCv)" size="small" effect="dark">
-                  {{ row.filteredCv.toFixed(2) }}%
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="allLevel" label="所有数据一致性" align="center" width="110">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.allCv)" size="small">
-                  {{ row.allLevel }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="filteredLevel" label="过滤后一致性" align="center" width="110">
-              <template #default="{ row }">
-                <el-tag :type="getLevelType(row.filteredCv)" size="small">
-                  {{ row.filteredLevel }}
-                </el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
-      </el-tabs>
-
-      <!-- 图表 -->
-      <div class="chart-section">
-        <h4><el-icon><DataLine /></el-icon> 二级指标 CV 对比图</h4>
-        <div ref="indicatorChartRef" class="chart-container-large"></div>
+        <!-- 二级指标权重 CV（指标层） -->
+        <el-card class="cv-card cv-domain-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span><el-icon><List /></el-icon> 二、二级指标权重 CV 分析</span>
+              <el-tag type="info">共 {{ indicatorTableData?.length || 0 }} 个指标</el-tag>
+            </div>
+          </template>
+          <el-tabs v-model="activeDimensionTab" type="border-card">
+            <el-tab-pane
+              v-for="dim in dimensionTabs"
+              :key="dim.code"
+              :label="dim.name"
+              :name="dim.code"
+            >
+              <el-table :data="getIndicatorsByDimension(dim.code)" border stripe size="small" max-height="400">
+                <el-table-column prop="indicatorName" label="指标" min-width="120" />
+                <el-table-column prop="allMean" label="所有数据均值" align="center" width="110">
+                  <template #default="{ row }">
+                    {{ (row.allMean * 100).toFixed(4) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredMean" label="过滤后均值" align="center" width="110">
+                  <template #default="{ row }">
+                    {{ (row.filteredMean * 100).toFixed(4) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allCv" label="所有数据CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small" effect="dark">
+                      {{ row.allCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredCv" label="过滤后CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small" effect="dark">
+                      {{ row.filteredCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allLevel" label="所有数据一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small">{{ row.allLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredLevel" label="过滤后一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small">{{ row.filteredLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="全部" name="eff-all">
+              <el-table :data="indicatorTableData" border stripe size="small" max-height="400">
+                <el-table-column prop="dimension" label="维度" width="120" />
+                <el-table-column prop="indicatorName" label="指标" min-width="120" />
+                <el-table-column prop="allMean" label="所有数据均值" align="center" width="110">
+                  <template #default="{ row }">
+                    {{ (row.allMean * 100).toFixed(4) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredMean" label="过滤后均值" align="center" width="110">
+                  <template #default="{ row }">
+                    {{ (row.filteredMean * 100).toFixed(4) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allCv" label="所有数据CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small" effect="dark">
+                      {{ row.allCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredCv" label="过滤后CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small" effect="dark">
+                      {{ row.filteredCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allLevel" label="所有数据一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small">{{ row.allLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredLevel" label="过滤后一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small">{{ row.filteredLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+          </el-tabs>
+          <div class="chart-section">
+            <h4><el-icon><DataLine /></el-icon> 效能指标二级 CV 对比图</h4>
+            <div ref="effIndicatorChartRef" class="chart-container-large"></div>
+          </div>
+        </el-card>
       </div>
-    </el-card>
+
+      <div v-show="activeTopTab === 'equipment'" class="cv-domain-panel">
+        <!-- 一级维度 CV（维度层） -->
+        <el-card class="cv-card cv-domain-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span><el-icon><Grid /></el-icon> 一、一级维度权重 CV 分析</span>
+            </div>
+          </template>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-table :data="equipmentDimensionTableData" border stripe size="small">
+                <el-table-column prop="indicatorName" label="维度" min-width="100" />
+                <el-table-column prop="allMean" label="所有数据均值" align="center" width="120">
+                  <template #default="{ row }">
+                    {{ (row.allMean * 100).toFixed(2) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredMean" label="过滤后均值" align="center" width="120">
+                  <template #default="{ row }">
+                    {{ (row.filteredMean * 100).toFixed(2) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allCv" label="所有数据CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small" effect="dark">
+                      {{ row.allCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredCv" label="过滤后CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small" effect="dark">
+                      {{ row.filteredCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allLevel" label="所有数据一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small">{{ row.allLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredLevel" label="过滤后一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small">{{ row.filteredLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <el-empty
+                v-if="!equipmentDimensionTableData?.length"
+                description="暂无装备操作 AHP 数据；请先在「装备操作 AHP」中保存或批量模拟入库"
+                :image-size="72"
+                style="margin: 16px 0"
+              />
+            </el-col>
+            <el-col :span="12">
+              <div ref="eqDimensionChartRef" class="chart-container"></div>
+            </el-col>
+          </el-row>
+        </el-card>
+
+        <!-- 二级指标 CV（指标层） -->
+        <el-card class="cv-card cv-domain-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span><el-icon><List /></el-icon> 二、二级指标权重 CV 分析</span>
+              <el-tag type="info">共 {{ equipmentIndicatorTableData?.length || 0 }} 个指标</el-tag>
+            </div>
+          </template>
+          <el-tabs v-model="activeEqDimTab" type="border-card">
+            <el-tab-pane
+              v-for="dim in equipmentDimensionTabs"
+              :key="dim.code"
+              :label="dim.name"
+              :name="dim.code"
+            >
+              <el-table :data="getEqIndicatorsByDimension(dim.name)" border stripe size="small" max-height="400">
+                <el-table-column prop="indicatorName" label="指标" min-width="120" />
+                <el-table-column prop="allMean" label="所有数据均值" align="center" width="110">
+                  <template #default="{ row }">
+                    {{ (row.allMean * 100).toFixed(4) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredMean" label="过滤后均值" align="center" width="110">
+                  <template #default="{ row }">
+                    {{ (row.filteredMean * 100).toFixed(4) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allCv" label="所有数据CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small" effect="dark">
+                      {{ row.allCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredCv" label="过滤后CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small" effect="dark">
+                      {{ row.filteredCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allLevel" label="所有数据一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small">{{ row.allLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredLevel" label="过滤后一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small">{{ row.filteredLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="全部" name="eq-all">
+              <el-table :data="equipmentIndicatorTableData" border stripe size="small" max-height="400">
+                <el-table-column prop="dimension" label="维度" width="140" />
+                <el-table-column prop="indicatorName" label="指标" min-width="120" />
+                <el-table-column prop="allMean" label="所有数据均值" align="center" width="110">
+                  <template #default="{ row }">
+                    {{ (row.allMean * 100).toFixed(4) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredMean" label="过滤后均值" align="center" width="110">
+                  <template #default="{ row }">
+                    {{ (row.filteredMean * 100).toFixed(4) }}%
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allCv" label="所有数据CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small" effect="dark">
+                      {{ row.allCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredCv" label="过滤后CV" align="center" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small" effect="dark">
+                      {{ row.filteredCv.toFixed(2) }}%
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="allLevel" label="所有数据一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.allCv)" size="small">{{ row.allLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="filteredLevel" label="过滤后一致性" align="center" width="110">
+                  <template #default="{ row }">
+                    <el-tag :type="getLevelType(row.filteredCv)" size="small">{{ row.filteredLevel }}</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <el-empty
+                v-if="!equipmentIndicatorTableData?.length"
+                description="暂无装备操作 AHP 数据；请先在「装备操作 AHP」中保存或批量模拟入库"
+                :image-size="72"
+                style="margin: 16px 0"
+              />
+            </el-tab-pane>
+          </el-tabs>
+          <div class="chart-section">
+            <h4><el-icon><DataLine /></el-icon> 装备操作二级 CV 对比图</h4>
+            <div ref="eqIndicatorChartRef" class="chart-container-large"></div>
+          </div>
+        </el-card>
+      </div>
+    </div>
 
     <!-- ==================== 专家集结计算（对比打分层） ==================== -->
     <template v-if="isCollective">
@@ -581,11 +741,17 @@ const isCollective = computed(() => props.pageMode === 'collective')
 // ==================== 现有状态（原CV分析） ====================
 const loading = ref(false)
 const aggregationResult = ref(null)
-const activeDimensionTab = ref('all')
+const activeTopTab = ref('effectiveness')
+const activeDimensionTab = ref('security')
+const activeEqDimTab = ref('eq-all')
 const dimensionChartRef = ref(null)
-const indicatorChartRef = ref(null)
+const effIndicatorChartRef = ref(null)
+const eqDimensionChartRef = ref(null)
+const eqIndicatorChartRef = ref(null)
 let dimensionChart = null
-let indicatorChart = null
+let effIndicatorChart = null
+let eqDimensionChart = null
+let eqIndicatorChart = null
 
 // ==================== 集结计算状态 ====================
 const collectiveLoading = ref(false)
@@ -605,9 +771,13 @@ let indWeightChart = null
 
 function disposeDispersionCharts() {
   dimensionChart?.dispose()
-  indicatorChart?.dispose()
+  effIndicatorChart?.dispose()
+  eqDimensionChart?.dispose()
+  eqIndicatorChart?.dispose()
   dimensionChart = null
-  indicatorChart = null
+  effIndicatorChart = null
+  eqDimensionChart = null
+  eqIndicatorChart = null
 }
 
 function disposeCollectiveCharts() {
@@ -672,14 +842,31 @@ const dimensionTabs = [
   { code: 'effect', name: '效能影响' }
 ]
 
+// 装备操作维度（动态取后端维度名）
+const equipmentDimensionTabs = computed(() => {
+  const eqDims = allData.value?.equipmentDimensionCvs || []
+  return eqDims.map((item) => ({
+    code: item.indicatorCode,
+    name: item.indicatorName
+  }))
+})
+
 // 计算属性
 const allData = computed(() => aggregationResult.value?.allDataResult || null)
 const filteredExtreme = computed(() => aggregationResult.value?.filteredExtremeResult || null)
 
-/** 所有数据方案下的参与专家（含 id、名称） */
+/** 所有数据方案下的参与专家（含 id、名称）；合并效能权重快照与装备操作打分两类来源 */
 const participatingExperts = computed(() => {
-  const list = allData.value?.participatingExperts
-  if (list && list.length) return list
+  const eff = allData.value?.participatingExperts || []
+  const eq = allData.value?.equipmentParticipatingExperts || []
+  const map = new Map()
+  for (const e of eff) {
+    if (e?.expertId != null) map.set(e.expertId, e)
+  }
+  for (const e of eq) {
+    if (e?.expertId != null && !map.has(e.expertId)) map.set(e.expertId, e)
+  }
+  if (map.size) return Array.from(map.values())
   const ids = allData.value?.expertIds || []
   return ids.map((id) => ({ expertId: id, expertName: '' }))
 })
@@ -734,6 +921,52 @@ function getIndicatorsByDimension(dimensionCode) {
     'effect': '效能影响'
   }
   return indicatorTableData.value.filter(item => item.dimension === dimensionMap[dimensionCode])
+}
+
+/** 装备操作维度层 CV */
+const equipmentDimensionTableData = computed(() => {
+  const allEq = allData.value?.equipmentDimensionCvs ?? []
+  const filteredEq = filteredExtreme.value?.equipmentDimensionCvs ?? []
+  if (!allEq.length) return []
+  return allEq.map((item) => {
+    const filtered = filteredEq.find((f) => f.indicatorCode === item.indicatorCode) || {}
+    return {
+      indicatorCode: item.indicatorCode,
+      indicatorName: item.indicatorName,
+      allMean: item.mean,
+      filteredMean: filtered.mean || 0,
+      allCv: item.cv,
+      filteredCv: filtered.cv || 0,
+      allLevel: item.consistencyLevel,
+      filteredLevel: filtered.consistencyLevel || '-'
+    }
+  })
+})
+
+/** 装备操作二级指标 CV（后端由 comparison_key 前缀 装备操作_ 现场计算） */
+const equipmentIndicatorTableData = computed(() => {
+  const allEq = allData.value?.equipmentIndicatorCvs ?? []
+  const filteredEq = filteredExtreme.value?.equipmentIndicatorCvs ?? []
+  if (!allEq.length) return []
+  return allEq.map((item) => {
+    const filtered = filteredEq.find((f) => f.indicatorCode === item.indicatorCode) || {}
+    return {
+      indicatorCode: item.indicatorCode,
+      indicatorName: item.indicatorName,
+      dimension: item.dimension,
+      allMean: item.mean,
+      filteredMean: filtered.mean || 0,
+      allCv: item.cv,
+      filteredCv: filtered.cv || 0,
+      allLevel: item.consistencyLevel,
+      filteredLevel: filtered.consistencyLevel || '-'
+    }
+  })
+})
+
+/** 装备操作按维度（中文名）筛选指标 */
+function getEqIndicatorsByDimension(dimName) {
+  return equipmentIndicatorTableData.value.filter((item) => item.dimension === dimName)
 }
 
 // ==================== 矩阵展示计算属性 ====================
@@ -951,6 +1184,8 @@ async function loadData() {
     nextTick(() => {
       renderDimensionChart()
       renderIndicatorChart()
+      renderEqDimensionChart()
+      renderEqIndicatorChart()
     })
   } catch (error) {
     console.error('加载数据失败:', error)
@@ -1033,62 +1268,39 @@ function renderDimensionChart() {
 }
 
 function renderIndicatorChart() {
-  if (!indicatorChartRef.value) return
-
-  if (!indicatorChart) {
-    indicatorChart = echarts.init(indicatorChartRef.value)
+  if (!effIndicatorChartRef.value) return
+  if (!effIndicatorChart) {
+    effIndicatorChart = echarts.init(effIndicatorChartRef.value)
   }
 
   const allIndicators = allData.value?.indicatorCvs || []
   const filteredIndicators = filteredExtreme.value?.indicatorCvs || []
-
-  if (allIndicators.length === 0) return
+  if (allIndicators.length === 0) {
+    effIndicatorChart.clear()
+    return
+  }
 
   const option = {
-    title: {
-      text: '二级指标 CV 对比',
-      left: 'center',
-      textStyle: { fontSize: 14 }
-    },
+    title: { text: '效能指标二级 CV 对比', left: 'center', textStyle: { fontSize: 14 } },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
       formatter: (params) => {
         let result = params[0].name + '<br/>'
-        params.forEach(p => {
-          result += `${p.seriesName}: ${p.value.toFixed(2)}%<br/>`
-        })
+        params.forEach(p => { result += `${p.seriesName}: ${p.value.toFixed(2)}%<br/>` })
         return result
       }
     },
-    legend: {
-      data: ['所有数据', '去除极端值'],
-      top: 30
-    },
-    xAxis: {
-      type: 'category',
-      data: allIndicators.map(item => item.indicatorName),
-      axisLabel: { rotate: 30, fontSize: 10 }
-    },
-    yAxis: {
-      type: 'value',
-      name: 'CV(%)',
-      axisLabel: { formatter: '{value}%' }
-    },
+    legend: { data: ['所有数据', '去除极端值'], top: 30 },
+    xAxis: { type: 'category', data: allIndicators.map((item) => item.indicatorName), axisLabel: { rotate: 30, fontSize: 10 } },
+    yAxis: { type: 'value', name: 'CV(%)', axisLabel: { formatter: '{value}%' } },
     series: [
-      {
-        name: '所有数据',
-        type: 'line',
-        data: allIndicators.map(item => item.cv),
-        itemStyle: { color: '#409EFF' },
-        lineStyle: { width: 2 },
-        smooth: true
-      },
+      { name: '所有数据', type: 'line', data: allIndicators.map((item) => item.cv), itemStyle: { color: '#409EFF' }, lineStyle: { width: 2 }, smooth: true },
       {
         name: '去除极端值',
         type: 'line',
-        data: allIndicators.map(item => {
-          const filtered = filteredIndicators.find(f => f.indicatorCode === item.indicatorCode)
+        data: allIndicators.map((item) => {
+          const filtered = filteredIndicators.find((f) => f.indicatorCode === item.indicatorCode)
           return filtered ? filtered.cv : 0
         }),
         itemStyle: { color: '#67C23A' },
@@ -1098,8 +1310,96 @@ function renderIndicatorChart() {
     ],
     grid: { left: '3%', right: '4%', bottom: '20%', containLabel: true }
   }
-  indicatorChart.setOption(option)
-  indicatorChart.resize()
+  effIndicatorChart.setOption(option)
+  effIndicatorChart.resize()
+}
+
+function renderEqDimensionChart() {
+  if (!eqDimensionChartRef.value) return
+  if (!eqDimensionChart) {
+    eqDimensionChart = echarts.init(eqDimensionChartRef.value)
+  }
+  const allDims = allData.value?.equipmentDimensionCvs || []
+  const filteredDims = filteredExtreme.value?.equipmentDimensionCvs || []
+  if (!allDims.length) {
+    eqDimensionChart.clear()
+    return
+  }
+  const option = {
+    title: { text: '装备操作维度 CV 对比', left: 'center', textStyle: { fontSize: 14 } },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        let result = params[0].name + '<br/>'
+        params.forEach((p) => { result += `${p.seriesName}: ${p.value.toFixed(2)}%<br/>` })
+        return result
+      }
+    },
+    legend: { data: ['所有数据', '去除极端值'], top: 30 },
+    xAxis: { type: 'category', data: allDims.map((item) => item.indicatorName), axisLabel: { rotate: 20, fontSize: 11 } },
+    yAxis: { type: 'value', name: 'CV(%)', axisLabel: { formatter: '{value}%' } },
+    series: [
+      { name: '所有数据', type: 'bar', data: allDims.map((item) => item.cv), itemStyle: { color: '#E6A23C' } },
+      {
+        name: '去除极端值',
+        type: 'bar',
+        data: allDims.map((item) => {
+          const filtered = filteredDims.find((f) => f.indicatorCode === item.indicatorCode)
+          return filtered ? filtered.cv : 0
+        }),
+        itemStyle: { color: '#F56C6C' }
+      }
+    ],
+    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true }
+  }
+  eqDimensionChart.setOption(option)
+  eqDimensionChart.resize()
+}
+
+function renderEqIndicatorChart() {
+  if (!eqIndicatorChartRef.value) return
+  if (!eqIndicatorChart) {
+    eqIndicatorChart = echarts.init(eqIndicatorChartRef.value)
+  }
+  const allEq = allData.value?.equipmentIndicatorCvs || []
+  const filteredEq = filteredExtreme.value?.equipmentIndicatorCvs || []
+  if (!allEq.length) {
+    eqIndicatorChart.clear()
+    return
+  }
+  const option = {
+    title: { text: '装备操作二级 CV 对比', left: 'center', textStyle: { fontSize: 14 } },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        let result = params[0].name + '<br/>'
+        params.forEach((p) => { result += `${p.seriesName}: ${p.value.toFixed(2)}%<br/>` })
+        return result
+      }
+    },
+    legend: { data: ['所有数据', '去除极端值'], top: 30 },
+    xAxis: { type: 'category', data: allEq.map((item) => item.indicatorName), axisLabel: { rotate: 30, fontSize: 10 } },
+    yAxis: { type: 'value', name: 'CV(%)', axisLabel: { formatter: '{value}%' } },
+    series: [
+      { name: '所有数据', type: 'line', data: allEq.map((item) => item.cv), itemStyle: { color: '#E6A23C' }, lineStyle: { width: 2 }, smooth: true },
+      {
+        name: '去除极端值',
+        type: 'line',
+        data: allEq.map((item) => {
+          const filtered = filteredEq.find((f) => f.indicatorCode === item.indicatorCode)
+          return filtered ? filtered.cv : 0
+        }),
+        itemStyle: { color: '#F56C6C' },
+        lineStyle: { width: 2, type: 'dashed' },
+        smooth: true
+      }
+    ],
+    grid: { left: '3%', right: '4%', bottom: '20%', containLabel: true }
+  }
+  eqIndicatorChart.setOption(option)
+  eqIndicatorChart.resize()
 }
 
 // ==================== 集结计算函数 ====================
@@ -1230,10 +1530,24 @@ watch(
   { immediate: true, flush: 'post' }
 )
 
+watch(activeTopTab, () => {
+  nextTick(() => {
+    if (activeTopTab.value === 'equipment') {
+      renderEqDimensionChart()
+      renderEqIndicatorChart()
+    } else {
+      renderDimensionChart()
+      renderIndicatorChart()
+    }
+  })
+})
+
 onMounted(() => {
   window.addEventListener('resize', () => {
     dimensionChart?.resize()
-    indicatorChart?.resize()
+    effIndicatorChart?.resize()
+    eqDimensionChart?.resize()
+    eqIndicatorChart?.resize()
     dimWeightChart?.resize()
     indWeightChart?.resize()
   })
@@ -1319,6 +1633,51 @@ onMounted(() => {
 
 .cv-card {
   margin-bottom: 16px;
+}
+
+.cv-domain-switch-wrap {
+  margin-bottom: 20px;
+}
+
+.cv-top-switch-card {
+  margin-bottom: 16px;
+  border: 1px solid #dcdfe6;
+
+  :deep(.el-card__body) {
+    padding: 12px 20px;
+  }
+}
+
+.cv-top-switch-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.cv-top-switch-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.cv-top-radio {
+  flex: 1;
+  min-width: 240px;
+}
+
+.cv-domain-panel {
+  margin-top: 0;
+}
+
+.cv-domain-card {
+  border: none;
+  box-shadow: none;
+
+  .el-card__header {
+    background: #f5f7fa;
+    padding: 10px 20px;
+  }
 }
 
 .chart-container {

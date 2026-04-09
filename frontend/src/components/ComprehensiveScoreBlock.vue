@@ -511,7 +511,11 @@ async function runSimulateBatch() {
     const res = await simulateExpertAhpScores({
       expertIds: simulateExpertIds.value
     })
-    ElMessage.success(`已写入 ${res.insertedCount} 名专家的模拟打分，跳过 ${res.skippedCount} 名`)
+    const skip = res.skippedCount ?? 0
+    const eqN = res.equipmentInsertedCount ?? res.insertedCount
+    ElMessage.success(
+      `效能指标 AHP：已写入 ${res.insertedCount} 名专家，跳过 ${skip} 名；装备操作 AHP：已写入 ${eqN} 名专家`
+    )
     simulateDialogVisible.value = false
   } catch (e) {
     console.error(e)

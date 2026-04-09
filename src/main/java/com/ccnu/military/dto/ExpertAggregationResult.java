@@ -53,6 +53,15 @@ public class ExpertAggregationResult {
 
         /** 参与计算的专家（ID + 名称，与 expertIds 顺序一致） */
         private List<ExpertParticipant> participatingExperts;
+
+        /** 装备操作一级维度 CV */
+        private List<IndicatorCvItem> equipmentDimensionCvs;
+
+        /** 装备操作二级指标 CV（由 comparison_key 前缀 装备操作_ 的现场计算得到，与效能指标分列） */
+        private List<IndicatorCvItem> equipmentIndicatorCvs;
+
+        /** 参与装备操作 CV 的专家 */
+        private List<ExpertParticipant> equipmentParticipatingExperts;
     }
 
     /**

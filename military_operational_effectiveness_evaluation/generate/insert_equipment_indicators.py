@@ -7,9 +7,8 @@
 
 【维度体系】
   战前 → 系统性能（组网时长）
-  战中 → 操作响应（应急处理）
+  战中 → 系统性能（应急处理、连通率、任务可靠度；原独立维度「操作响应」已取消并入）
   战中 → 通信保障操作（链路维持、业务开通、应急抢通）
-  战中 → 系统性能（连通率、任务可靠度）
   战后 → 维修与反馈（返修率、抢修能力）
   战中 → 通信进攻操作（干扰目标锁定、干扰效能达成、欺骗信号生成）
   战中 → 通信防御操作（信号截获感知、抗干扰操作、防骗反骗）
@@ -45,9 +44,9 @@ qt_indicators = [
      "records_military_operation_info", "avg_network_setup_time_ms", None,
      "avg", "ms", "negative", 1, 1),
 
-    # === 战中 → 操作响应 ===
+    # === 战中 → 系统性能（应急处理，原「操作响应」维度已并入） ===
     # Q2 应急处理
-    ("eqt_emergency_handling", "应急处理", "Emergency Response", "mid_war", "操作响应",
+    ("eqt_emergency_handling", "应急处理", "Emergency Response", "mid_war", "系统性能",
      "作战过程中，操作员感知到异常并做出反应的平均时间",
      "records_military_communication_info", "operator_reaction_ms", None,
      "avg", "ms", "negative", 2, 1),

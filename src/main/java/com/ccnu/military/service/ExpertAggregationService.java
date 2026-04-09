@@ -5,6 +5,8 @@ import com.ccnu.military.dto.ExpertAggregationResult.CvDataResult;
 import com.ccnu.military.dto.ExpertAggregationResult.DataSummary;
 import com.ccnu.military.dto.ExpertAggregationResult.ExpertParticipant;
 import com.ccnu.military.dto.ExpertAggregationResult.IndicatorCvItem;
+import com.ccnu.military.dto.MatrixCalculationResult;
+import com.ccnu.military.entity.ExpertAhpComparisonScore;
 import com.ccnu.military.entity.ExpertAhpIndividualWeights;
 import com.ccnu.military.repository.ExpertAhpIndividualWeightsRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,8 @@ import java.util.stream.Collectors;
 public class ExpertAggregationService {
 
     private final ExpertAhpIndividualWeightsRepository weightsRepository;
+    private final EquipmentAhpScoreService equipmentAhpScoreService;
+    private final EquipmentAhpService equipmentAhpService;
 
     /** 一级维度编码映射 */
     private static final Map<String, String> DIMENSION_CODE_MAP = Map.of(
@@ -102,6 +106,8 @@ public class ExpertAggregationService {
         result.setAllDataResult(allResult);
         result.setFilteredExtremeResult(filteredExtremeResult);
         result.setSummary(summary);
+
+        attachEquipmentCvAnalysis(allResult, filteredExtremeResult);
 
         log.info("专家集结CV计算完成: 总专家数={}, 所有数据量={}, 去除极端值后数据量={}",
                 allWeights.size(), allResult.getDataCount(), filteredExtremeResult.getDataCount());
@@ -365,10 +371,146 @@ public class ExpertAggregationService {
 
     private ExpertAggregationResult createEmptyResult() {
         ExpertAggregationResult result = new ExpertAggregationResult();
-        result.setAllDataResult(new CvDataResult());
-        result.setFilteredExtremeResult(new CvDataResult());
+        CvDataResult empty = new CvDataResult();
+        empty.setEquipmentDimensionCvs(Collections.emptyList());
+        empty.setEquipmentIndicatorCvs(Collections.emptyList());
+        empty.setEquipmentParticipatingExperts(Collections.emptyList());
+        result.setAllDataResult(empty);
+        CvDataResult empty2 = new CvDataResult();
+        empty2.setEquipmentDimensionCvs(Collections.emptyList());
+        empty2.setEquipmentIndicatorCvs(Collections.emptyList());
+        empty2.setEquipmentParticipatingExperts(Collections.emptyList());
+        result.setFilteredExtremeResult(empty2);
         result.setSummary(new DataSummary());
         return result;
+    }
+
+    /**
+     * 装备操作：从 expert_ahp_comparison_score（装备操作_ 前缀）现场算权重，再算二级指标 CV
+     */
+    private void attachEquipmentCvAnalysis(CvDataResult allResult, CvDataResult filteredResult) {
+        List<ExpertWeightData> full = buildEquipmentExpertWeightDataList();
+        allResult.setEquipmentDimensionCvs(computeEquipmentDimensionCvs(full));
+        allResult.setEquipmentIndicatorCvs(computeEquipmentIndicatorCvs(full));
+        allResult.setEquipmentParticipatingExperts(toEquipmentParticipants(full));
+        List<ExpertWeightData> fe = removeEquipmentOutliers(full);
+        filteredResult.setEquipmentDimensionCvs(computeEquipmentDimensionCvs(fe));
+        filteredResult.setEquipmentIndicatorCvs(computeEquipmentIndicatorCvs(fe));
+        filteredResult.setEquipmentParticipatingExperts(toEquipmentParticipants(fe));
+    }
+
+    private List<ExpertParticipant> toEquipmentParticipants(List<ExpertWeightData> list) {
+        return list.stream()
+                .map(d -> new ExpertParticipant(d.expertId, d.expertName != null ? d.expertName : ""))
+                .collect(Collectors.toList());
+    }
+
+    private List<ExpertWeightData> buildEquipmentExpertWeightDataList() {
+        List<Long> ids = equipmentAhpScoreService.listExpertIdsWithEquipmentScores();
+        List<ExpertWeightData> out = new ArrayList<>();
+        for (Long id : ids) {
+            MatrixCalculationResult calc = equipmentAhpScoreService.calculateFromStoredScores(id);
+            if (calc == null || calc.getCombinedWeights() == null || calc.getCombinedWeights().isEmpty()) {
+                continue;
+            }
+            ExpertWeightData data = new ExpertWeightData();
+            data.expertId = id;
+            List<ExpertAhpComparisonScore> rows = equipmentAhpScoreService.listByExpert(id);
+            data.expertName = rows.isEmpty() ? "" : Optional.ofNullable(rows.get(0).getExpertName()).orElse("");
+            if (calc.getDimensionResult() != null && calc.getDimensionResult().getWeightMap() != null) {
+                for (Map.Entry<String, Double> e : calc.getDimensionResult().getWeightMap().entrySet()) {
+                    data.dimensionWeights.put("eq:" + e.getKey(), e.getValue());
+                }
+            }
+            for (MatrixCalculationResult.CombinedWeight cw : calc.getCombinedWeights()) {
+                String code = "eq:" + cw.getDimension() + ":" + cw.getIndicator();
+                data.indicatorWeights.put(code, cw.getCombinedWeight());
+            }
+            out.add(data);
+        }
+        return out;
+    }
+
+    private List<IndicatorCvItem> computeEquipmentDimensionCvs(List<ExpertWeightData> dataList) {
+        if (dataList.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> dims = equipmentAhpService.getDimensions();
+        List<IndicatorCvItem> out = new ArrayList<>();
+        for (String dim : dims) {
+            String code = "eq:" + dim;
+            List<Double> values = dataList.stream()
+                    .map(d -> d.dimensionWeights.getOrDefault(code, 0.0))
+                    .filter(v -> v > 0)
+                    .collect(Collectors.toList());
+            if (!values.isEmpty()) {
+                out.add(createCvItem(code, dim, dim, values));
+            }
+        }
+        return out;
+    }
+
+    private List<IndicatorCvItem> computeEquipmentIndicatorCvs(List<ExpertWeightData> dataList) {
+        if (dataList.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<IndicatorCvItem> indicatorCvs = new ArrayList<>();
+        List<String> dims = equipmentAhpService.getDimensions();
+        Map<String, List<Map<String, Object>>> dimInds = equipmentAhpService.getDimensionIndicators(null);
+        for (String dim : dims) {
+            List<Map<String, Object>> inds = dimInds.getOrDefault(dim, Collections.emptyList());
+            for (Map<String, Object> ind : inds) {
+                String name = (String) ind.get("name");
+                if (name == null) {
+                    continue;
+                }
+                String code = "eq:" + dim + ":" + name;
+                List<Double> values = dataList.stream()
+                        .map(d -> d.indicatorWeights.getOrDefault(code, 0.0))
+                        .filter(v -> v > 0)
+                        .collect(Collectors.toList());
+                if (!values.isEmpty()) {
+                    indicatorCvs.add(createCvItem(code, name, dim, values));
+                }
+            }
+        }
+        return indicatorCvs;
+    }
+
+    private List<ExpertWeightData> removeEquipmentOutliers(List<ExpertWeightData> dataList) {
+        if (dataList.size() <= 2) {
+            return new ArrayList<>(dataList);
+        }
+        List<String> eqDimKeys = equipmentAhpService.getDimensions().stream()
+                .map(d -> "eq:" + d)
+                .collect(Collectors.toList());
+        Map<String, Double> centers = new HashMap<>();
+        for (String dk : eqDimKeys) {
+            double mean = dataList.stream()
+                    .mapToDouble(d -> d.dimensionWeights.getOrDefault(dk, 0.0))
+                    .filter(v -> v > 0)
+                    .average()
+                    .orElse(0.0);
+            centers.put(dk, mean);
+        }
+        List<ExpertDistance> distances = new ArrayList<>();
+        for (ExpertWeightData data : dataList) {
+            double dist = 0;
+            for (Map.Entry<String, Double> entry : centers.entrySet()) {
+                double v = data.dimensionWeights.getOrDefault(entry.getKey(), 0.0);
+                double diff = v - entry.getValue();
+                dist += diff * diff;
+            }
+            dist = Math.sqrt(dist);
+            distances.add(new ExpertDistance(data, dist));
+        }
+        distances.sort((a, b) -> Double.compare(b.distance, a.distance));
+        int removeCount = Math.max(1, (int) Math.ceil(dataList.size() * 0.1));
+        Set<Long> removeIds = new HashSet<>();
+        for (int i = 0; i < removeCount && i < distances.size(); i++) {
+            removeIds.add(distances.get(i).data.expertId);
+        }
+        return dataList.stream().filter(d -> !removeIds.contains(d.expertId)).collect(Collectors.toList());
     }
 
     // ============ 内部类 ============

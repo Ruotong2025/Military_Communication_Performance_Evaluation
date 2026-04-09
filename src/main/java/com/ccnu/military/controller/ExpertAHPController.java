@@ -6,6 +6,7 @@ import com.ccnu.military.dto.ExpertAhpSimulateRequest;
 import com.ccnu.military.dto.MatrixCalculationRequest;
 import com.ccnu.military.dto.MatrixCalculationResult;
 import com.ccnu.military.entity.ExpertAhpComparisonScore;
+import com.ccnu.military.service.AhpBatchSimulateOrchestrator;
 import com.ccnu.military.service.ExpertAHPService;
 import com.ccnu.military.service.ExpertAhpComparisonScoreService;
 import com.ccnu.military.service.ExpertAhpIndividualWeightsService;
@@ -29,14 +30,17 @@ public class ExpertAHPController {
     private final ExpertAHPService expertAHPService;
     private final ExpertAhpComparisonScoreService expertAhpComparisonScoreService;
     private final ExpertAhpIndividualWeightsService expertAhpIndividualWeightsService;
+    private final AhpBatchSimulateOrchestrator ahpBatchSimulateOrchestrator;
 
     public ExpertAHPController(
             ExpertAHPService expertAHPService,
             ExpertAhpComparisonScoreService expertAhpComparisonScoreService,
-            ExpertAhpIndividualWeightsService expertAhpIndividualWeightsService) {
+            ExpertAhpIndividualWeightsService expertAhpIndividualWeightsService,
+            AhpBatchSimulateOrchestrator ahpBatchSimulateOrchestrator) {
         this.expertAHPService = expertAHPService;
         this.expertAhpComparisonScoreService = expertAhpComparisonScoreService;
         this.expertAhpIndividualWeightsService = expertAhpIndividualWeightsService;
+        this.ahpBatchSimulateOrchestrator = ahpBatchSimulateOrchestrator;
     }
 
     @Operation(summary = "获取AHP矩阵结构定义", description = "返回维度层和各维度指标层的元素名称列表")
@@ -102,11 +106,11 @@ public class ExpertAHPController {
         }
     }
 
-    @Operation(summary = "批量模拟专家AHP打分", description = "为多名专家生成随机标度与把握度（约20%把握度<0.6）；标度由随机权重比 a_i/a_j 反推，理论一致性好，舍入后仍校验各矩阵CR<0.1")
+    @Operation(summary = "批量模拟专家AHP打分", description = "为多名专家同时生成并入库效能指标 AHP 与装备操作 AHP 比较打分（同表不同前缀）；随机标度与把握度规则同单套模拟")
     @PostMapping("/scores/simulate")
     public ApiResponse<Map<String, Object>> simulateScores(@RequestBody ExpertAhpSimulateRequest request) {
         try {
-            Map<String, Object> result = expertAhpComparisonScoreService.simulate(request);
+            Map<String, Object> result = ahpBatchSimulateOrchestrator.simulateEffectivenessAndEquipment(request);
             return ApiResponse.success(result);
         } catch (Exception e) {
             log.error("模拟AHP打分失败", e);

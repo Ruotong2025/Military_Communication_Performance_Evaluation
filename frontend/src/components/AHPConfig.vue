@@ -1,6 +1,10 @@
 <template>
-  <el-card class="ahp-config-card">
-    <template #header>
+  <el-card
+    class="ahp-config-card"
+    :class="{ 'ahp-config-card--embedded': embedded }"
+    :shadow="embedded ? 'never' : 'always'"
+  >
+    <template v-if="!embedded" #header>
       <div class="ahp-header-wrap">
         <div class="card-header card-header-row1">
           <el-icon class="header-icon"><Setting /></el-icon>
@@ -17,7 +21,6 @@
                 clearable
                 filterable
                 style="width: min(280px, 100%)"
-                @change="onExpertChange"
               >
                 <el-option
                   v-for="e in expertOptions"
@@ -42,47 +45,63 @@
     </template>
 
     <div class="config-content">
-      <el-alert type="info" :closable="false" show-icon class="matrix-guide compact expert-ahp-hint">
-        <template v-if="!selectedExpertId">请先在标题栏选择「当前专家」；选择后将展示维度层与指标层判断矩阵。未选专家时仍可使用下方「批量模拟入库」生成数据。</template>
-        <template v-else>
-          已选择专家：自动加载该专家的比较打分，以及表 <code>expert_ahp_individual_weights</code> 中已保存的层次权重结果；若无打分记录则标度全为 1、把握度均为 {{ defaultBlankConfidence }}（低于 0.6）。保存或批量模拟入库时会同时覆盖更新两张表。
-        </template>
-      </el-alert>
-
-      <!-- 标度说明（1、3、5、7、9 及中间值 2、4、6、8） -->
-      <div class="scale-section scale-legend-block">
-        <h3 class="scale-legend-title">
-          <el-icon><InfoFilled /></el-icon>
-          AHP 判断标度说明（Saaty 1～9 标度）
-        </h3>
-        <p class="scale-legend-intro">
-          上三角「重要性」为 <strong>Saaty 正互反标度</strong>，取值区间 <strong>[1/9，9]</strong>（可填小数）：表示<strong>行要素相对列要素</strong>。<strong>1</strong> 为同等重要；<strong>&gt;1</strong> 表示行比列重要（如 3、5）；<strong>&lt;1</strong> 表示行不如列重要（如 0.33≈1/3、0.2=1/5）。下三角为互反倒数。
-        </p>
-        <el-table :data="ahpScaleFullLegend" border stripe size="small" class="scale-legend-table">
-          <el-table-column prop="scale" label="标度" width="110" align="center" />
-          <el-table-column prop="meaning" label="含义" min-width="100" />
-          <el-table-column prop="note" label="说明" min-width="200" />
-          <el-table-column prop="scene" label="适用场景" min-width="180" />
-        </el-table>
+      <!-- embedded：父页统一顶栏只有专家选择，操作按钮在此补全 -->
+      <div v-if="embedded && !toolbarInParent" class="ahp-embedded-actions" @click.stop>
+        <el-form :inline="true" class="expert-ahp-form expert-ahp-form--embedded-actions">
+          <el-form-item>
+            <el-button type="primary" :disabled="!selectedExpertId" :loading="savingScores" @click="saveScoresToDb">
+              保存到数据库
+            </el-button>
+            <el-button :disabled="!selectedExpertId" :loading="loadingScores" @click="reloadScoresFromDb">
+              重新加载
+            </el-button>
+            <el-button type="success" @click="openSimulateDialog">批量模拟入库</el-button>
+          </el-form-item>
+        </el-form>
       </div>
+      <template v-if="!legendsInParent">
+        <el-alert type="info" :closable="false" show-icon class="matrix-guide compact expert-ahp-hint">
+          <template v-if="!selectedExpertId">请先在标题栏选择「当前专家」；选择后将展示维度层与指标层判断矩阵。未选专家时仍可使用下方「批量模拟入库」生成数据。</template>
+          <template v-else>
+            已选择专家：自动加载该专家的比较打分，以及表 <code>expert_ahp_individual_weights</code> 中已保存的层次权重结果；若无打分记录则标度全为 1、把握度均为 {{ defaultBlankConfidence }}（低于 0.6）。保存或批量模拟入库时会同时覆盖更新两张表。
+          </template>
+        </el-alert>
 
-      <!-- 把握度等级与判断可信度 λ -->
-      <div class="scale-section scale-legend-block confidence-legend-block">
-        <h3 class="scale-legend-title">
-          <el-icon><InfoFilled /></el-icon>
-          把握度等级与判断可信度 λ
-        </h3>
-        <p class="scale-legend-intro">
-            矩阵上三角中「把握度」为 0～1 的小数，表示您对该次<strong>重要性比较</strong>的可信程度，可按下表<strong>判断可信度 λ</strong>取值：
-          1 级对应 λ=1，2 级对应 0.8，3 级对应 0.6；4 级表示不能确认，建议 λ 取 <strong>小于 0.6</strong> 的数值（如 0.5、0.4）。新选专家且无已存数据时，系统默认标度全为 1、把握度为 {{ defaultBlankConfidence }}（低于 0.6）。
-        </p>
-        <el-table :data="ahpConfidenceLevelLegend" border stripe size="small" class="scale-legend-table">
-          <el-table-column prop="level" label="等级" width="72" align="center" />
-          <el-table-column prop="meaning" label="等级含义" width="100" />
-          <el-table-column prop="standard" label="等级标准" min-width="280" />
-          <el-table-column prop="lambda" label="判断可信度 λ" width="120" align="center" />
-        </el-table>
-      </div>
+        <!-- 标度说明（1、3、5、7、9 及中间值 2、4、6、8） -->
+        <div class="scale-section scale-legend-block">
+          <h3 class="scale-legend-title">
+            <el-icon><InfoFilled /></el-icon>
+            AHP 判断标度说明（Saaty 1～9 标度）
+          </h3>
+          <p class="scale-legend-intro">
+            上三角「重要性」为 <strong>Saaty 正互反标度</strong>，取值区间 <strong>[1/9，9]</strong>（可填小数）：表示<strong>行要素相对列要素</strong>。<strong>1</strong> 为同等重要；<strong>&gt;1</strong> 表示行比列重要（如 3、5）；<strong>&lt;1</strong> 表示行不如列重要（如 0.33≈1/3、0.2=1/5）。下三角为互反倒数。
+          </p>
+          <el-table :data="ahpScaleFullLegend" border stripe size="small" class="scale-legend-table">
+            <el-table-column prop="scale" label="标度" width="110" align="center" />
+            <el-table-column prop="meaning" label="含义" min-width="100" />
+            <el-table-column prop="note" label="说明" min-width="200" />
+            <el-table-column prop="scene" label="适用场景" min-width="180" />
+          </el-table>
+        </div>
+
+        <!-- 把握度等级与判断可信度 λ -->
+        <div class="scale-section scale-legend-block confidence-legend-block">
+          <h3 class="scale-legend-title">
+            <el-icon><InfoFilled /></el-icon>
+            把握度等级与判断可信度 λ
+          </h3>
+          <p class="scale-legend-intro">
+              矩阵上三角中「把握度」为 0～1 的小数，表示您对该次<strong>重要性比较</strong>的可信程度，可按下表<strong>判断可信度 λ</strong>取值：
+            1 级对应 λ=1，2 级对应 0.8，3 级对应 0.6；4 级表示不能确认，建议 λ 取 <strong>小于 0.6</strong> 的数值（如 0.5、0.4）。新选专家且无已存数据时，系统默认标度全为 1、把握度为 {{ defaultBlankConfidence }}（低于 0.6）。
+          </p>
+          <el-table :data="ahpConfidenceLevelLegend" border stripe size="small" class="scale-legend-table">
+            <el-table-column prop="level" label="等级" width="72" align="center" />
+            <el-table-column prop="meaning" label="等级含义" width="100" />
+            <el-table-column prop="standard" label="等级标准" min-width="280" />
+            <el-table-column prop="lambda" label="判断可信度 λ" width="120" align="center" />
+          </el-table>
+        </div>
+      </template>
 
       <el-empty
         v-if="!selectedExpertId"
@@ -541,8 +560,18 @@
       </div>
     </div>
 
-    <el-dialog v-model="simulateDialogVisible" title="批量模拟 AHP 打分入库" width="520px" destroy-on-close @open="onSimulateDialogOpen">
-      <p class="simulate-dialog-tip">为所选多名专家随机生成把握度（约 20% 小于 0.6）。标度由<strong>随机权重</strong>反推：每层在 [1，9] 上抽样正数 a_i，令比较标度 a_ij = a_i/a_j（等价于先得到和为 1 的权重 w_i ∝ a_i 再取 w_i/w_j），理论上一致性完美（CI=0）；两位小数舍入后仍校验各矩阵 CR &lt; 0.1。数据写入上述两张表。</p>
+    <el-dialog
+      v-model="simulateDialogVisible"
+      title="批量模拟 AHP 打分入库"
+      width="520px"
+      top="8vh"
+      append-to-body
+      align-center
+      destroy-on-close
+      class="ahp-simulate-dialog"
+      @open="onSimulateDialogOpen"
+    >
+      <p class="simulate-dialog-tip">为所选多名专家<strong>同时</strong>生成<strong>效能指标 AHP</strong>与<strong>装备操作 AHP</strong>两套比较打分并入库（comparison_key 前缀不同，互不影响）。把握度约 20% 小于 0.6；标度由随机权重反推 a_i/a_j，舍入后校验各矩阵 CR &lt; 0.1。效能侧会更新权重快照表；装备侧数据写入后请在「装备操作 AHP」页点击「重新加载」查看最新矩阵。</p>
       <el-select
         v-model="simulateExpertIds"
         multiple
@@ -614,7 +643,29 @@ function buildIndicatorConfidenceMatrices() {
   return matrices
 }
 
-const emit = defineEmits(['weights-calculated'])
+const props = defineProps({
+  /** 嵌入评估页：隐藏本卡片标题栏，专家由父级统一选择 */
+  embedded: { type: Boolean, default: false },
+  /** 父级已展示标度说明 + 把握度表时，本组件不再重复 */
+  legendsInParent: { type: Boolean, default: false },
+  /** 父级统一展示保存/重载/模拟与域切换时，隐藏本组件内嵌操作条 */
+  toolbarInParent: { type: Boolean, default: false },
+  /** 父级传入的专家 ID（与 embedded 同时使用） */
+  expertId: { type: [Number, null], default: undefined }
+})
+const emit = defineEmits(['weights-calculated', 'update:expertId', 'expert-options'])
+
+const localExpertId = ref(null)
+const selectedExpertId = computed({
+  get() {
+    if (props.embedded) return props.expertId ?? null
+    return localExpertId.value
+  },
+  set(v) {
+    if (props.embedded) emit('update:expertId', v)
+    localExpertId.value = v
+  }
+})
 
 /** 行/列表头列 + n 个等宽数据列（表头与数据行共用同一模板，严格对齐） */
 const dimensionMatrixGridTemplate = computed(() => {
@@ -762,7 +813,6 @@ function clampAhpScore(val) {
 }
 
 const expertOptions = ref([])
-const selectedExpertId = ref(null)
 const loadingScores = ref(false)
 const savingScores = ref(false)
 const simulateDialogVisible = ref(false)
@@ -775,6 +825,7 @@ async function fetchExpertOptions() {
   try {
     const list = await getExpertList()
     expertOptions.value = Array.isArray(list) ? list : []
+    emit('expert-options', expertOptions.value)
   } catch (e) {
     console.error(e)
     ElMessage.error('加载专家列表失败：' + (e.message || ''))
@@ -817,10 +868,6 @@ function applyDbRowsToMatrices(rows) {
     }
   }
 }
-
-watch(selectedExpertId, (id) => {
-  if (id) activeIndicatorTab.value = dimensions[0].code
-})
 
 async function loadStoredWeightsSnapshot() {
   if (!selectedExpertId.value) {
@@ -870,13 +917,18 @@ async function loadExpertScoresIntoMatrices() {
   }
 }
 
-async function onExpertChange() {
-  await loadExpertScoresIntoMatrices()
-}
-
 async function reloadScoresFromDb() {
   await loadExpertScoresIntoMatrices()
 }
+
+watch(
+  selectedExpertId,
+  (id) => {
+    if (id) activeIndicatorTab.value = dimensions[0].code
+    void loadExpertScoresIntoMatrices()
+  },
+  { immediate: true }
+)
 
 function buildPersistPayload() {
   const dimensionEntries = []
@@ -949,7 +1001,11 @@ async function runSimulateBatch() {
     const res = await simulateExpertAhpScores({
       expertIds: simulateExpertIds.value
     })
-    ElMessage.success(`已写入 ${res.insertedCount} 名专家的模拟打分，跳过 ${res.skippedCount} 名`)
+    const skip = res.skippedCount ?? 0
+    const eqN = res.equipmentInsertedCount ?? res.insertedCount
+    ElMessage.success(
+      `效能指标 AHP：已写入 ${res.insertedCount} 名专家，跳过 ${skip} 名；装备操作 AHP：已写入 ${eqN} 名专家`
+    )
     simulateDialogVisible.value = false
     if (selectedExpertId.value && simulateExpertIds.value.includes(selectedExpertId.value)) {
       await loadExpertScoresIntoMatrices()
@@ -1345,11 +1401,27 @@ const exportWeights = () => {
   ElMessage.success('权重已导出为JSON文件')
 }
 
+defineExpose({
+  saveScoresToDb,
+  reloadScoresFromDb,
+  openSimulateDialog
+})
+
 </script>
 
 <style scoped lang="scss">
 .ahp-config-card {
   margin-bottom: 20px;
+
+  &.ahp-config-card--embedded {
+    margin-bottom: 0;
+    border: none;
+    box-shadow: none !important;
+
+    :deep(.el-card__body) {
+      padding: 0;
+    }
+  }
 
   :deep(.el-card__header) {
     padding-bottom: 14px;
@@ -1388,6 +1460,18 @@ const exportWeights = () => {
 }
 
 .config-content {
+  .ahp-embedded-actions {
+    padding: 0 0 12px;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed var(--el-border-color-lighter);
+
+    .expert-ahp-form--embedded-actions {
+      margin-bottom: 0;
+      flex-wrap: wrap;
+      row-gap: 8px;
+    }
+  }
+
   .ahp-select-expert-empty {
     padding: 28px 16px 8px;
   }
@@ -2025,5 +2109,14 @@ const exportWeights = () => {
     text-align: center;
     font-size: 12px;
   }
+}
+</style>
+
+<!-- append-to-body 弹层不受 scoped 影响，单独样式避免内容区被视口裁切 -->
+<style lang="scss">
+.ahp-simulate-dialog .el-dialog__body {
+  max-height: min(420px, 62vh);
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 </style>

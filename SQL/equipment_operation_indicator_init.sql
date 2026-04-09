@@ -23,8 +23,8 @@ INSERT INTO `equipment_qt_indicator_def` (
  'records_military_operation_info', 'avg_network_setup_time_ms', 'avg',
  NULL, 'ms', 'negative', 1, 1),
 
--- Q2 应急处理
-('eqt_emergency_handling', '应急处理', 'Emergency Response', 'mid_war', '操作响应',
+-- Q2 应急处理（并入一级维度「系统性能」，与组网/连通率/任务可靠度同属作战体系性能）
+('eqt_emergency_handling', '应急处理', 'Emergency Response', 'mid_war', '系统性能',
  '作战过程中，操作员感知到异常并做出反应的平均时间',
  'records_military_communication_info', 'operator_reaction_ms', 'avg',
  NULL, 'ms', 'negative', 2, 1),

@@ -27,6 +27,9 @@ import java.util.concurrent.ThreadLocalRandom;
 @RequiredArgsConstructor
 public class ExpertAhpComparisonScoreService {
 
+    /** 与 {@link EquipmentAhpScoreService} 中装备操作域前缀一致，用于同表域隔离 */
+    private static final String EQUIPMENT_KEY_PREFIX = "装备操作_";
+
     private static final double CR_LIMIT = 0.1;
     private static final int WEIGHT_PAYLOAD_MAX_TRIES = 8;
 
@@ -42,7 +45,7 @@ public class ExpertAhpComparisonScoreService {
         if (expertId == null) {
             return Collections.emptyList();
         }
-        return scoreRepository.findByExpertIdOrderByIdAsc(expertId);
+        return scoreRepository.findEffectivenessByExpertId(expertId, EQUIPMENT_KEY_PREFIX + "%");
     }
 
     @Transactional
@@ -62,7 +65,7 @@ public class ExpertAhpComparisonScoreService {
             throw new IllegalArgumentException("没有可保存的比较项");
         }
 
-        scoreRepository.deleteByExpertId(req.getExpertId());
+        scoreRepository.deleteEffectivenessByExpertId(req.getExpertId(), EQUIPMENT_KEY_PREFIX + "%");
         scoreRepository.saveAll(rows);
         MatrixCalculationRequest matrixReq = new MatrixCalculationRequest();
         matrixReq.setDimensionMatrix(req.getDimensionMatrix());
@@ -93,7 +96,7 @@ public class ExpertAhpComparisonScoreService {
             List<ExpertAhpComparisonScore> rows = buildRowsFromMatrixPayload(
                     expertId, expert.getExpertName(),
                     matrix.getDimensionMatrix(), matrix.getIndicatorMatrices());
-            scoreRepository.deleteByExpertId(expertId);
+            scoreRepository.deleteEffectivenessByExpertId(expertId, EQUIPMENT_KEY_PREFIX + "%");
             scoreRepository.saveAll(rows);
             saveSnapshot(expertId, expert.getExpertName(), matrix);
             inserted.add(expertId);
@@ -139,13 +142,46 @@ public class ExpertAhpComparisonScoreService {
 
     /**
      * a_i ~ U(1,9)，标度 a_ij = a_i/a_j ∈ [1/9,9]；归一化权重 w_i = a_i/Σa 时 w_i/w_j = a_i/a_j。
+     * 三层波动策略：20% 指数极端 / 40% 均匀 / 40% 局部放大
      */
     private List<MatrixCalculationRequest.MatrixEntry> buildEntriesFromRandomPositiveWeights(String[] elements, ThreadLocalRandom rnd) {
         int n = elements.length;
         double[] a = new double[n];
-        for (int i = 0; i < n; i++) {
-            a[i] = rnd.nextDouble(1.0, 9.0);
+
+        double roll = rnd.nextDouble();
+        if (roll < 0.20) {
+            // Dirichlet 指数风格：少数极大、多数极小，波动最剧烈
+            double[] raw = new double[n];
+            double sum = 0;
+            for (int i = 0; i < n; i++) {
+                raw[i] = -Math.log(rnd.nextDouble(1e-6, 1.0));
+                sum += raw[i];
+            }
+            double base = rnd.nextDouble(0.5, 3.0);
+            for (int i = 0; i < n; i++) {
+                a[i] = base * (raw[i] / sum) * n * 3.5;
+                a[i] = Math.max(0.11, Math.min(9.0, a[i]));
+            }
+        } else if (roll < 0.60) {
+            // 均匀分布 [1, 9]，中等波动（原有逻辑）
+            for (int i = 0; i < n; i++) {
+                a[i] = rnd.nextDouble(1.0, 9.0);
+            }
+        } else {
+            // 局部放大风格：挑选 1～2 个优势元素乘以 3～6 倍，其余 [1, 3]
+            for (int i = 0; i < n; i++) {
+                a[i] = rnd.nextDouble(1.0, 3.0);
+            }
+            int advantageCount = rnd.nextInt(1, Math.min(3, n));
+            Set<Integer> chosen = new HashSet<>();
+            while (chosen.size() < advantageCount) {
+                chosen.add(rnd.nextInt(n));
+            }
+            for (int idx : chosen) {
+                a[idx] = rnd.nextDouble(3.5, 7.0);
+            }
         }
+
         List<MatrixCalculationRequest.MatrixEntry> list = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
