@@ -405,6 +405,85 @@
       </div>
     </div>
 
+    <!-- ==================== 综合叶子全局权重 CV（效能+装备统一排序） ==================== -->
+    <div v-if="isDispersion" class="unified-leaf-section">
+      <el-card class="unified-leaf-card" shadow="hover">
+        <template #header>
+          <div class="card-header">
+            <span>
+              <el-icon><Histogram /></el-icon>
+              三、综合叶子全局权重 CV（效能 + 装备）
+            </span>
+            <el-tag size="small" type="info">所有叶子已乘域间一级权重，直接可比</el-tag>
+          </div>
+        </template>
+
+        <el-tabs v-model="unifiedLeafActiveTab" class="unified-leaf-tabs">
+          <el-tab-pane label="所有数据" name="all">
+            <el-table :data="unifiedLeafTableData" stripe border size="small" max-height="480">
+              <el-table-column type="index" label="排名" width="60" align="center" />
+              <el-table-column label="域" width="70" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="row.domainTag === '效能' ? 'success' : 'primary'" size="small">
+                    {{ row.domainTag }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="indicatorName" label="指标名称" min-width="140" />
+              <el-table-column prop="dimension" label="维度" width="110" align="center" />
+              <el-table-column prop="allMean" label="均值" width="90" align="center" :formatter="fmtPct" />
+              <el-table-column prop="allCv" label="CV(%)" width="90" align="center">
+                <template #default="{ row }">
+                  <span :style="{ color: cvColor(row.allCv) }">{{ fmtCv(row.allCv) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="allLevel" label="一致性" width="90" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="levelTagType(row.allLevel)" size="small">{{ row.allLevel }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="allStdDev" label="标准差" width="80" align="center" :formatter="fmtPct" />
+            </el-table>
+            <el-empty v-if="!unifiedLeafTableData?.length" description="暂无综合叶子数据" :image-size="72" style="margin:16px 0" />
+          </el-tab-pane>
+
+          <el-tab-pane label="去除极端值" name="filtered">
+            <el-table :data="unifiedLeafFilteredData" stripe border size="small" max-height="480">
+              <el-table-column type="index" label="排名" width="60" align="center" />
+              <el-table-column label="域" width="70" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="row.domainTag === '效能' ? 'success' : 'primary'" size="small">
+                    {{ row.domainTag }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="indicatorName" label="指标名称" min-width="140" />
+              <el-table-column prop="dimension" label="维度" width="110" align="center" />
+              <el-table-column prop="filteredMean" label="均值" width="90" align="center" :formatter="fmtPct" />
+              <el-table-column prop="filteredCv" label="CV(%)" width="90" align="center">
+                <template #default="{ row }">
+                  <span :style="{ color: cvColor(row.filteredCv) }">{{ fmtCv(row.filteredCv) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="filteredLevel" label="一致性" width="90" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="levelTagType(row.filteredLevel)" size="small">{{ row.filteredLevel }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="filteredStdDev" label="标准差" width="80" align="center" :formatter="fmtPct" />
+            </el-table>
+            <el-empty v-if="!unifiedLeafFilteredData?.length" description="暂无过滤后数据" :image-size="72" style="margin:16px 0" />
+          </el-tab-pane>
+        </el-tabs>
+
+        <!-- 柱状图：按均值降序 top-N -->
+        <div class="chart-section">
+          <h4><el-icon><DataLine /></el-icon> 综合叶子全局权重均值对比（Top 20）</h4>
+          <div ref="unifiedLeafChartRef" class="chart-container-large"></div>
+        </div>
+      </el-card>
+    </div>
+
     <!-- ==================== 专家集结计算（对比打分层） ==================== -->
     <template v-if="isCollective">
     <el-divider content-position="left">
@@ -546,8 +625,8 @@
         <div class="flow-step">
           <el-tag type="primary">Step 5</el-tag>
           <span>
-            构造 6 个集体判断矩阵（维度层 + 5 个指标层），分别执行 AHP 层次单排序得权重向量，
-            计算 λ<sub>max</sub> 和 CR（一致性比率）。综合权重 = 维度权重 × 指标层权重，归一化至和为 1。
+            构造集体判断矩阵：效能侧（维度层 + 各维度指标层）、装备操作侧（带「装备操作_」前缀的键）、以及域间一级（效能 vs 装备）；
+            分别做 AHP 得权重向量并检验 CR。再按与个体 AHP 相同规则合成<strong>一级域间 · 二级维度 · 三级叶子</strong>的全局权重（含旭日图，见下方第五节）。
           </span>
         </div>
       </div>
@@ -562,13 +641,23 @@
     <el-card v-if="activeCollectiveWeights" class="collective-card" shadow="hover">
       <template #header>
         <span><el-icon><PieChart /></el-icon> 一致性检验（CR &lt; 0.1 为通过）</span>
+        <el-tag v-if="collectiveCrItems.some((x) => x.branch === 'eq')" type="info" effect="plain" size="small" style="margin-left: 10px">
+          含装备操作矩阵
+        </el-tag>
       </template>
       <el-row :gutter="12">
-        <el-col :span="4" v-for="(cr, key) in activeCollectiveWeights.crResults" :key="key">
+        <el-col
+          v-for="item in collectiveCrItems"
+          :key="item.key"
+          :xs="12"
+          :sm="8"
+          :md="6"
+          :lg="4"
+        >
           <div class="cr-item">
-            <span class="cr-label">{{ crLabelMap[key] || key }}</span>
-            <el-tag :type="(Number(cr) < 0.1) ? 'success' : 'danger'" size="large">
-              {{ Number(cr).toFixed(4) }}
+            <span class="cr-label">{{ item.label }}</span>
+            <el-tag :type="(Number(item.cr) < 0.1) ? 'success' : 'danger'" size="large">
+              {{ Number(item.cr).toFixed(4) }}
             </el-tag>
           </div>
         </el-col>
@@ -583,8 +672,19 @@
         </div>
       </template>
 
-      <!-- 矩阵选择器 -->
-      <div class="matrix-selector">
+      <!-- 体系切换 + 矩阵选择器 -->
+      <div class="matrix-selector matrix-selector--system">
+        <span class="matrix-system-label">集体矩阵体系：</span>
+        <el-radio-group v-model="matrixSystem" size="default" @change="onMatrixSystemChange">
+          <el-radio-button value="efficacy">效能指标体系</el-radio-button>
+          <el-radio-button value="equipment" :disabled="!eqCollectiveMatrixAvailable">装备操作体系</el-radio-button>
+        </el-radio-group>
+        <el-tag v-if="!eqCollectiveMatrixAvailable" type="warning" effect="plain" size="small" style="margin-left: 8px">
+          装备侧需存在「装备操作_」前缀的集体打分；完整层次见第五节
+        </el-tag>
+      </div>
+
+      <div v-show="matrixSystem === 'efficacy'" class="matrix-selector">
         <el-radio-group v-model="selectedMatrix" size="large">
           <el-radio-button value="dim">维度层矩阵 (5×5)</el-radio-button>
           <el-radio-button value="security">安全性指标层 (3×3)</el-radio-button>
@@ -592,6 +692,23 @@
           <el-radio-button value="transmission">传输能力指标层 (6×6)</el-radio-button>
           <el-radio-button value="antiJamming">抗干扰指标层 (3×3)</el-radio-button>
           <el-radio-button value="effect">效能影响指标层 (3×3)</el-radio-button>
+        </el-radio-group>
+        <el-tag :type="currentMatrixCR < 0.1 ? 'success' : 'danger'" size="large" style="margin-left: 16px">
+          CR = {{ currentMatrixCR.toFixed(4) }}
+          {{ currentMatrixCR < 0.1 ? '（一致性通过）' : '（一致性未通过）' }}
+        </el-tag>
+      </div>
+
+      <div v-show="matrixSystem === 'equipment'" class="matrix-selector matrix-selector--eq">
+        <el-radio-group v-model="selectedEqView" size="large">
+          <el-radio-button value="eq-dim">装备维度层 ({{ eqDimMatrixSize }}×{{ eqDimMatrixSize }})</el-radio-button>
+          <el-radio-button
+            v-for="d in eqCollectiveDimensionNames"
+            :key="'eqind-' + d"
+            :value="'eq-ind:' + d"
+          >
+            {{ d }} 指标层
+          </el-radio-button>
         </el-radio-group>
         <el-tag :type="currentMatrixCR < 0.1 ? 'success' : 'danger'" size="large" style="margin-left: 16px">
           CR = {{ currentMatrixCR.toFixed(4) }}
@@ -616,9 +733,9 @@
 
       <!-- 矩阵内嵌权重向量 -->
       <div class="matrix-weights">
-        <h5>{{ selectedMatrix === 'dim' ? '维度' : getMatrixIndicatorName(selectedMatrix) }}层权重向量</h5>
+        <h5>{{ matrixWeightsTitle }}</h5>
         <el-row :gutter="12">
-          <el-col :span="4" v-for="(w, idx) in currentMatrixWeights" :key="idx">
+          <el-col :xs="12" :sm="8" :md="6" :lg="4" v-for="(w, idx) in currentMatrixWeights" :key="idx">
             <div class="weight-card">
               <span class="weight-name">{{ currentMatrixHeaders[idx] }}</span>
               <strong>{{ (w * 100).toFixed(2) }}%</strong>
@@ -636,7 +753,7 @@
 
       <!-- 维度权重（文字卡片） -->
       <div class="preview-section">
-        <h5>4.1 一级维度集结权重</h5>
+        <h5>4.1 效能指标体系 · 一级维度集结权重</h5>
         <el-row :gutter="12">
           <el-col :span="4" v-for="(w, dim) in activeCollectiveWeights.dimensionWeights" :key="dim">
             <div class="weight-item">
@@ -649,20 +766,47 @@
 
       <!-- 维度权重柱状图 -->
       <div class="weight-chart-section">
-        <h5>4.2 维度层权重分布图</h5>
+        <h5>4.2 效能 · 维度层权重分布图</h5>
         <div ref="dimWeightChartRef" class="chart-container-medium"></div>
       </div>
 
-      <!-- 二级指标综合权重表格 -->
+      <!-- 装备操作：体系内维度权重 -->
+      <div v-if="eqCollectiveDimensionNames.length" class="preview-section">
+        <h5>4.2b 装备操作体系 · 一级维度集结权重（体系内归一化）</h5>
+        <el-row :gutter="12">
+          <el-col :xs="12" :sm="8" :md="6" :lg="4" v-for="dim in eqCollectiveDimensionNames" :key="'eqdw-' + dim">
+            <div class="weight-item weight-item--eq">
+              <span class="weight-label">{{ dim }}</span>
+              <strong>{{ (Number(aggregatedUnified?.equipment?.dimensionWeights?.[dim]) * 100 || 0).toFixed(2) }}%</strong>
+            </div>
+          </el-col>
+        </el-row>
+      </div>
+      <div v-if="eqCollectiveDimensionNames.length" class="weight-chart-section">
+        <h5>4.2c 装备操作 · 维度层权重分布图</h5>
+        <div ref="eqCollectiveDimChartRef" class="chart-container-medium"></div>
+      </div>
+
+      <!-- 二级叶子：效能 + 装备，同一综合权重表（与第五节 allLeaves 一致） -->
       <div class="preview-section">
-        <h5>4.3 二级指标综合权重（对总目标，归一化）</h5>
-        <el-table :data="indicatorWeightTableData" border stripe size="small" max-height="320">
-          <el-table-column prop="dimension" label="维度" width="100" align="center">
+        <h5>4.3 二级叶子指标综合权重（效能 + 装备操作，对总目标）</h5>
+        <p v-if="!aggregatedUnified?.allLeaves?.length" class="combined-leaf-hint">
+          当前为效能侧集结权重预览；执行集结且含域间与装备数据后，本表与下图将合并展示全部叶子的全局综合权重。
+        </p>
+        <el-table :data="collectiveAllLeafRows" border stripe size="small" max-height="420">
+          <el-table-column prop="systemLabel" label="体系" width="120" align="center">
             <template #default="{ row }">
-              <el-tag size="small">{{ row.dimension }}</el-tag>
+              <el-tag size="small" :type="row.systemKey === 'equipment' ? 'warning' : 'success'">
+                {{ row.systemLabel }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="indicator" label="指标" min-width="140" />
+          <el-table-column prop="dimension" label="维度" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain">{{ row.dimension }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="indicator" label="指标（叶子）" min-width="140" show-overflow-tooltip />
           <el-table-column label="综合权重" align="center" width="130">
             <template #default="{ row }">
               <span class="score-cell">{{ (Number(row.weight) * 100).toFixed(2) }}%</span>
@@ -671,7 +815,7 @@
           <el-table-column label="权重条" min-width="160">
             <template #default="{ row }">
               <el-progress
-                :percentage="Number(row.weight) * 100"
+                :percentage="Math.min(100, Number(row.weight) * 100)"
                 :stroke-width="10"
                 :show-text="false"
               />
@@ -680,10 +824,12 @@
         </el-table>
       </div>
 
-      <!-- 指标权重柱状图 -->
-      <div class="weight-chart-section">
-        <h5>4.4 二级指标综合权重分布图</h5>
-        <div ref="indWeightChartRef" class="chart-container-large"></div>
+      <div class="weight-chart-section weight-chart-section--sunburst">
+        <h5>4.4 二级叶子综合权重旭日图（内圈体系 · 中圈维度 · 外圈叶子）</h5>
+        <p class="sunburst-hint">
+          扇区大小表示对总目标的综合权重（%）。含完整域间与装备数据时展示效能 + 装备双体系；仅预览效能集结时为单体系旭日图。
+        </p>
+        <div ref="collectiveSunburstRef" class="collective-sunburst-chart"></div>
       </div>
     </el-card>
 
@@ -724,7 +870,8 @@ import {
   Cpu,
   PieChart,
   Flag,
-  Guide
+  Guide,
+  Histogram
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -753,6 +900,11 @@ let effIndicatorChart = null
 let eqDimensionChart = null
 let eqIndicatorChart = null
 
+// 综合叶子权重
+const unifiedLeafActiveTab = ref('all')
+const unifiedLeafChartRef = ref(null)
+let unifiedLeafChart = null
+
 // ==================== 集结计算状态 ====================
 const collectiveLoading = ref(false)
 const previewLoading = ref(false)
@@ -762,12 +914,19 @@ const availableExperts = ref([])
 const weightPreview = ref(null)
 const collectiveResult = ref(null)
 
-// 矩阵展示相关
+// 矩阵展示相关（与后端 comparison_key 一致：装备操作_ 前缀）
+const EQ_PREFIX = '装备操作_'
 const selectedMatrix = ref('dim')
+/** efficacy | equipment：集体判断矩阵切换 */
+const matrixSystem = ref('efficacy')
+/** equipment：eq-dim 维度层；eq-ind:维度名 指标层 */
+const selectedEqView = ref('eq-dim')
 const dimWeightChartRef = ref(null)
-const indWeightChartRef = ref(null)
+const collectiveSunburstRef = ref(null)
+const eqCollectiveDimChartRef = ref(null)
 let dimWeightChart = null
-let indWeightChart = null
+let collectiveSunburstChart = null
+let eqCollectiveDimChart = null
 
 function disposeDispersionCharts() {
   dimensionChart?.dispose()
@@ -782,9 +941,11 @@ function disposeDispersionCharts() {
 
 function disposeCollectiveCharts() {
   dimWeightChart?.dispose()
-  indWeightChart?.dispose()
+  collectiveSunburstChart?.dispose()
+  eqCollectiveDimChart?.dispose()
   dimWeightChart = null
-  indWeightChart = null
+  collectiveSunburstChart = null
+  eqCollectiveDimChart = null
 }
 
 const collectiveForm = ref({
@@ -796,7 +957,7 @@ const collectiveForm = ref({
 /** 优先使用最近一次「执行集结计算」结果，否则用「预览」数据，保证矩阵与图表有数据 */
 const activeCollectiveWeights = computed(() => collectiveResult.value ?? weightPreview.value)
 
-// 矩阵元素定义
+// 效能集体矩阵元素（须早于 collectiveCrItems / 矩阵计算属性）
 const matrixConfig = {
   dim: {
     name: '维度层',
@@ -831,6 +992,64 @@ const crLabelMap = {
   '传输能力': '传输能力',
   '抗干扰能力': '抗干扰能力',
   '效能影响': '效能影响'
+}
+
+/** 集结合成的完整层次（含装备），与后端 aggregatedUnified 一致 */
+const aggregatedUnified = computed(() => activeCollectiveWeights.value?.aggregatedUnified ?? null)
+
+const collectiveCrItems = computed(() => {
+  const src = activeCollectiveWeights.value
+  if (!src) return []
+  const items = []
+  const crMap = src.crResults
+  if (crMap && typeof crMap === 'object') {
+    for (const [k, v] of Object.entries(crMap)) {
+      items.push({
+        key: 'eff-cr-' + k,
+        branch: 'eff',
+        label: '效能·' + (crLabelMap[k] || k),
+        cr: Number(v) || 0
+      })
+    }
+  }
+  const crEq = aggregatedUnified.value?.equipment?.crByDimension
+  if (crEq && typeof crEq === 'object') {
+    for (const [k, v] of Object.entries(crEq)) {
+      const label = k === 'dimension' ? '装备·维度层' : '装备·' + k + '·指标层'
+      items.push({
+        key: 'eq-cr-' + k,
+        branch: 'eq',
+        label,
+        cr: Number(v) || 0
+      })
+    }
+  }
+  return items
+})
+
+const eqCollectiveDimensionNames = computed(() => {
+  const dw = aggregatedUnified.value?.equipment?.dimensionWeights
+  if (!dw || typeof dw !== 'object') return []
+  return Object.keys(dw).sort()
+})
+
+const eqCollectiveMatrixAvailable = computed(() => {
+  if (eqCollectiveDimensionNames.value.length > 0) return true
+  const cs = activeCollectiveWeights.value?.collectiveScores
+  if (!cs || typeof cs !== 'object') return false
+  return Object.keys(cs).some((k) => k && k.startsWith(EQ_PREFIX))
+})
+
+const eqDimMatrixSize = computed(() => Math.max(1, eqCollectiveDimensionNames.value.length))
+
+function onMatrixSystemChange() {
+  if (matrixSystem.value === 'equipment' && !eqCollectiveMatrixAvailable.value) {
+    matrixSystem.value = 'efficacy'
+    return
+  }
+  if (matrixSystem.value === 'equipment') {
+    selectedEqView.value = 'eq-dim'
+  }
 }
 
 // 维度定义
@@ -971,61 +1190,142 @@ function getEqIndicatorsByDimension(dimName) {
 
 // ==================== 矩阵展示计算属性 ====================
 
-// 当前选中的矩阵配置
-const currentMatrixConfig = computed(() => matrixConfig[selectedMatrix.value] || matrixConfig.dim)
+/** 装备集体矩阵单元格：comparison_key 为 装备操作_维A_维B 或 装备操作_维度_指标A_指标B */
+function equipmentMatrixCell(collectiveScores, rowName, colName, indicatorDimension) {
+  if (rowName === colName) return '1.000'
+  let ratio = 1
+  if (indicatorDimension) {
+    const k1 = EQ_PREFIX + indicatorDimension + '_' + rowName + '_' + colName
+    const k2 = EQ_PREFIX + indicatorDimension + '_' + colName + '_' + rowName
+    let s = collectiveScores[k1]
+    if (s != null && Number.isFinite(Number(s))) ratio = Number(s)
+    else {
+      s = collectiveScores[k2]
+      if (s != null && Number.isFinite(Number(s))) ratio = 1 / Number(s)
+    }
+  } else {
+    const k1 = EQ_PREFIX + rowName + '_' + colName
+    const k2 = EQ_PREFIX + colName + '_' + rowName
+    let s = collectiveScores[k1]
+    if (s != null && Number.isFinite(Number(s))) ratio = Number(s)
+    else {
+      s = collectiveScores[k2]
+      if (s != null && Number.isFinite(Number(s))) ratio = 1 / Number(s)
+    }
+  }
+  return ratio.toFixed(3)
+}
 
-// 当前矩阵CR值
+const efficacyMatrixHeaders = computed(
+  () => (matrixConfig[selectedMatrix.value] || matrixConfig.dim).headers
+)
+
 const currentMatrixCR = computed(() => {
-  if (!activeCollectiveWeights.value?.crResults) return 0
-  const crMap = activeCollectiveWeights.value.crResults
-  if (selectedMatrix.value === 'dim') return Number(crMap['dim']) || 0
-  return Number(crMap[matrixConfig[selectedMatrix.value]?.name]) || 0
+  if (matrixSystem.value === 'efficacy') {
+    if (!activeCollectiveWeights.value?.crResults) return 0
+    const crMap = activeCollectiveWeights.value.crResults
+    if (selectedMatrix.value === 'dim') return Number(crMap['dim']) || 0
+    return Number(crMap[matrixConfig[selectedMatrix.value]?.name]) || 0
+  }
+  const crBy = aggregatedUnified.value?.equipment?.crByDimension
+  if (!crBy) return 0
+  if (selectedEqView.value === 'eq-dim') {
+    return Number(crBy['dimension']) || 0
+  }
+  const dim = selectedEqView.value.startsWith('eq-ind:') ? selectedEqView.value.slice(7) : ''
+  return Number(crBy[dim]) || 0
 })
 
-// 当前矩阵表头
-const currentMatrixHeaders = computed(() => currentMatrixConfig.value?.headers || [])
+const currentMatrixHeaders = computed(() => {
+  if (matrixSystem.value === 'efficacy') {
+    return efficacyMatrixHeaders.value
+  }
+  const eq = aggregatedUnified.value?.equipment
+  if (!eq) return []
+  if (selectedEqView.value === 'eq-dim') {
+    return eqCollectiveDimensionNames.value
+  }
+  const dim = selectedEqView.value.startsWith('eq-ind:') ? selectedEqView.value.slice(7) : ''
+  const indMap = eq.indicators?.[dim]
+  if (!indMap || typeof indMap !== 'object') return []
+  return Object.keys(indMap).sort()
+})
 
-// 当前矩阵数据（集体判断矩阵）
 const currentMatrixData = computed(() => {
-  if (!activeCollectiveWeights.value) return []
+  const src = activeCollectiveWeights.value
+  if (!src) return []
   const headers = currentMatrixHeaders.value
-  const collectiveScores = activeCollectiveWeights.value.collectiveScores || {}
+  const collectiveScores = src.collectiveScores || {}
 
-  // 构建矩阵
+  if (matrixSystem.value === 'efficacy') {
+    const matrix = []
+    for (let i = 0; i < headers.length; i++) {
+      const row = { row: headers[i] }
+      for (let j = 0; j < headers.length; j++) {
+        if (i === j) {
+          row[headers[j]] = '1.000'
+        } else {
+          const key = `${headers[i]}_${headers[j]}`
+          const score = collectiveScores[key]
+          row[headers[j]] = score ? Number(score).toFixed(3) : '1.000'
+        }
+      }
+      matrix.push(row)
+    }
+    return matrix
+  }
+
+  const indDim = selectedEqView.value.startsWith('eq-ind:') ? selectedEqView.value.slice(7) : null
   const matrix = []
   for (let i = 0; i < headers.length; i++) {
     const row = { row: headers[i] }
     for (let j = 0; j < headers.length; j++) {
-      if (i === j) {
-        row[headers[j]] = '1.000'
-      } else {
-        const key = `${headers[i]}_${headers[j]}`
-        const score = collectiveScores[key]
-        row[headers[j]] = score ? Number(score).toFixed(3) : '1.000'
-      }
+      if (i === j) row[headers[j]] = '1.000'
+      else row[headers[j]] = equipmentMatrixCell(collectiveScores, headers[i], headers[j], indDim)
     }
     matrix.push(row)
   }
   return matrix
 })
 
-// 当前矩阵权重向量
 const currentMatrixWeights = computed(() => {
-  if (!activeCollectiveWeights.value) return []
+  const src = activeCollectiveWeights.value
+  if (!src) return []
   const headers = currentMatrixHeaders.value
-  const config = currentMatrixConfig.value
 
-  if (selectedMatrix.value === 'dim') {
-    const dimWeights = activeCollectiveWeights.value.dimensionWeights || {}
-    return headers.map(h => Number(dimWeights[h] || 0))
-  } else {
-    const indWeightsByDim = activeCollectiveWeights.value.indicatorWeightsByDimension || {}
+  if (matrixSystem.value === 'efficacy') {
+    const config = matrixConfig[selectedMatrix.value] || matrixConfig.dim
+    if (selectedMatrix.value === 'dim') {
+      const dimWeights = src.dimensionWeights || {}
+      return headers.map((h) => Number(dimWeights[h] || 0))
+    }
+    const indWeightsByDim = src.indicatorWeightsByDimension || {}
     const dimIndWeights = indWeightsByDim[config.name] || {}
-    return headers.map(h => Number(dimIndWeights[h] || 0))
+    return headers.map((h) => Number(dimIndWeights[h] || 0))
   }
+
+  const eq = aggregatedUnified.value?.equipment
+  if (!eq) return headers.map(() => 0)
+  if (selectedEqView.value === 'eq-dim') {
+    const dw = eq.dimensionWeights || {}
+    return headers.map((h) => Number(dw[h] || 0))
+  }
+  const dim = selectedEqView.value.slice(7)
+  const dimInd = eq.indicators?.[dim] || {}
+  return headers.map((h) => Number(dimInd[h] || 0))
 })
 
-// 获取矩阵名称
+const matrixWeightsTitle = computed(() => {
+  if (matrixSystem.value === 'efficacy') {
+    if (selectedMatrix.value === 'dim') return '维度层权重向量'
+    const n = matrixConfig[selectedMatrix.value]?.name || ''
+    return n ? `${n} · 指标层权重向量` : '指标层权重向量'
+  }
+  if (selectedEqView.value === 'eq-dim') return '装备操作 · 维度层权重向量'
+  const dim = selectedEqView.value.startsWith('eq-ind:') ? selectedEqView.value.slice(7) : ''
+  return dim ? `装备操作 · ${dim} · 指标层权重向量` : '装备操作 · 指标层权重向量'
+})
+
 function getMatrixIndicatorName(key) {
   return matrixConfig[key]?.name || ''
 }
@@ -1098,47 +1398,258 @@ function renderDimWeightChart() {
   dimWeightChart.resize()
 }
 
-function renderIndWeightChart() {
-  const src = collectiveResult.value ?? weightPreview.value
-  if (!indWeightChartRef.value || !src?.indicatorWeights) return
+const SB_SUNBURST_BRANCH = ['#3D9970', '#409EFF']
+const SB_SUNBURST_DIM_PALETTE = ['#0074D9', '#39CCCC', '#3D9970', '#FF851B', '#FFDC00', '#B10DC9', '#85144b', '#F012BE']
 
-  if (indWeightChart) {
-    const dom = indWeightChart.getDom()
+function shortLeafLabel(name) {
+  if (!name || typeof name !== 'string') return String(name ?? '')
+  return name.replace(/得分$/u, '').slice(0, 12)
+}
+
+function crossBranchWeights(snap) {
+  const c = snap?.crossDomain
+  const wEff = Number.isFinite(Number(c?.effWeight)) ? Number(c.effWeight) : 0.5
+  const wEq = Number.isFinite(Number(c?.eqWeight)) ? Number(c.eqWeight) : 0.5
+  return { wEff, wEq }
+}
+
+/** 与 UnifiedGlobalWeightsPanel 一致：由 aggregatedUnified 合成旭日图数据 */
+function buildSunburstTreeFromSnapshot(snap) {
+  if (!snap) return null
+  const { wEff, wEq } = crossBranchWeights(snap)
+  const eff = snap.effectiveness
+  const eq = snap.equipment
+  const effDims = eff?.dimensionWeights || {}
+  const eqDims = eq?.dimensionWeights || {}
+  const effInd = eff?.indicators || {}
+  const eqInd = eq?.indicators || {}
+
+  function dimChildren(branchW, dimWeights, indicators) {
+    const list = []
+    let ci = 0
+    for (const [dimName, dimLocal] of Object.entries(dimWeights)) {
+      const dw = Number(dimLocal) || 0
+      const indMap = indicators[dimName] || {}
+      const leaves = []
+      for (const [indName, indLocal] of Object.entries(indMap)) {
+        const iw = Number(indLocal) || 0
+        const v = Math.max(1e-9, branchW * dw * iw * 100)
+        leaves.push({
+          name: shortLeafLabel(indName),
+          value: v,
+          fullPath: `${dimName} · ${indName}`
+        })
+      }
+      if (!leaves.length) continue
+      const base = SB_SUNBURST_DIM_PALETTE[ci % SB_SUNBURST_DIM_PALETTE.length]
+      ci++
+      list.push({
+        name: dimName,
+        itemStyle: { color: base },
+        children: leaves.map((leaf, i) => ({
+          name: leaf.name,
+          value: leaf.value,
+          fullPath: leaf.fullPath,
+          itemStyle: { color: echarts.color.lift(base, (i % 5) * 0.07) }
+        }))
+      })
+    }
+    return list
+  }
+
+  const effChildren = dimChildren(wEff, effDims, effInd)
+  const eqChildren = dimChildren(wEq, eqDims, eqInd)
+
+  const children = []
+  if (effChildren.length) {
+    children.push({
+      name: '效能',
+      itemStyle: { color: SB_SUNBURST_BRANCH[0] },
+      children: effChildren
+    })
+  }
+  if (eqChildren.length) {
+    children.push({
+      name: '装备',
+      itemStyle: { color: SB_SUNBURST_BRANCH[1] },
+      children: eqChildren
+    })
+  }
+  if (!children.length) return null
+
+  return {
+    name: '',
+    itemStyle: { color: '#001f3f' },
+    children
+  }
+}
+
+/** 无 aggregatedUnified 时，仅由叶子行（多为效能）组树 */
+function buildSunburstTreeFromLeafRows(rows) {
+  if (!rows?.length) return null
+  const effRows = rows.filter((r) => r.systemKey === 'efficiency')
+  const eqRows = rows.filter((r) => r.systemKey === 'equipment')
+  const children = []
+
+  function branch(name, list, color) {
+    const byDim = new Map()
+    for (const r of list) {
+      if (!byDim.has(r.dimension)) byDim.set(r.dimension, [])
+      byDim.get(r.dimension).push(r)
+    }
+    let ci = 0
+    const dimChildren = []
+    for (const [dimName, arr] of byDim) {
+      const base = SB_SUNBURST_DIM_PALETTE[ci % SB_SUNBURST_DIM_PALETTE.length]
+      ci++
+      dimChildren.push({
+        name: dimName,
+        itemStyle: { color: base },
+        children: arr.map((row, i) => ({
+          name: shortLeafLabel(row.indicator),
+          value: Math.max(1e-9, Number(row.weight) * 100),
+          fullPath: `${dimName} · ${row.indicator}`,
+          itemStyle: { color: echarts.color.lift(base, (i % 5) * 0.07) }
+        }))
+      })
+    }
+    return { name, itemStyle: { color }, children: dimChildren }
+  }
+
+  if (effRows.length) children.push(branch('效能', effRows, SB_SUNBURST_BRANCH[0]))
+  if (eqRows.length) children.push(branch('装备', eqRows, SB_SUNBURST_BRANCH[1]))
+  if (!children.length) return null
+  return {
+    name: '',
+    itemStyle: { color: '#001f3f' },
+    children
+  }
+}
+
+function renderCollectiveLeafSunburst() {
+  const src = collectiveResult.value ?? weightPreview.value
+  if (!collectiveSunburstRef.value || !src) return
+
+  if (collectiveSunburstChart) {
+    const dom = collectiveSunburstChart.getDom()
     if (!dom?.isConnected) {
-      indWeightChart.dispose()
-      indWeightChart = null
+      collectiveSunburstChart.dispose()
+      collectiveSunburstChart = null
     }
   }
-  if (!indWeightChart) {
-    indWeightChart = echarts.init(indWeightChartRef.value)
+  if (!collectiveSunburstChart) {
+    collectiveSunburstChart = echarts.init(collectiveSunburstRef.value)
   }
 
-  const indWeights = src.indicatorWeights
-  const indicators = Object.keys(indWeights).sort()
-  const values = indicators.map((ind) =>
-    Number((Number(indWeights[ind]) || 0) * 100).toFixed(2)
+  const snap = aggregatedUnified.value
+  let root = snap ? buildSunburstTreeFromSnapshot(snap) : null
+  if (!root) {
+    root = buildSunburstTreeFromLeafRows(collectiveAllLeafRows.value)
+  }
+  if (!root) {
+    collectiveSunburstChart.clear()
+    return
+  }
+
+  collectiveSunburstChart.setOption({
+    tooltip: {
+      trigger: 'item',
+      confine: true,
+      formatter(p) {
+        const v = p.value
+        const pct = typeof v === 'number' ? `${v.toFixed(4)}%` : String(p.value)
+        const extra = p.data?.fullPath
+        if (extra && p.treePathInfo?.length >= 4) {
+          return `<div style="max-width:300px;line-height:1.6">${extra}<br/>占全体：<b>${pct}</b></div>`
+        }
+        const path = p.treePathInfo?.map((x) => x.name).filter(Boolean).slice(1).join(' → ') || ''
+        return `<div style="max-width:300px;line-height:1.6">${path}<br/>占全体：<b>${pct}</b></div>`
+      }
+    },
+    series: [
+      {
+        type: 'sunburst',
+        data: [root],
+        radius: ['10%', '92%'],
+        sort: 'desc',
+        nodeClick: false,
+        emphasis: {
+          focus: 'ancestor',
+          itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.18)' }
+        },
+        itemStyle: {
+          borderRadius: 2,
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.92)'
+        },
+        levels: [
+          { r0: '0%', r: '10%', label: { show: false }, itemStyle: { color: '#001f3f', borderWidth: 0 } },
+          {
+            r0: '10%',
+            r: '30%',
+            label: {
+              show: true,
+              rotate: 'radial',
+              minAngle: 6,
+              fontSize: 11,
+              fontWeight: 'bold',
+              color: '#fff',
+              textBorderColor: 'rgba(0,31,63,0.45)',
+              textBorderWidth: 1.2,
+              position: 'inside',
+              overflow: 'truncate',
+              width: 56
+            },
+            itemStyle: { borderWidth: 1 }
+          },
+          {
+            r0: '30%',
+            r: '54%',
+            label: {
+              show: true,
+              rotate: 'radial',
+              minAngle: 4,
+              fontSize: 10,
+              color: '#fff',
+              textBorderColor: 'rgba(0,0,0,0.25)',
+              position: 'inside',
+              overflow: 'truncate',
+              width: 64
+            },
+            itemStyle: { borderWidth: 1 }
+          },
+          { r0: '54%', r: '92%', label: { show: false }, itemStyle: { borderWidth: 1 } }
+        ]
+      }
+    ]
+  })
+  collectiveSunburstChart.resize()
+}
+
+/** 集结结果中装备操作体系内维度权重柱状图（4.2c） */
+function renderEqCollectiveDimChart() {
+  const eq = aggregatedUnified.value?.equipment?.dimensionWeights
+  if (!eqCollectiveDimChartRef.value || !eq || typeof eq !== 'object') return
+
+  if (eqCollectiveDimChart) {
+    const dom = eqCollectiveDimChart.getDom()
+    if (!dom?.isConnected) {
+      eqCollectiveDimChart.dispose()
+      eqCollectiveDimChart = null
+    }
+  }
+  if (!eqCollectiveDimChart) {
+    eqCollectiveDimChart = echarts.init(eqCollectiveDimChartRef.value)
+  }
+
+  const dims = Object.keys(eq).sort()
+  const values = dims.map((d) =>
+    Number((Number(eq[d]) || 0) * 100).toFixed(2)
   )
-
-  const colors = []
-  const colorMap = {
-    '安全性': '#409EFF',
-    '可靠性': '#67C23A',
-    '传输能力': '#E6A23C',
-    '抗干扰能力': '#F56C6C',
-    '效能影响': '#909399'
-  }
-  const indDimMap = {
-    '密钥泄露得分': '安全性', '被侦察得分': '安全性', '抗拦截得分': '安全性',
-    '崩溃比例得分': '可靠性', '恢复能力得分': '可靠性', '通信可用得分': '可靠性',
-    '带宽得分': '传输能力', '呼叫建立得分': '传输能力', '传输时延得分': '传输能力',
-    '误码率得分': '传输能力', '吞吐量得分': '传输能力', '频谱效率得分': '传输能力',
-    '信干噪比得分': '抗干扰能力', '抗干扰余量得分': '抗干扰能力', '通信距离得分': '抗干扰能力',
-    '战损率得分': '效能影响', '任务完成率得分': '效能影响', '致盲率得分': '效能影响'
-  }
 
   const option = {
     title: {
-      text: '二级指标综合权重分布',
+      text: '装备操作 · 维度层权重分布',
       left: 'center',
       textStyle: { fontSize: 14 }
     },
@@ -1150,11 +1661,11 @@ function renderIndWeightChart() {
         return `<strong>${p.name}</strong><br/>权重: <strong>${p.value}%</strong>`
       }
     },
-    grid: { left: '3%', right: '4%', bottom: '25%', containLabel: true },
+    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
     xAxis: {
       type: 'category',
-      data: indicators,
-      axisLabel: { rotate: 45, fontSize: 10, interval: 0 }
+      data: dims,
+      axisLabel: { rotate: 18, fontSize: 12 }
     },
     yAxis: {
       type: 'value',
@@ -1165,13 +1676,20 @@ function renderIndWeightChart() {
       type: 'bar',
       data: values.map((v, i) => ({
         value: v,
-        itemStyle: { color: colorMap[indDimMap[indicators[i]]] || '#409EFF' }
+        itemStyle: {
+          color: ['#E6A23C', '#F56C6C', '#909399', '#67C23A', '#409EFF', '#b37feb'][i % 6]
+        }
       })),
-      label: { show: false }
+      label: {
+        show: true,
+        position: 'top',
+        formatter: (p) => p.value + '%',
+        fontSize: 11
+      }
     }]
   }
-  indWeightChart.setOption(option, true)
-  indWeightChart.resize()
+  eqCollectiveDimChart.setOption(option, true)
+  eqCollectiveDimChart.resize()
 }
 
 async function loadData() {
@@ -1186,6 +1704,7 @@ async function loadData() {
       renderIndicatorChart()
       renderEqDimensionChart()
       renderEqIndicatorChart()
+      renderUnifiedLeafChart()
     })
   } catch (error) {
     console.error('加载数据失败:', error)
@@ -1402,6 +1921,106 @@ function renderEqIndicatorChart() {
   eqIndicatorChart.resize()
 }
 
+function renderUnifiedLeafChart() {
+  if (!unifiedLeafChartRef.value) return
+  if (!unifiedLeafChart) {
+    unifiedLeafChart = echarts.init(unifiedLeafChartRef.value)
+  }
+  const unified = allData.value?.unifiedLeafCvs || []
+  if (!unified.length) {
+    unifiedLeafChart.clear()
+    return
+  }
+  // Top 20 按均值降序
+  const sorted = [...unified].sort((a, b) => b.mean - a.mean).slice(0, 20)
+  const option = {
+    title: { text: '综合叶子全局权重均值 Top 20', left: 'center', textStyle: { fontSize: 14 } },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        const item = sorted[params[0].dataIndex]
+        return `${item.indicatorName}<br/>域: ${item.domainTag}<br/>维度: ${item.dimension}<br/>均值: ${(item.mean * 100).toFixed(2)}%<br/>CV: ${item.cv.toFixed(2)}%`
+      }
+    },
+    xAxis: { type: 'category', data: sorted.map((i) => i.indicatorName), axisLabel: { rotate: 40, fontSize: 9 } },
+    yAxis: { type: 'value', name: '全局权重均值', axisLabel: { formatter: (v) => (v * 100).toFixed(1) + '%' } },
+    series: [
+      {
+        name: '均值',
+        type: 'bar',
+        data: sorted.map((i) => i.mean),
+        itemStyle: {
+          color: (params) => params.dataIndex < 10 ? '#67C23A' : '#909399'
+        },
+        label: {
+          show: true,
+          position: 'top',
+          formatter: (params) => (params.value * 100).toFixed(1) + '%',
+          fontSize: 9,
+          rotate: 40
+        }
+      }
+    ],
+    grid: { left: '3%', right: '4%', bottom: '25%', containLabel: true }
+  }
+  unifiedLeafChart.setOption(option)
+  unifiedLeafChart.resize()
+}
+
+// 综合叶子表格数据
+const unifiedLeafTableData = computed(() => {
+  const all = allData.value?.unifiedLeafCvs || []
+  return all.map((item) => ({
+    indicatorCode: item.indicatorCode,
+    indicatorName: item.indicatorName,
+    dimension: item.dimension,
+    domainTag: item.domainTag,
+    allMean: item.mean,
+    allCv: item.cv,
+    allLevel: item.consistencyLevel,
+    allStdDev: item.stdDev
+  }))
+})
+
+const unifiedLeafFilteredData = computed(() => {
+  const filtered = filteredExtreme.value?.unifiedLeafCvs || []
+  return filtered.map((item) => ({
+    indicatorCode: item.indicatorCode,
+    indicatorName: item.indicatorName,
+    dimension: item.dimension,
+    domainTag: item.domainTag,
+    filteredMean: item.mean,
+    filteredCv: item.cv,
+    filteredLevel: item.consistencyLevel,
+    filteredStdDev: item.stdDev
+  }))
+})
+
+function fmtPct(row, col, val) {
+  return val != null ? (val * 100).toFixed(2) + '%' : '-'
+}
+
+function fmtCv(cv) {
+  return cv != null ? cv.toFixed(2) + '%' : '-'
+}
+
+function cvColor(cv) {
+  if (cv == null) return '#666'
+  if (cv <= 15) return '#67C23A'
+  if (cv <= 25) return '#E6A23C'
+  if (cv <= 35) return '#F56C6C'
+  return '#C0392B'
+}
+
+function levelTagType(level) {
+  if (level === '高度一致') return 'success'
+  if (level === '较为一致') return 'warning'
+  if (level === '轻度分歧') return 'warning'
+  if (level === '严重分歧') return 'danger'
+  return 'info'
+}
+
 // ==================== 集结计算函数 ====================
 
 const dimensionIndicatorMap = {
@@ -1412,19 +2031,43 @@ const dimensionIndicatorMap = {
   '效能影响': ['战损率得分', '任务完成率得分', '致盲率得分']
 }
 
-const indicatorWeightTableData = computed(() => {
-  if (!activeCollectiveWeights.value?.indicatorWeights) return []
+/** 第四节合并表/图：叶子全局综合权重（优先 aggregatedUnified.allLeaves，否则仅效能 indicatorWeights） */
+const collectiveAllLeafRows = computed(() => {
+  const unified = aggregatedUnified.value
+  const leaves = unified?.allLeaves
+  if (Array.isArray(leaves) && leaves.length > 0) {
+    return leaves
+      .map((leaf) => {
+        const dk = leaf.domain === 'equipment' ? 'equipment' : 'efficiency'
+        return {
+          systemKey: dk,
+          systemLabel: dk === 'equipment' ? '装备操作' : '效能',
+          dimension: leaf.dimension || '—',
+          indicator: leaf.indicator || '—',
+          weight: Number(leaf.globalWeight) || 0
+        }
+      })
+      .sort((a, b) => b.weight - a.weight)
+  }
+  const src = activeCollectiveWeights.value
+  if (!src?.indicatorWeights) return []
+  const iw = src.indicatorWeights
   const result = []
-  const iw = activeCollectiveWeights.value.indicatorWeights
   for (const [dim, indicators] of Object.entries(dimensionIndicatorMap)) {
     for (const ind of indicators) {
       const w = iw[ind]
       if (w !== undefined) {
-        result.push({ indicator: ind, dimension: dim, weight: w })
+        result.push({
+          systemKey: 'efficiency',
+          systemLabel: '效能',
+          dimension: dim,
+          indicator: ind,
+          weight: Number(w) || 0
+        })
       }
     }
   }
-  return result
+  return result.sort((a, b) => b.weight - a.weight)
 })
 
 async function loadEvaluationIds() {
@@ -1468,11 +2111,14 @@ async function previewWeights() {
     weightPreview.value = await previewCollectiveWeights(params)
     collectiveResult.value = null
     selectedMatrix.value = 'dim'
+    matrixSystem.value = 'efficacy'
+    selectedEqView.value = 'eq-dim'
 
     ElMessage.success('权重预览已更新')
     nextTick(() => {
       renderDimWeightChart()
-      renderIndWeightChart()
+      renderCollectiveLeafSunburst()
+      renderEqCollectiveDimChart()
     })
   } catch (error) {
     console.error('预览权重失败:', error)
@@ -1498,7 +2144,8 @@ async function executeCalculation() {
     ElMessage.success('集结权重已保存。综合得分请至「评估结果计算」点击「加载综合结果」，或在综合评分区「生成综合得分」。')
     nextTick(() => {
       renderDimWeightChart()
-      renderIndWeightChart()
+      renderCollectiveLeafSunburst()
+      renderEqCollectiveDimChart()
     })
   } catch (error) {
     console.error('集结计算失败:', error)
@@ -1549,7 +2196,8 @@ onMounted(() => {
     eqDimensionChart?.resize()
     eqIndicatorChart?.resize()
     dimWeightChart?.resize()
-    indWeightChart?.resize()
+    collectiveSunburstChart?.resize()
+    eqCollectiveDimChart?.resize()
   })
 })
 </script>
@@ -1706,6 +2354,29 @@ onMounted(() => {
 }
 
 // ==================== 集结计算样式 ====================
+.combined-leaf-hint {
+  font-size: 12px;
+  color: #909399;
+  margin: 0 0 10px 0;
+  line-height: 1.5;
+}
+
+.weight-chart-section--sunburst {
+  .sunburst-hint {
+    font-size: 12px;
+    color: #909399;
+    margin: 0 0 10px 0;
+    line-height: 1.5;
+    text-align: center;
+  }
+}
+
+.collective-sunburst-chart {
+  width: 100%;
+  min-height: 420px;
+  height: 440px;
+}
+
 .collective-card {
   margin-bottom: 16px;
 
@@ -1754,6 +2425,24 @@ onMounted(() => {
       color: #409eff;
     }
   }
+
+  .weight-item--eq strong {
+    color: #e6a23c;
+  }
+}
+
+.matrix-selector--system {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.matrix-system-label {
+  font-size: 13px;
+  color: #606266;
 }
 
 .result-toolbar {
@@ -1914,6 +2603,16 @@ onMounted(() => {
 
 .code-field {
   font-size: 12px;
+}
+
+.unified-leaf-section {
+  margin-bottom: 20px;
+}
+
+.unified-leaf-card {
+  .el-tabs {
+    margin-bottom: 16px;
+  }
 }
 
 </style>

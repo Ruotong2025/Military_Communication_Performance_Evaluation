@@ -42,6 +42,12 @@ public class CollectiveCalculateResponse {
     /** 专家权重明细 */
     private List<ExpertWeightDetail> expertWeights;
 
+    /**
+     * 集结后的完整层次（域间一级 + 效能体系 + 装备体系 + 叶子全局权重），
+     * 与个体快照 {@link com.ccnu.military.dto.AhpIndividualResult} 结构一致，供前端一级/二级/三级与旭日图展示。
+     */
+    private com.ccnu.military.dto.AhpIndividualResult aggregatedUnified;
+
     // ==================== 集体判断矩阵 ====================
     /** 集体比较打分（用于展示矩阵） */
     private Map<String, Double> collectiveScores;

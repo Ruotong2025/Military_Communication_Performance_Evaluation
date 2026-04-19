@@ -42,6 +42,9 @@ public class CollectiveWeightPreview {
     /** 专家权重明细 */
     private List<CollectiveCalculateResponse.ExpertWeightDetail> expertWeights;
 
+    /** 与 {@link CollectiveCalculateResponse#getAggregatedUnified()} 相同 */
+    private com.ccnu.military.dto.AhpIndividualResult aggregatedUnified;
+
     // ==================== 集体判断矩阵 ====================
     /**
      * 集体比较打分

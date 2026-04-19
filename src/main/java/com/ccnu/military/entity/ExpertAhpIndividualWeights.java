@@ -1,20 +1,24 @@
 package com.ccnu.military.entity;
 
 import lombok.Data;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import javax.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 专家 AHP 计算结果快照：与库表分列字段对齐，便于在 Navicat 中直接查看；
- * ahp_result_json 仍保存完整 MatrixCalculationResult 供前后端使用。
+ * 专家 AHP 统一层次权重快照：一张表同时存效能与装备，
+ * 所有叶子指标的全局权重之和为 1。
+ * <p>
+ * 层次结构：
+ * 根 → 域间一级（效能 vs 装备）→ 效能维度（5维）/ 装备维度 → 叶子指标
  */
 @Data
 @Entity
-@Table(name = "expert_ahp_individual_weights", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_expert_id", columnNames = {"expert_id"})
-})
+@Table(name = "expert_ahp_individual_weights",
+       uniqueConstraints = @UniqueConstraint(name = "uk_expert_id", columnNames = {"expert_id"}))
+@EntityListeners(AuditingEntityListener.class)
 public class ExpertAhpIndividualWeights {
 
     @Id
@@ -27,87 +31,59 @@ public class ExpertAhpIndividualWeights {
     @Column(name = "expert_name", length = 100)
     private String expertName;
 
-    /** 完整计算结果 JSON（维度层、指标层、综合权重、CR 等） */
-    @Column(name = "ahp_result_json", columnDefinition = "LONGTEXT")
-    private String resultJson;
-
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // ---------- 一级维度权重（与维度层 AHP 一致）----------
-    @Column(name = "security_weight", precision = 10, scale = 6)
-    private BigDecimal securityWeight;
+    // ── 域间一级（效能 vs 装备）────────────────────────────────────────
+    @Column(name = "eff_domain_weight", precision = 10, scale = 6)
+    private BigDecimal effDomainWeight;
 
-    @Column(name = "reliability_weight", precision = 10, scale = 6)
-    private BigDecimal reliabilityWeight;
+    @Column(name = "eq_domain_weight", precision = 10, scale = 6)
+    private BigDecimal eqDomainWeight;
 
-    @Column(name = "transmission_weight", precision = 10, scale = 6)
-    private BigDecimal transmissionWeight;
+    @Column(name = "cross_domain_score", precision = 10, scale = 6)
+    private BigDecimal crossDomainScore;
 
-    @Column(name = "anti_jamming_weight", precision = 10, scale = 6)
-    private BigDecimal antiJammingWeight;
+    @Column(name = "cross_domain_confidence", precision = 3, scale = 2)
+    private BigDecimal crossDomainConfidence;
 
-    @Column(name = "effect_weight", precision = 10, scale = 6)
-    private BigDecimal effectWeight;
+    // ── 效能维度层（数量不固定，存 JSON）──────────────────────────────
+    @Column(name = "eff_dim_weights_json", columnDefinition = "LONGTEXT")
+    private String effDimWeightsJson;
 
-    // ---------- 二级指标对总目标的综合权重（维度权重 × 指标层权重）----------
-    @Column(name = "security_key_leakage_weight", precision = 10, scale = 6)
-    private BigDecimal securityKeyLeakageWeight;
+    @Column(name = "eff_dim_count")
+    private Integer effDimCount;
 
-    @Column(name = "security_detected_probability_weight", precision = 10, scale = 6)
-    private BigDecimal securityDetectedProbabilityWeight;
+    // ── 效能叶子指标全局权重（数量不固定，存 JSON）──────────────────
+    @Column(name = "eff_leaf_weights_json", columnDefinition = "LONGTEXT")
+    private String effLeafWeightsJson;
 
-    @Column(name = "security_interception_resistance_weight", precision = 10, scale = 6)
-    private BigDecimal securityInterceptionResistanceWeight;
+    @Column(name = "eff_leaf_count")
+    private Integer effLeafCount;
 
-    @Column(name = "reliability_crash_rate_weight", precision = 10, scale = 6)
-    private BigDecimal reliabilityCrashRateWeight;
+    // ── 效能 CR─────────────────────────────────────────────────────
+    @Column(name = "eff_cr", precision = 8, scale = 6)
+    private BigDecimal effCr;
 
-    @Column(name = "reliability_recovery_capability_weight", precision = 10, scale = 6)
-    private BigDecimal reliabilityRecoveryCapabilityWeight;
+    // ── 装备维度层（数量不固定，存 JSON）─────────────────────────────────
+    @Column(name = "eq_dim_weights_json", columnDefinition = "LONGTEXT")
+    private String eqDimWeightsJson;
 
-    @Column(name = "reliability_communication_availability_weight", precision = 10, scale = 6)
-    private BigDecimal reliabilityCommunicationAvailabilityWeight;
+    @Column(name = "eq_dim_count")
+    private Integer eqDimCount;
 
-    @Column(name = "transmission_bandwidth_weight", precision = 10, scale = 6)
-    private BigDecimal transmissionBandwidthWeight;
+    // ── 装备叶子指标全局权重（数量不固定，存 JSON）──────────────────────
+    @Column(name = "eq_leaf_weights_json", columnDefinition = "LONGTEXT")
+    private String eqLeafWeightsJson;
 
-    @Column(name = "transmission_call_setup_time_weight", precision = 10, scale = 6)
-    private BigDecimal transmissionCallSetupTimeWeight;
+    @Column(name = "eq_leaf_count")
+    private Integer eqLeafCount;
 
-    @Column(name = "transmission_transmission_delay_weight", precision = 10, scale = 6)
-    private BigDecimal transmissionTransmissionDelayWeight;
+    // ── 装备一致性比率─────────────────────────────────────────────────
+    @Column(name = "eq_cr_json", columnDefinition = "LONGTEXT")
+    private String eqCrJson;
 
-    @Column(name = "transmission_bit_error_rate_weight", precision = 10, scale = 6)
-    private BigDecimal transmissionBitErrorRateWeight;
-
-    @Column(name = "transmission_throughput_weight", precision = 10, scale = 6)
-    private BigDecimal transmissionThroughputWeight;
-
-    @Column(name = "transmission_spectral_efficiency_weight", precision = 10, scale = 6)
-    private BigDecimal transmissionSpectralEfficiencyWeight;
-
-    @Column(name = "anti_jamming_sinr_weight", precision = 10, scale = 6)
-    private BigDecimal antiJammingSinrWeight;
-
-    @Column(name = "anti_jamming_anti_jamming_margin_weight", precision = 10, scale = 6)
-    private BigDecimal antiJammingAntiJammingMarginWeight;
-
-    @Column(name = "anti_jamming_communication_distance_weight", precision = 10, scale = 6)
-    private BigDecimal antiJammingCommunicationDistanceWeight;
-
-    @Column(name = "effect_damage_rate_weight", precision = 10, scale = 6)
-    private BigDecimal effectDamageRateWeight;
-
-    @Column(name = "effect_mission_completion_rate_weight", precision = 10, scale = 6)
-    private BigDecimal effectMissionCompletionRateWeight;
-
-    @Column(name = "effect_blind_rate_weight", precision = 10, scale = 6)
-    private BigDecimal effectBlindRateWeight;
-
-    @PrePersist
-    @PreUpdate
-    protected void touch() {
-        updatedAt = LocalDateTime.now();
-    }
+    // ── 完整结果 JSON（供前后端完整渲染）────────────────────────────────
+    @Column(name = "ahp_result_json", columnDefinition = "LONGTEXT")
+    private String ahpResultJson;
 }

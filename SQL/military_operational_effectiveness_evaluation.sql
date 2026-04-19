@@ -415,49 +415,55 @@ CREATE TABLE `expert_ahp_comparison_score`  (
 -- Table structure for expert_ahp_group_weights
 -- ----------------------------
 DROP TABLE IF EXISTS `expert_ahp_group_weights`;
-CREATE TABLE `expert_ahp_group_weights`  (
+CREATE TABLE `expert_ahp_group_weights` (
   `id` bigint NOT NULL AUTO_INCREMENT,
+
+  -- 专家组基本信息
   `group_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '专家组ID（UUID）',
-  `expert_ids` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '专家ID集合（按ID排序，逗号分隔），作为唯一标识',
-  `expert_count` int NOT NULL COMMENT '参与专家数量',
-  `group_name` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '专家组名称（可选描述）',
-  `cr_dim` decimal(8, 6) NULL DEFAULT NULL COMMENT '维度层CR',
-  `cr_security` decimal(8, 6) NULL DEFAULT NULL COMMENT '安全性指标层CR',
-  `cr_reliability` decimal(8, 6) NULL DEFAULT NULL COMMENT '可靠性指标层CR',
-  `cr_transmission` decimal(8, 6) NULL DEFAULT NULL COMMENT '传输能力指标层CR',
-  `cr_anti_jamming` decimal(8, 6) NULL DEFAULT NULL COMMENT '抗干扰能力指标层CR',
-  `cr_effect` decimal(8, 6) NULL DEFAULT NULL COMMENT '效能影响指标层CR',
-  `dim_weight_security` decimal(10, 6) NULL DEFAULT NULL COMMENT '安全性维度权重',
-  `dim_weight_reliability` decimal(10, 6) NULL DEFAULT NULL COMMENT '可靠性维度权重',
-  `dim_weight_transmission` decimal(10, 6) NULL DEFAULT NULL COMMENT '传输能力维度权重',
-  `dim_weight_anti_jamming` decimal(10, 6) NULL DEFAULT NULL COMMENT '抗干扰能力维度权重',
-  `dim_weight_effect` decimal(10, 6) NULL DEFAULT NULL COMMENT '效能影响维度权重',
-  `ind_weight_key_leakage` decimal(10, 6) NULL DEFAULT NULL COMMENT '密钥泄露得分权重',
-  `ind_weight_detected_probability` decimal(10, 6) NULL DEFAULT NULL COMMENT '被侦察得分权重',
-  `ind_weight_interception_resistance` decimal(10, 6) NULL DEFAULT NULL COMMENT '抗拦截得分权重',
-  `ind_weight_crash_rate` decimal(10, 6) NULL DEFAULT NULL COMMENT '崩溃比例得分权重',
-  `ind_weight_recovery_capability` decimal(10, 6) NULL DEFAULT NULL COMMENT '恢复能力得分权重',
-  `ind_weight_communication_availability` decimal(10, 6) NULL DEFAULT NULL COMMENT '通信可用得分权重',
-  `ind_weight_bandwidth` decimal(10, 6) NULL DEFAULT NULL COMMENT '带宽得分权重',
-  `ind_weight_call_setup_time` decimal(10, 6) NULL DEFAULT NULL COMMENT '呼叫建立得分权重',
-  `ind_weight_transmission_delay` decimal(10, 6) NULL DEFAULT NULL COMMENT '传输时延得分权重',
-  `ind_weight_bit_error_rate` decimal(10, 6) NULL DEFAULT NULL COMMENT '误码率得分权重',
-  `ind_weight_throughput` decimal(10, 6) NULL DEFAULT NULL COMMENT '吞吐量得分权重',
-  `ind_weight_spectral_efficiency` decimal(10, 6) NULL DEFAULT NULL COMMENT '频谱效率得分权重',
-  `ind_weight_sinr` decimal(10, 6) NULL DEFAULT NULL COMMENT '信干噪比得分权重',
-  `ind_weight_anti_jamming_margin` decimal(10, 6) NULL DEFAULT NULL COMMENT '抗干扰余量得分权重',
-  `ind_weight_communication_distance` decimal(10, 6) NULL DEFAULT NULL COMMENT '通信距离得分权重',
-  `ind_weight_damage_rate` decimal(10, 6) NULL DEFAULT NULL COMMENT '战损率得分权重',
-  `ind_weight_mission_completion_rate` decimal(10, 6) NULL DEFAULT NULL COMMENT '任务完成率得分权重',
-  `ind_weight_blind_rate` decimal(10, 6) NULL DEFAULT NULL COMMENT '致盲率得分权重',
-  `expert_weights_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '专家权重明细（JSON格式）',
+  `expert_ids` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '专家ID集合（排序后逗号分隔），唯一标识',
+  `expert_count` int DEFAULT NULL COMMENT '专家数量',
+  `group_name` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '专家组名称',
+  `updated_at` datetime DEFAULT NULL,
+
+  -- 域间一级（效能 vs 装备）
+  `cross_domain_score` decimal(10,6) DEFAULT NULL COMMENT '域间 Saaty 标度 a（效能相对装备）',
+  `cross_domain_confidence` decimal(3,2) DEFAULT NULL COMMENT '域间把握度',
+  `eff_domain_weight` decimal(10,6) DEFAULT NULL COMMENT '域间：效能体系全局权重 w_eff=a/(1+a)',
+  `eq_domain_weight` decimal(10,6) DEFAULT NULL COMMENT '域间：装备体系全局权重 w_eq=1/(1+a)',
+
+  -- 效能维度层
+  `eff_dim_weights_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '效能维度层权重 JSON {dimName: weight}',
+  `eff_dim_count` int DEFAULT NULL COMMENT '效能维度数量',
+
+  -- 效能叶子指标
+  `eff_leaf_weights_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '效能叶子指标全局权重 JSON Array of {dim,indicator,globalWeight}',
+  `eff_leaf_count` int DEFAULT NULL COMMENT '效能叶子指标数量',
+  `eff_cr` decimal(8,6) DEFAULT NULL COMMENT '效能维度层 CR',
+
+  -- 装备维度层
+  `eq_dim_weights_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '装备维度层权重 JSON {dimName: weight}',
+  `eq_dim_count` int DEFAULT NULL COMMENT '装备维度数量',
+
+  -- 装备叶子指标
+  `eq_leaf_weights_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '装备叶子指标全局权重 JSON Array of {dim,indicator,globalWeight}',
+  `eq_leaf_count` int DEFAULT NULL COMMENT '装备叶子指标数量',
+  `eq_cr_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '装备各层 CR JSON',
+
+  -- 专家权重明细
+  `expert_weights_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '专家权重明细 JSON（可信度信息）',
+
+  -- 完整快照
+  `aggregated_unified_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '集结后完整统一快照 JSON（参照 AhpIndividualResult）',
+
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_expert_ids`(`expert_ids` ASC) USING BTREE,
-  INDEX `idx_group_id`(`group_id` ASC) USING BTREE,
-  INDEX `idx_created_at`(`created_at` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '专家集结权重快照' ROW_FORMAT = Dynamic;
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_expert_ids` (`expert_ids`)
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '专家集结 AHP 统一层次权重快照（效能+装备完整展开）' ROW_FORMAT = Dynamic;
+  UNIQUE KEY `uk_expert_ids` (`expert_ids`)
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '专家集结 AHP 统一层次权重快照（效能+装备完整展开）' ROW_FORMAT = Dynamic;
+  UNIQUE KEY `uk_expert_ids` (`expert_ids`)
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '专家集结 AHP 统一层次权重快照（效能+装备完整展开）' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Table structure for expert_ahp_individual_weights
@@ -467,34 +473,39 @@ CREATE TABLE `expert_ahp_individual_weights`  (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `expert_id` bigint NOT NULL,
   `expert_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  `ahp_result_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT 'MatrixCalculationResult JSON（维度层+指标层+综合权重+CR等）',
   `updated_at` datetime NULL DEFAULT NULL,
-  `security_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '一级：安全性',
-  `reliability_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '一级：可靠性',
-  `transmission_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '一级：传输能力',
-  `anti_jamming_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '一级：抗干扰能力',
-  `effect_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '一级：效能影响',
-  `security_key_leakage_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：密钥泄露得分',
-  `security_detected_probability_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：被侦察得分',
-  `security_interception_resistance_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：抗拦截得分',
-  `reliability_crash_rate_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：崩溃比例得分',
-  `reliability_recovery_capability_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：恢复能力得分',
-  `reliability_communication_availability_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：通信可用得分',
-  `transmission_bandwidth_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：带宽得分',
-  `transmission_call_setup_time_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：呼叫建立得分',
-  `transmission_transmission_delay_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：传输时延得分',
-  `transmission_bit_error_rate_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：误码率得分',
-  `transmission_throughput_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：吞吐量得分',
-  `transmission_spectral_efficiency_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：频谱效率得分',
-  `anti_jamming_sinr_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：信干噪比得分',
-  `anti_jamming_anti_jamming_margin_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：抗干扰余量得分',
-  `anti_jamming_communication_distance_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：通信距离得分',
-  `effect_damage_rate_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：战损率得分',
-  `effect_mission_completion_rate_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：任务完成率得分',
-  `effect_blind_rate_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '综合：致盲率得分',
+
+  -- 域间一级（效能 vs 装备）
+  `eff_domain_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '域间：效能体系全局权重 w_eff=a/(1+a)',
+  `eq_domain_weight` decimal(10, 6) NULL DEFAULT NULL COMMENT '域间：装备体系全局权重 w_eq=1/(1+a)',
+  `cross_domain_score` decimal(10, 6) NULL DEFAULT NULL COMMENT '域间 Saaty 标度 a（效能相对装备）',
+  `cross_domain_confidence` decimal(3, 2) NULL DEFAULT NULL COMMENT '域间把握度 λ',
+
+  -- 效能维度层权重（数量不固定，存 JSON）
+  `eff_dim_weights_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '效能维度层权重 JSON {dimName: weight}',
+  `eff_dim_count` int NULL DEFAULT NULL COMMENT '效能维度数量',
+
+  -- 效能叶子指标全局权重（数量不固定，存 JSON）
+  `eff_leaf_weights_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '效能叶子指标全局权重 JSON Array of {dim,indicator,globalWeight}',
+  `eff_leaf_count` int NULL DEFAULT NULL COMMENT '效能叶子指标数量',
+
+  -- 装备维度层权重（数量不固定，存 JSON）
+  `eq_dim_weights_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '装备维度层权重 JSON {dimName: weight}',
+  `eq_dim_count` int NULL DEFAULT NULL COMMENT '装备维度数量',
+
+  -- 装备叶子指标全局权重（数量不固定，存 JSON）
+  `eq_leaf_weights_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '装备叶子指标全局权重 JSON Array of {dim,indicator,globalWeight}',
+  `eq_leaf_count` int NULL DEFAULT NULL COMMENT '装备叶子指标数量',
+
+  -- 一致性比率
+  `eff_cr` decimal(8, 6) NULL DEFAULT NULL COMMENT '效能维度层 CR',
+  `eq_cr_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '装备各层 CR 及效能指标层 CR JSON',
+
+  -- 完整结果 JSON（供前后端完整渲染）
+  `ahp_result_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '完整 AHP 统一计算结果 JSON',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_expert_id`(`expert_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 11 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '专家AHP层次总排序权重快照' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 11 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '专家AHP层次总排序权重快照（效能+装备统一展开，所有叶子全局权重之和=1）' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Table structure for expert_base_info
@@ -859,7 +870,7 @@ CREATE TABLE `records_security_events`  (
 DROP TABLE IF EXISTS `score_military_comm_effect`;
 CREATE TABLE `score_military_comm_effect`  (
   `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `evaluation_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '评估批次ID',
+  `evaluation_batch_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '评估批次ID',
   `operation_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '作战任务ID（与各层级表关联）',
   `security_key_leakage_qt` decimal(5, 2) NULL DEFAULT NULL COMMENT '密钥泄露得分',
   `security_detected_probability_qt` decimal(5, 2) NULL DEFAULT NULL COMMENT '被侦察得分',

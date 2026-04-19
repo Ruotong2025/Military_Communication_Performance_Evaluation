@@ -43,6 +43,25 @@ public interface ExpertAhpComparisonScoreRepository extends JpaRepository<Expert
     @Query("DELETE FROM ExpertAhpComparisonScore e WHERE e.expertId = :expertId AND e.comparisonKey NOT LIKE :prefix")
     void deleteEffectivenessByExpertId(@Param("expertId") Long expertId, @Param("prefix") String prefix);
 
+    /**
+     * 删除效能指标矩阵行，但保留「装备操作_」与「域间一级_」前缀（域间一级为效能 vs 装备的一级比较，单独持久化）
+     */
+    @Modifying
+    @Query("DELETE FROM ExpertAhpComparisonScore e WHERE e.expertId = :expertId "
+            + "AND e.comparisonKey NOT LIKE :equipmentPrefix AND e.comparisonKey NOT LIKE :crossDomainPrefix")
+    void deleteEffectivenessCorePreservingEquipmentAndCrossDomain(
+            @Param("expertId") Long expertId,
+            @Param("equipmentPrefix") String equipmentPrefix,
+            @Param("crossDomainPrefix") String crossDomainPrefix);
+
+    @Modifying
+    @Query("DELETE FROM ExpertAhpComparisonScore e WHERE e.expertId = :expertId AND e.comparisonKey = :comparisonKey")
+    void deleteByExpertIdAndComparisonKey(@Param("expertId") Long expertId, @Param("comparisonKey") String comparisonKey);
+
     @Query("SELECT DISTINCT e.expertId FROM ExpertAhpComparisonScore e WHERE e.comparisonKey LIKE CONCAT(:prefix, '%')")
     List<Long> findDistinctExpertIdsByComparisonKeyStartingWith(@Param("prefix") String prefix);
+
+    @Query("SELECT e FROM ExpertAhpComparisonScore e WHERE e.expertId = :expertId AND e.comparisonKey = :comparisonKey")
+    java.util.Optional<ExpertAhpComparisonScore> findByExpertIdAndComparisonKey(
+            @Param("expertId") Long expertId, @Param("comparisonKey") String comparisonKey);
 }

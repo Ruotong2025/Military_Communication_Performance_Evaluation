@@ -2,12 +2,12 @@ package com.ccnu.military.service;
 
 import com.ccnu.military.entity.EquipmentQlEvaluationRecord;
 import com.ccnu.military.entity.EquipmentQlIndicatorDef;
+import com.ccnu.military.entity.EquipmentQlAggregationResult;
 import com.ccnu.military.entity.ExpertBaseInfo;
-import com.ccnu.military.entity.QlAggregationResult;
 import com.ccnu.military.repository.EquipmentQlEvaluationRecordRepository;
 import com.ccnu.military.repository.EquipmentQlIndicatorDefRepository;
 import com.ccnu.military.repository.ExpertBaseInfoRepository;
-import com.ccnu.military.repository.QlAggregationResultRepository;
+import com.ccnu.military.repository.EquipmentQlAggregationResultRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,7 +37,7 @@ public class EquipmentQlEvaluationService {
     private final EquipmentQlIndicatorDefRepository qlDefRepository;
     private final EquipmentQlEvaluationRecordRepository qlRecordRepository;
     private final ExpertBaseInfoRepository expertRepository;
-    private final QlAggregationResultRepository qlAggResultRepository;
+    private final EquipmentQlAggregationResultRepository equipmentQlAggResultRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -1073,7 +1073,7 @@ public class EquipmentQlEvaluationService {
     }
 
     /**
-     * 将集结结果持久化到 ql_aggregation_result 表（Upsert 策略：相同 batch+operation+indicator 覆盖）。
+     * 将集结结果持久化到 equipment_ql_aggregation_result 表（Upsert 策略：相同 batch+operation+indicator 覆盖）。
      * 返回写入的记录数。
      */
     private int persistAggregationResult(
@@ -1100,14 +1100,14 @@ public class EquipmentQlEvaluationService {
                     ? details.stream().map(e -> ((Number) e.get("expertId")).longValue()).collect(Collectors.toList())
                     : Collections.emptyList();
 
-            Optional<QlAggregationResult> existingOpt = qlAggResultRepository
+            Optional<EquipmentQlAggregationResult> existingOpt = equipmentQlAggResultRepository
                     .findByEvaluationBatchIdAndOperationIdAndIndicatorKey(batchId, operationId, indicatorKey);
 
-            QlAggregationResult entity;
+            EquipmentQlAggregationResult entity;
             if (existingOpt.isPresent()) {
                 entity = existingOpt.get();
             } else {
-                entity = new QlAggregationResult();
+                entity = new EquipmentQlAggregationResult();
                 entity.setEvaluationBatchId(batchId);
                 entity.setOperationId(operationId);
                 entity.setIndicatorKey(indicatorKey);
@@ -1124,7 +1124,7 @@ public class EquipmentQlEvaluationService {
             } catch (JsonProcessingException e) {
                 log.warn("序列化 JSON 失败: {}", e.getMessage());
             }
-            qlAggResultRepository.save(entity);
+            equipmentQlAggResultRepository.save(entity);
             count++;
         }
         return count;
@@ -1137,14 +1137,14 @@ public class EquipmentQlEvaluationService {
         if (batchId == null || batchId.isBlank() || operationId == null || operationId.isBlank()) {
             return Collections.emptyList();
         }
-        return qlAggResultRepository
+        return equipmentQlAggResultRepository
                 .findByEvaluationBatchIdAndOperationId(batchId, operationId)
                 .stream()
                 .map(this::convertAggResultToMap)
                 .collect(Collectors.toList());
     }
 
-    private Map<String, Object> convertAggResultToMap(QlAggregationResult r) {
+    private Map<String, Object> convertAggResultToMap(EquipmentQlAggregationResult r) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", r.getId());
         m.put("evaluationBatchId", r.getEvaluationBatchId());

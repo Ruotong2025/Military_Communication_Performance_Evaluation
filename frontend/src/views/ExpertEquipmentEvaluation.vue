@@ -283,11 +283,8 @@
               <span class="agg-weight-hint">与 w_α 为比例系数，计算时归一化为 1</span>
             </el-form-item>
             <el-form-item label="">
-              <el-button type="primary" :icon="Refresh" :loading="aggLoading" @click="loadQualitativeAggregation(false)">
-                计算集结结果
-              </el-button>
-              <el-button type="success" :icon="Refresh" :loading="aggSaving" :disabled="!aggResult || !aggResult.indicators" @click="saveAggregationResult">
-                保存集结结果
+              <el-button type="primary" :icon="Refresh" :loading="aggLoading" @click="loadQualitativeAggregation(true)">
+                计算并保存集结结果
               </el-button>
             </el-form-item>
           </el-form>

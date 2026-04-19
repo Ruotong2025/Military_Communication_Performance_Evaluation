@@ -139,7 +139,7 @@ public class EquipmentQlController {
      * - 群体结论质心 x*_j（文献式 4-21）= Σγ_kj·(a2-a1)·midpoint / Σγ_kj·(a2-a1)
      *
      * 支持批量（operationId=ALL）对批次内每个作战分别集结。
-     * 请求体参数 saveResult=true 时将结果写入 ql_aggregation_result 表。
+     * 请求体参数 saveResult=true 时将结果写入 equipment_ql_aggregation_result 表。
      */
     @PostMapping("/qualitative-aggregation")
     public ApiResponse<Map<String, Object>> qualitativeAggregation(@RequestBody Map<String, Object> payload) {
@@ -152,7 +152,7 @@ public class EquipmentQlController {
     }
 
     /**
-     * 查询已存储的集结结果（从 ql_aggregation_result 表）。
+     * 查询已存储的集结结果（从 equipment_ql_aggregation_result 表）。
      */
     @GetMapping("/aggregation-result")
     public ApiResponse<List<Map<String, Object>>> getStoredAggregationResult(

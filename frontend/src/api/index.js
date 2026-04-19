@@ -156,10 +156,37 @@ export function getExpertAhpIndividualWeights(expertId) {
   });
 }
 
+/** 查询统一 AHP 快照（域间 + 效能 + 装备，含 allLeaves 叶子全局权重） */
+export function getExpertUnifiedWeights(expertId) {
+  return request({
+    url: "/evaluation/expert-ahp/unified-weights",
+    method: "get",
+    params: { expertId },
+  });
+}
+
+/** 按库中打分重算并写入 expert_ahp_individual_weights，再用于 getExpertUnifiedWeights */
+export function recalculateExpertUnifiedWeights(expertId) {
+  return request({
+    url: "/evaluation/expert-ahp/unified-weights/recalculate",
+    method: "post",
+    params: { expertId },
+  });
+}
+
 /** 保存当前矩阵为该专家的 AHP 比较打分（覆盖写入） */
 export function saveExpertAhpScores(payload) {
   return request({
     url: "/evaluation/expert-ahp/scores",
+    method: "post",
+    data: payload,
+  });
+}
+
+/** 保存「效能指标 vs 装备操作」一级域间比较（单对） */
+export function saveCrossDomainExpertAhpScore(payload) {
+  return request({
+    url: "/evaluation/expert-ahp/cross-domain-score",
     method: "post",
     data: payload,
   });
@@ -765,7 +792,7 @@ export function getQlRecordForEdit(evaluationBatchId, operationId, expertId) {
  *   operationId       必填（支持 "ALL" 批量）
  *   wAlpha            可选，默认 0.5（权威度权重）
  *   wLambda           可选，默认 0.5（把握度权重）
- *   saveResult        可选，默认 false（是否持久化到 ql_aggregation_result 表）
+ *   saveResult        可选，默认 false（是否持久化到 equipment_ql_aggregation_result 表）
  */
 export function getQlQualitativeAggregation(params) {
   return request({
@@ -781,6 +808,127 @@ export function getQlQualitativeAggregation(params) {
 export function getStoredQlAggregationResult(evaluationBatchId, operationId) {
   return request({
     url: "/equipment/ql/aggregation-result",
+    method: "get",
+    params: { evaluationBatchId, operationId },
+  });
+}
+
+// ==================== 综合评分 API ====================
+
+/**
+ * 获取评估批次列表
+ */
+export function getComprehensiveBatches() {
+  return request({
+    url: "/equipment/comprehensive/batches",
+    method: "get",
+  });
+}
+
+/**
+ * 执行综合评分计算
+ */
+export function calculateComprehensiveScores(evaluationBatchId) {
+  return request({
+    url: "/equipment/comprehensive/calculate",
+    method: "post",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 获取已保存的综合评分结果
+ */
+export function getComprehensiveResults(evaluationBatchId) {
+  return request({
+    url: "/equipment/comprehensive/results",
+    method: "get",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 删除综合评分结果
+ */
+export function deleteComprehensiveResults(evaluationBatchId) {
+  return request({
+    url: "/equipment/comprehensive/results",
+    method: "delete",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 获取效能指标原始数据
+ */
+export function getMetricsRaw(evaluationBatchId) {
+  return request({
+    url: "/equipment/comprehensive/metrics-raw",
+    method: "get",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 获取效能指标归一化得分
+ */
+export function getMetricsScore(evaluationBatchId) {
+  return request({
+    url: "/equipment/comprehensive/metrics-score",
+    method: "get",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 获取装备操作原始数据
+ */
+export function getEquipmentRaw(evaluationBatchId) {
+  return request({
+    url: "/equipment/comprehensive/equipment-raw",
+    method: "get",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 获取装备操作归一化得分
+ */
+export function getEquipmentScore(evaluationBatchId) {
+  return request({
+    url: "/equipment/comprehensive/equipment-score",
+    method: "get",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 获取批次信息（调试用）
+ */
+export function getBatchInfo() {
+  return request({
+    url: "/equipment/comprehensive/batch-info",
+    method: "get",
+  });
+}
+
+/**
+ * 获取批次下的作战ID列表
+ */
+export function getOperationsByBatch(evaluationBatchId) {
+  return request({
+    url: "/equipment/comprehensive/operations",
+    method: "get",
+    params: { evaluationBatchId },
+  });
+}
+
+/**
+ * 获取指定作战的完整评估数据
+ */
+export function getOperationData(evaluationBatchId, operationId) {
+  return request({
+    url: "/equipment/comprehensive/operation-data",
     method: "get",
     params: { evaluationBatchId, operationId },
   });

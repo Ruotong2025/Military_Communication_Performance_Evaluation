@@ -36,6 +36,8 @@ public class EquipmentAhpScoreService {
     private final ExpertBaseInfoRepository expertBaseInfoRepository;
     private final EquipmentAhpService equipmentAhpService;
     private final ExpertAhpIndividualWeightsService individualWeightsService;
+    @org.springframework.context.annotation.Lazy
+    private final AhpIndividualService ahpIndividualService;
 
     /**
      * 查询某专家在装备操作域的比较打分
@@ -149,11 +151,8 @@ public class EquipmentAhpScoreService {
         scoreRepository.deleteByExpertIdAndComparisonKeyStartingWith(req.getExpertId(), PREFIX);
         scoreRepository.saveAll(rows);
 
-        // 保存权重快照到单独表（若需要）
-        MatrixCalculationRequest matrixReq = new MatrixCalculationRequest();
-        matrixReq.setDimensionMatrix(req.getDimensionMatrix());
-        matrixReq.setIndicatorMatrices(req.getIndicatorMatrices());
         log.info("已保存装备操作 AHP 打分 expertId={} 条数={}", req.getExpertId(), rows.size());
+        ahpIndividualService.persistUnified(req.getExpertId(), name);
         return rows.size();
     }
 

@@ -1,5 +1,6 @@
 package com.ccnu.military.service;
 
+import com.ccnu.military.dto.CrossDomainAhpPersistRequest;
 import com.ccnu.military.dto.ExpertAhpScoresPersistRequest;
 import com.ccnu.military.dto.ExpertAhpSimulateRequest;
 import com.ccnu.military.dto.MatrixCalculationRequest;
@@ -30,6 +31,13 @@ public class ExpertAhpComparisonScoreService {
     /** 与 {@link EquipmentAhpScoreService} 中装备操作域前缀一致，用于同表域隔离 */
     private static final String EQUIPMENT_KEY_PREFIX = "装备操作_";
 
+    /** 域间一级：效能指标 vs 装备操作（comparison_key，存于 expert_ahp_comparison_score，不以装备操作_开头） */
+    public static final String CROSS_DOMAIN_KEY_PREFIX = "域间一级_";
+    public static final String CROSS_DOMAIN_COMPARISON_KEY = "域间一级_效能指标_装备操作";
+
+    private static final String EQUIPMENT_LIKE_PATTERN = EQUIPMENT_KEY_PREFIX + "%";
+    private static final String CROSS_DOMAIN_LIKE_PATTERN = CROSS_DOMAIN_KEY_PREFIX + "%";
+
     private static final double CR_LIMIT = 0.1;
     private static final int WEIGHT_PAYLOAD_MAX_TRIES = 8;
 
@@ -37,6 +45,8 @@ public class ExpertAhpComparisonScoreService {
     private final ExpertBaseInfoRepository expertBaseInfoRepository;
     private final ExpertAHPService expertAHPService;
     private final ExpertAhpIndividualWeightsService individualWeightsService;
+    @org.springframework.context.annotation.Lazy
+    private final AhpIndividualService ahpIndividualService;
 
     /**
      * 查询某专家的比较打分。
@@ -45,7 +55,7 @@ public class ExpertAhpComparisonScoreService {
         if (expertId == null) {
             return Collections.emptyList();
         }
-        return scoreRepository.findEffectivenessByExpertId(expertId, EQUIPMENT_KEY_PREFIX + "%");
+        return scoreRepository.findEffectivenessByExpertId(expertId, EQUIPMENT_LIKE_PATTERN);
     }
 
     @Transactional
@@ -65,7 +75,8 @@ public class ExpertAhpComparisonScoreService {
             throw new IllegalArgumentException("没有可保存的比较项");
         }
 
-        scoreRepository.deleteEffectivenessByExpertId(req.getExpertId(), EQUIPMENT_KEY_PREFIX + "%");
+        scoreRepository.deleteEffectivenessCorePreservingEquipmentAndCrossDomain(
+                req.getExpertId(), EQUIPMENT_LIKE_PATTERN, CROSS_DOMAIN_LIKE_PATTERN);
         scoreRepository.saveAll(rows);
         MatrixCalculationRequest matrixReq = new MatrixCalculationRequest();
         matrixReq.setDimensionMatrix(req.getDimensionMatrix());
@@ -73,6 +84,27 @@ public class ExpertAhpComparisonScoreService {
         saveSnapshot(req.getExpertId(), name, matrixReq);
         log.info("已保存专家 AHP 打分 expertId={} 条数={}", req.getExpertId(), rows.size());
         return rows.size();
+    }
+
+    /**
+     * 保存「效能指标 vs 装备操作」一级域间比较（单对），用于将两套 AHP 权重按同一专家意见合并加权。
+     */
+    @Transactional
+    public void persistCrossDomain(CrossDomainAhpPersistRequest req) {
+        if (req == null || req.getExpertId() == null) {
+            throw new IllegalArgumentException("expertId 不能为空");
+        }
+        ExpertBaseInfo expert = expertBaseInfoRepository.findById(req.getExpertId())
+                .orElseThrow(() -> new IllegalArgumentException("专家不存在: " + req.getExpertId()));
+        String name = req.getExpertName() != null && !req.getExpertName().isBlank()
+                ? req.getExpertName()
+                : expert.getExpertName();
+        double sc = req.getScore() != null ? req.getScore() : 1.0;
+        Double conf = req.getConfidence();
+        scoreRepository.deleteByExpertIdAndComparisonKey(req.getExpertId(), CROSS_DOMAIN_COMPARISON_KEY);
+        scoreRepository.save(row(req.getExpertId(), name, CROSS_DOMAIN_COMPARISON_KEY, sc, conf, LocalDateTime.now()));
+        log.info("已保存专家域间一级 AHP 比较 expertId={} key={}", req.getExpertId(), CROSS_DOMAIN_COMPARISON_KEY);
+        ahpIndividualService.persistUnified(req.getExpertId(), name);
     }
 
     /**
@@ -96,7 +128,8 @@ public class ExpertAhpComparisonScoreService {
             List<ExpertAhpComparisonScore> rows = buildRowsFromMatrixPayload(
                     expertId, expert.getExpertName(),
                     matrix.getDimensionMatrix(), matrix.getIndicatorMatrices());
-            scoreRepository.deleteEffectivenessByExpertId(expertId, EQUIPMENT_KEY_PREFIX + "%");
+            appendRandomCrossDomainRow(expertId, expert.getExpertName(), rows, rnd, LocalDateTime.now());
+            scoreRepository.deleteEffectivenessByExpertId(expertId, EQUIPMENT_LIKE_PATTERN);
             scoreRepository.saveAll(rows);
             saveSnapshot(expertId, expert.getExpertName(), matrix);
             inserted.add(expertId);
@@ -265,8 +298,21 @@ public class ExpertAhpComparisonScoreService {
      * 根据当前判断矩阵计算 AHP 层次结果并写入 expert_ahp_individual_weights
      */
     private void saveSnapshot(Long expertId, String expertName, MatrixCalculationRequest matrixReq) {
-        MatrixCalculationResult calc = expertAHPService.calculateAll(matrixReq);
-        individualWeightsService.upsert(expertId, expertName, calc);
+        // 计算统一快照（域间 + 效能 + 装备 → 一份结果）
+        ahpIndividualService.persistUnified(expertId, expertName);
+    }
+
+    private void appendRandomCrossDomainRow(
+            Long expertId,
+            String expertName,
+            List<ExpertAhpComparisonScore> rows,
+            ThreadLocalRandom rnd,
+            LocalDateTime now) {
+        double a0 = rnd.nextDouble(1.0, 9.0);
+        double a1 = rnd.nextDouble(1.0, 9.0);
+        double sc = round2(a0 / a1);
+        sc = Math.max(1.0 / 9.0, Math.min(9.0, sc));
+        rows.add(row(expertId, expertName, CROSS_DOMAIN_COMPARISON_KEY, sc, randomConfidence(rnd), now));
     }
 
     private List<ExpertAhpComparisonScore> buildRowsFromMatrixPayload(

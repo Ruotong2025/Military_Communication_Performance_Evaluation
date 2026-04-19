@@ -1,5 +1,5 @@
 -- ============================================================
--- 专家定性指标集结结果表
+-- 装备操作定性指标集结结果表
 -- 存储每次集结计算的最终质心分 x* 和映射等级
 -- 创建时间: 2026-04-08
 -- 说明: 定性指标集结结果持久化，供综合评分复用
@@ -8,8 +8,8 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
-DROP TABLE IF EXISTS `ql_aggregation_result`;
-CREATE TABLE `ql_aggregation_result` (
+DROP TABLE IF EXISTS `equipment_ql_aggregation_result`;
+CREATE TABLE `equipment_ql_aggregation_result` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键',
   `evaluation_batch_id` VARCHAR(50) NOT NULL COMMENT '评估批次ID',
   `operation_id` VARCHAR(50) NOT NULL COMMENT '作战ID',
@@ -29,9 +29,9 @@ CREATE TABLE `ql_aggregation_result` (
   INDEX `idx_batch` (`evaluation_batch_id`),
   INDEX `idx_operation` (`operation_id`),
   INDEX `idx_indicator` (`indicator_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='专家定性指标集结结果（质心分）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='装备操作定性指标集结结果（质心分）';
 
 -- 验证
--- SELECT * FROM ql_aggregation_result ORDER BY id DESC LIMIT 5;
+-- SELECT * FROM equipment_ql_aggregation_result ORDER BY id DESC LIMIT 5;
 
 SET FOREIGN_KEY_CHECKS = 1;

@@ -3,23 +3,23 @@ package com.ccnu.military.entity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.Type;
-import org.hibernate.annotations.TypeDef;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import javax.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 专家定性指标集结结果实体
+ * 装备操作定性指标集结结果实体
  * 存储每次集结计算后的群体质心分 x* 及映射等级
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "ql_aggregation_result")
-public class QlAggregationResult {
+@Table(name = "equipment_ql_aggregation_result")
+@EntityListeners(AuditingEntityListener.class)
+public class EquipmentQlAggregationResult {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

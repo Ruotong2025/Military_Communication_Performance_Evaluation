@@ -375,12 +375,14 @@ public class MetricsCalculationService {
 
     /**
      * 删除指定评估批次的全部指标行
+     * 注意：metrics_military_comm_effect 表使用 evaluation_id 字段
+     *       score_military_comm_effect 表使用 evaluation_batch_id 字段
      */
     public int deleteEvaluationBatch(String evaluationBatchId) {
         if (!StringUtils.hasText(evaluationBatchId)) {
             return 0;
         }
-        jdbcTemplate.update("DELETE FROM " + SCORE_TABLE + " WHERE evaluation_id = ?", evaluationBatchId.trim());
+        jdbcTemplate.update("DELETE FROM " + SCORE_TABLE + " WHERE evaluation_batch_id = ?", evaluationBatchId.trim());
         return jdbcTemplate.update("DELETE FROM metrics_military_comm_effect WHERE evaluation_id = ?", evaluationBatchId.trim());
     }
 
@@ -400,8 +402,8 @@ public class MetricsCalculationService {
         log.info("开始为评估批次 {} 生成归一化 score 数据", evaluationBatchId);
 
         try {
-            // 1. 先删除该批次的旧 score 数据
-            jdbcTemplate.update("DELETE FROM " + SCORE_TABLE + " WHERE evaluation_id = ?", evaluationBatchId.trim());
+            // 1. 先删除该批次的旧 score 数据（score 表使用 evaluation_batch_id）
+            jdbcTemplate.update("DELETE FROM " + SCORE_TABLE + " WHERE evaluation_batch_id = ?", evaluationBatchId.trim());
 
             // 2. 查询原始指标数据
             List<Map<String, Object>> rawData = getCalculatedMetrics(evaluationBatchId);
@@ -448,7 +450,8 @@ public class MetricsCalculationService {
                     scoreValues.add(score);
                 }
 
-                insertScore(evalId, opId, scoreValues);
+                // 写入 score 表时使用 evaluation_batch_id 字段
+                insertScore(evaluationBatchId, opId, scoreValues);
                 count++;
             }
 
@@ -471,13 +474,13 @@ public class MetricsCalculationService {
 
     /**
      * 将 score 数据插入数据库
-     * 使用 score_military_comm_effect 表的实际列名
+     * 使用 score_military_comm_effect 表的实际列名（evaluation_batch_id）
      */
-    private void insertScore(String evaluationId, String operationId, List<Object> scoreValues) {
+    private void insertScore(String evaluationBatchId, String operationId, List<Object> scoreValues) {
         List<String> scoreFields = MetricsDirection.getScoreFields();
 
         StringBuilder sqlBuilder = new StringBuilder();
-        sqlBuilder.append("INSERT INTO ").append(SCORE_TABLE).append(" (evaluation_id, operation_id, ");
+        sqlBuilder.append("INSERT INTO ").append(SCORE_TABLE).append(" (evaluation_batch_id, operation_id, ");
         for (int i = 0; i < scoreFields.size(); i++) {
             sqlBuilder.append(scoreFields.get(i));
             if (i < scoreFields.size() - 1) sqlBuilder.append(", ");
@@ -490,7 +493,7 @@ public class MetricsCalculationService {
         sqlBuilder.append(", NOW(), NOW())");
 
         List<Object> params = new ArrayList<>();
-        params.add(evaluationId);
+        params.add(evaluationBatchId);
         params.add(operationId);
         params.addAll(scoreValues);
 
@@ -499,6 +502,7 @@ public class MetricsCalculationService {
 
     /**
      * 按评估批次获取归一化 score 数据
+     * score_military_comm_effect 表使用 evaluation_batch_id 字段
      */
     public List<Map<String, Object>> getScoreData(String evaluationBatchId) {
         if (!StringUtils.hasText(evaluationBatchId)) {
@@ -506,10 +510,10 @@ public class MetricsCalculationService {
         }
         List<String> scoreFields = MetricsDirection.getScoreFields();
         StringBuilder sqlBuilder = new StringBuilder();
-        sqlBuilder.append("SELECT evaluation_id, operation_id, ");
+        sqlBuilder.append("SELECT evaluation_batch_id, operation_id, ");
         sqlBuilder.append(String.join(", ", scoreFields));
         sqlBuilder.append(", created_at FROM ").append(SCORE_TABLE);
-        sqlBuilder.append(" WHERE evaluation_id = ? ORDER BY operation_id");
+        sqlBuilder.append(" WHERE evaluation_batch_id = ? ORDER BY operation_id");
         return jdbcTemplate.queryForList(sqlBuilder.toString(), evaluationBatchId.trim());
     }
 

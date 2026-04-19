@@ -1,15 +1,11 @@
 <template>
   <div class="metrics-calculation">
-    <el-tabs v-model="activeMainTab" class="main-tabs">
-      <!-- ====== Tab1: 效能指标 ====== -->
-      <el-tab-pane label="效能指标" name="efficacy">
-
-    <!-- ====== 第一步：效能指标计算 ====== -->
-    <el-card class="config-card">
+    <!-- ====== 效能指标计算 ====== -->
+    <el-card class="config-card efficacy-calc-card">
       <template #header>
         <div class="card-header">
           <el-icon class="header-icon"><Setting /></el-icon>
-          <span>第一步：效能指标计算</span>
+          <span>效能指标计算</span>
         </div>
       </template>
       <el-form :model="form" label-width="120px">
@@ -28,14 +24,71 @@
           </div>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleCalculate" :loading="calculating" :icon="VideoPlay">计算指标</el-button>
+          <el-button type="primary" @click="handleCalculate" :loading="calculating || calculatingEq" :icon="VideoPlay">计算指标（效能+装备）</el-button>
           <el-button @click="handleRefresh" :icon="Refresh">刷新列表</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
+    <!-- 统一批次选择 -->
+    <el-card class="batch-tab-card" shadow="never">
+      <template #header>
+        <div class="batch-tab-header">
+          <div class="batch-section">
+            <span class="batch-label">评估批次</span>
+            <el-select
+              v-model="unifiedSelectedBatchId"
+              placeholder="请选择批次"
+              filterable
+              clearable
+              style="min-width: 300px"
+              @change="onUnifiedBatchChange"
+            >
+              <el-option-group v-if="allBatches.length" label="可用批次">
+                <el-option
+                  v-for="b in allBatches"
+                  :key="b.id"
+                  :label="b.label"
+                  :value="b.id"
+                >
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>{{ b.label }}</span>
+                    <el-tag v-if="b.type === 'both'" type="success" size="small" style="margin-left: 8px;">完整</el-tag>
+                    <el-tag v-else-if="b.type === 'effectiveness'" type="warning" size="small" style="margin-left: 8px;">效能</el-tag>
+                    <el-tag v-else type="info" size="small" style="margin-left: 8px;">装备</el-tag>
+                  </div>
+                </el-option>
+              </el-option-group>
+            </el-select>
+            <el-tag v-if="allBatches.length" type="info" effect="plain" style="margin-left: 8px">
+              共 {{ allBatches.length }} 个批次
+            </el-tag>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+            <el-button
+              v-if="unifiedSelectedBatchId"
+              type="danger"
+              plain
+              size="small"
+              :icon="Delete"
+              @click="handleDeleteUnifiedBatch"
+            >
+              删除批次
+            </el-button>
+            <el-tag type="warning" effect="plain">
+              提示：效能指标和装备操作指标必须使用相同批次才能正确关联
+            </el-tag>
+          </div>
+        </div>
+      </template>
+    </el-card>
+
+    <el-tabs v-model="activeMainTab" class="main-tabs">
+      <!-- ====== Tab1: 效能指标 ====== -->
+      <el-tab-pane label="效能指标" name="efficacy">
+
     <!-- 计算结果（按评估批次） -->
-    <el-card v-if="evaluationBatches.length > 0 || calculatedData.length > 0" class="results-card">
+    <el-card v-if="unifiedSelectedBatchId || calculatedData.length > 0" class="results-card">
       <template #header>
         <div class="results-header">
           <div class="card-header">
@@ -44,22 +97,10 @@
             <el-tag type="success" style="margin-left: 10px">当前批次 {{ calculatedData.length }} 条作战记录</el-tag>
           </div>
           <div class="batch-toolbar">
-            <span class="batch-label">评估批次</span>
-            <el-select
-              v-model="selectedEvaluationId"
-              placeholder="切换历史批次（每次「计算指标」都会生成新的 evaluation_id）"
-              filterable
-              class="batch-select"
-            >
-              <el-option v-for="b in evaluationBatches" :key="b.evaluation_batch_id" :label="formatBatchLabel(b)" :value="b.evaluation_batch_id" />
-            </el-select>
-            <el-tag v-if="evaluationBatches.length" type="info" effect="plain" class="batch-count-tag">共 {{ evaluationBatches.length }} 个批次</el-tag>
-            <el-button type="danger" plain :disabled="!selectedEvaluationId" @click="handleDeleteBatch">删除当前批次</el-button>
+            <el-tag v-if="unifiedSelectedBatchId" type="primary" effect="plain">
+              批次: {{ unifiedSelectedBatchId }}
+            </el-tag>
           </div>
-          <p class="batch-hint-bar">
-            每次点击「计算指标」都会在库中新增一组记录，并分配<strong>新的</strong>
-            <code>evaluation_id</code>；下拉框按时间从新到旧列出全部历史批次，可任意切换查看对应原始指标与（若已算过）归一化结果。
-          </p>
         </div>
       </template>
 
@@ -375,27 +416,31 @@
               </el-select>
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" @click="handleEqCalculate" :loading="eqCalculating" :icon="VideoPlay">计算指标</el-button>
               <el-button @click="handleEqRefresh" :icon="Refresh">刷新</el-button>
               <el-button type="primary" plain @click="router.push('/simulation-training/equipment-evaluation')">
                 专家定性数据评估
+              </el-button>
+              <el-button
+                v-if="unifiedSelectedBatchId"
+                type="danger"
+                plain
+                :icon="Delete"
+                @click="handleDeleteUnifiedBatch"
+              >
+                删除当前批次
               </el-button>
             </el-form-item>
           </el-form>
         </el-card>
 
-        <!-- 批次切换 -->
-        <el-card v-if="eqBatches.length > 0" class="results-card" style="margin-top: 12px">
+        <!-- 定量指标计算结果 -->
+        <el-card v-if="unifiedSelectedBatchId && eqRecords.length > 0" class="results-card" style="margin-top: 12px">
           <template #header>
-            <div class="batch-toolbar">
-              <span class="batch-label">评估批次</span>
-              <el-select v-model="eqSelectedBatchId" placeholder="切换批次" filterable style="min-width: 300px">
-                <el-option v-for="b in eqBatches" :key="b.evaluation_batch_id"
-                  :label="formatEqBatchLabel(b)" :value="b.evaluation_batch_id" />
-              </el-select>
-              <el-tag type="info">共 {{ eqBatches.length }} 个批次</el-tag>
-              <el-button type="danger" plain size="small" :disabled="!eqSelectedBatchId"
-                @click="handleEqDeleteBatch">删除当前批次</el-button>
+            <div class="card-header">
+              <el-icon class="header-icon"><Document /></el-icon>
+              <span>定量指标原始值</span>
+              <el-tag type="success" style="margin-left: 8px">{{ eqRecords.length }} 条作战记录</el-tag>
+              <el-tag type="primary" effect="plain" style="margin-left: 8px">批次: {{ unifiedSelectedBatchId }}</el-tag>
             </div>
           </template>
 
@@ -569,6 +614,93 @@ import * as echarts from "echarts";
 const router = useRouter();
 const activeMainTab = ref("efficacy");
 
+// 统一批次选择
+const unifiedSelectedBatchId = ref(null);
+const allBatches = ref([]);
+
+// 加载统一批次列表（效能和装备的批次）
+async function loadUnifiedBatches() {
+  try {
+    // 获取效能批次
+    const effBatches = await getMetricBatches();
+    // 获取装备批次
+    const eqBatches = await getQtBatches();
+
+    const batchMap = new Map();
+
+    // 添加效能批次
+    if (Array.isArray(effBatches)) {
+      effBatches.forEach(b => {
+        if (b && b.evaluation_batch_id) {
+          batchMap.set(b.evaluation_batch_id, {
+            id: b.evaluation_batch_id,
+            label: formatBatchLabel(b),
+            type: 'effectiveness',
+            count: b.row_count,
+            createdAt: b.created_at
+          });
+        }
+      });
+    }
+
+    // 添加装备批次
+    if (Array.isArray(eqBatches)) {
+      eqBatches.forEach(b => {
+        if (b && b.evaluation_batch_id) {
+          if (batchMap.has(b.evaluation_batch_id)) {
+            const existing = batchMap.get(b.evaluation_batch_id);
+            existing.type = 'both'; // 标记为两个系统都有
+            existing.eqCount = b.row_count;
+          } else {
+            batchMap.set(b.evaluation_batch_id, {
+              id: b.evaluation_batch_id,
+              label: formatEqBatchLabel(b),
+              type: 'equipment',
+              count: b.row_count,
+              createdAt: b.created_at
+            });
+          }
+        }
+      });
+    }
+
+    // 转为数组并按时间排序（新的在前）
+    allBatches.value = Array.from(batchMap.values())
+      .sort((a, b) => {
+        // both 类型优先
+        if (a.type === 'both' && b.type !== 'both') return -1;
+        if (b.type === 'both' && a.type !== 'both') return 1;
+        return 0;
+      });
+
+    // 默认选择第一个（优先选择 both 类型的）
+    if (!unifiedSelectedBatchId.value && allBatches.value.length > 0) {
+      unifiedSelectedBatchId.value = allBatches.value[0].id;
+      onUnifiedBatchChange(unifiedSelectedBatchId.value);
+    }
+  } catch (e) {
+    console.error("加载批次失败", e);
+  }
+}
+
+// 统一批次切换处理
+async function onUnifiedBatchChange(batchId) {
+  if (!batchId) return;
+
+  unifiedSelectedBatchId.value = batchId;
+  selectedEvaluationId.value = batchId;
+  eqSelectedBatchId.value = batchId;
+
+  // 加载该批次的数据
+  await Promise.all([
+    loadResults(),
+    loadScoreData(),
+    loadEqRecords()
+  ]);
+
+  scoreGenerated.value = scoreData.value.length > 0;
+}
+
 const availableOperations = ref([]);
 const calculatedData = ref([]);
 const scoreData = ref([]);
@@ -576,6 +708,7 @@ const chartData = ref({ indicators: [], series: [] });
 const evaluationBatches = ref([]);
 const selectedEvaluationId = ref(null);
 const calculating = ref(false);
+const calculatingEq = ref(false);
 const generatingScore = ref(false);
 const scoreGenerated = ref(false);
 const chartRef = ref(null);
@@ -1104,34 +1237,49 @@ const loadOperations = async () => {
 
 const handleCalculate = async () => {
   calculating.value = true;
+  calculatingEq.value = true;
   try {
     const payload = {
       operationIds: form.value.operationIds,
       specificOnly: form.value.operationIds.length > 0,
     };
-    const res = await calculateMetrics(payload);
-    if (res && res.success) {
-      ElMessage.success(res.message || "计算成功");
-      const newBatchId = res.evaluationBatchId;
-      // 直接切换到新批次，syncBatchView 刷新下拉列表并保持选中
+
+    // 1. 先计算效能指标
+    const effRes = await calculateMetrics(payload);
+    if (!effRes || !effRes.success) {
+      ElMessage.error(effRes?.message || "效能指标计算失败");
+      return;
+    }
+    const newBatchId = effRes.evaluationBatchId;
+    ElMessage.success("效能指标计算成功，正在生成装备操作指标...");
+
+    // 2. 计算装备指标（使用相同批次）
+    const eqPayload = {
+      operationIds: payload.operationIds,
+      evaluationBatchId: newBatchId,
+    };
+    const eqRes = await calculateQtMetrics(eqPayload);
+
+    if (eqRes && eqRes.success) {
+      ElMessage.success("效能指标和装备操作指标计算成功！");
+      // 更新统一批次选择
+      unifiedSelectedBatchId.value = newBatchId;
+      await loadUnifiedBatches();
+      await onUnifiedBatchChange(newBatchId);
+    } else {
+      ElMessage.warning("效能指标已生成，但装备操作指标生成失败");
+      // 仍然更新效能数据
       selectedEvaluationId.value = newBatchId;
       await syncBatchView();
-      // 新批次默认没有 score，重置相关状态
       scoreGenerated.value = false;
       scoreData.value = [];
-      chartData.value = { indicators: [], series: [] };
-      if (chartInstance) {
-        chartInstance.dispose();
-        chartInstance = null;
-      }
-    } else {
-      ElMessage.error(res?.message || "计算失败");
     }
   } catch (error) {
     console.error("计算指标失败", error);
     ElMessage.error(error?.message || "计算指标失败");
   } finally {
     calculating.value = false;
+    calculatingEq.value = false;
   }
 };
 
@@ -1335,6 +1483,7 @@ const handleDeleteBatch = async () => {
       { type: "warning", confirmButtonText: "删除", cancelButtonText: "取消" },
     );
     await deleteMetricBatch(id);
+    try { await deleteQtBatch(id); } catch {} // 同时尝试删除装备批次
     ElMessage.success("已删除该批次");
     calculatedData.value = [];
     scoreData.value = [];
@@ -1353,6 +1502,38 @@ const handleDeleteBatch = async () => {
   }
 };
 
+// 统一批次删除（同时删除效能和装备批次）
+const handleDeleteUnifiedBatch = async () => {
+  const batchId = unifiedSelectedBatchId.value;
+  if (!batchId) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定删除批次「${batchId}」？此操作将同时删除效能指标和装备操作指标数据，不可恢复。`,
+      "删除批次",
+      { type: "warning", confirmButtonText: "删除", cancelButtonText: "取消" }
+    );
+    // 尝试删除效能批次
+    try { await deleteMetricBatch(batchId); } catch {}
+    // 尝试删除装备批次
+    try { await deleteQtBatch(batchId); } catch {}
+    ElMessage.success("已删除该批次");
+    unifiedSelectedBatchId.value = null;
+    selectedEvaluationId.value = null;
+    eqSelectedBatchId.value = null;
+    calculatedData.value = [];
+    scoreData.value = [];
+    eqRecords.value = [];
+    eqNormalizedRecords.value = [];
+    // 重新加载批次列表
+    await loadUnifiedBatches();
+  } catch (e) {
+    if (e !== "cancel") {
+      ElMessage.error(e?.message || "删除失败");
+    }
+  }
+};
+
+// 同时计算效能和装备指标（使用相同批次）
 const handleRefresh = () => {
   loadOperations();
   loadBatches().then(() => {
@@ -1416,16 +1597,11 @@ function onWindowResize() {
 }
 
 onMounted(() => {
+  // 加载作战列表和统一批次
   loadOperations();
-  loadBatches().then(() => {
-    loadResults();
-    // 页面初始化时自动检测当前批次是否已有 score 数据（watch 也会处理）
-    loadScoreData().then(() => {
-      scoreGenerated.value = scoreData.value.length > 0;
-      if (scoreGenerated.value) {
-        loadChartData();
-      }
-    });
+  loadUnifiedBatches().then(() => {
+    // 加载装备批次以支持下拉
+    loadEqBatches();
   });
   window.addEventListener("resize", onWindowResize);
 });
@@ -1532,6 +1708,33 @@ const getAlertClass = (value, min, max, reverse = false) => {
       font-size: 12px;
       color: var(--el-text-color-secondary);
       line-height: 1.5;
+    }
+
+    .batch-tab-card {
+      margin-bottom: 16px;
+
+      .batch-tab-header {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .batch-section {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .batch-label {
+        font-weight: 600;
+        color: #606266;
+        white-space: nowrap;
+      }
+    }
+
+    .efficacy-calc-card {
+      margin-bottom: 16px;
     }
 
     .config-card {

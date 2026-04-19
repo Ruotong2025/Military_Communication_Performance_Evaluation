@@ -62,6 +62,9 @@ public class ExpertAggregationResult {
 
         /** 参与装备操作 CV 的专家 */
         private List<ExpertParticipant> equipmentParticipatingExperts;
+
+        /** 综合叶子全局权重 CV（效能+装备所有叶子指标按 globalWeight 直接合并） */
+        private List<IndicatorCvItem> unifiedLeafCvs;
     }
 
     /**
@@ -108,6 +111,9 @@ public class ExpertAggregationResult {
 
         /** 等级标签类型（el-tag type） */
         private String levelType;
+
+        /** 域标签：效能 / 装备（用于综合叶子展示） */
+        private String domainTag;
     }
 
     /**

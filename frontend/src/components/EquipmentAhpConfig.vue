@@ -301,7 +301,7 @@
       </div>
 
       <!-- AHP结果展示 -->
-      <div v-if="selectedExpertId && result" class="result-section">
+      <div v-if="selectedExpertId && result" ref="eqAhpResultSectionRef" class="result-section">
         <!-- 维度层结果 -->
         <div class="result-block">
           <h3 class="section-title">
@@ -327,44 +327,83 @@
               </template>
             </el-table-column>
           </el-table>
+
+          <el-alert type="info" :closable="false" show-icon class="ahp-result-scroll-hint">
+            下方还有<strong>指标层</strong>与<strong>装备体系叶子分解总表</strong>、<strong>综合权重</strong>；计算完成后将自动滚至此处，请继续<strong>向下滚动</strong>。
+          </el-alert>
         </div>
 
         <!-- 指标层结果 -->
         <div class="result-block">
           <h3 class="section-title">
             <el-icon><DataAnalysis /></el-icon>
-            指标层权重结果
+            指标层权重结果（各维度内指标单排序）
           </h3>
 
-          <el-collapse accordion>
-            <el-collapse-item
-              v-for="(indResult, dimName) in result.indicatorResults"
-              :key="dimName"
-              :name="dimName"
-            >
-              <template #title>
-                <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
-                  <span style="font-weight: bold; font-size: 15px;">{{ dimName }}</span>
-                  <el-tag :type="indResult.consistent ? 'success' : 'warning'" size="small">
-                    CR={{ indResult.cr.toFixed(4) }}
-                    {{ indResult.consistent ? '✓' : '✗' }}
-                  </el-tag>
-                  <span style="margin-left: auto; font-size: 12px; color: #999;">
-                    {{ indResult.elementNames.length }}个指标
-                  </span>
-                </div>
-              </template>
+          <el-alert type="info" :closable="false" show-icon class="ahp-result-indicator-intro">
+            下表为<strong>装备操作</strong>各维度内部对指标的相对权重。
+          </el-alert>
 
+          <el-empty
+            v-if="!result.indicatorResults || !Object.keys(result.indicatorResults).length"
+            description="未返回指标层结果"
+          />
+          <el-tabs
+            v-else
+            v-model="eqResultIndicatorTab"
+            type="border-card"
+            class="ahp-result-indicator-tabs"
+          >
+            <el-tab-pane
+              v-for="(indResult, dimName) in result.indicatorResults"
+              :key="String(dimName)"
+              :label="`${dimName} · CR ${indResult.cr.toFixed(4)}`"
+              :name="String(dimName)"
+            >
+              <div class="ahp-result-tab-head">
+                <el-tag :type="indResult.consistent ? 'success' : 'warning'" size="small">
+                  {{ indResult.consistent ? '通过一致性检验' : '未通过一致性检验' }}
+                </el-tag>
+                <span class="ahp-result-tab-meta">{{ indResult.elementNames?.length || 0 }} 个指标</span>
+              </div>
               <el-table :data="formatIndicatorResult(indResult)" border size="small">
-                <el-table-column prop="name" label="指标" />
-                <el-table-column prop="weight" label="权重" align="center">
+                <el-table-column prop="name" label="指标" min-width="200" />
+                <el-table-column prop="weight" label="权重（本维度内）" align="center" width="160">
                   <template #default="{ row }">
                     <el-tag type="success" size="small">{{ (row.weight * 100).toFixed(2) }}%</el-tag>
                   </template>
                 </el-table-column>
               </el-table>
-            </el-collapse-item>
-          </el-collapse>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+
+        <!-- 装备体系：叶子分解权重总表 -->
+        <div v-if="combinedWeightSorted.length" class="result-block">
+          <h3 class="section-title">
+            <el-icon><Grid /></el-icon>
+            装备操作体系叶子分解权重总表（维度×指标）
+          </h3>
+          <el-alert type="success" :closable="false" show-icon class="ahp-result-total-alert">
+            共 <strong>{{ combinedWeightSorted.length }}</strong> 个叶子指标；综合权重之和为
+            <strong>{{ equipLeafSumPct.toFixed(4) }}%</strong>（在装备体系内应为 100%）。
+          </el-alert>
+          <el-table :data="combinedWeightSorted" border size="small" stripe max-height="420" class="combined-total-table">
+            <el-table-column type="index" label="#" width="48" align="center" />
+            <el-table-column prop="dimension" label="维度" width="150" />
+            <el-table-column prop="indicator" label="指标" min-width="180" />
+            <el-table-column prop="dimWeight" label="维度权重" width="110" align="center">
+              <template #default="{ row }">{{ (row.dimWeight * 100).toFixed(2) }}%</template>
+            </el-table-column>
+            <el-table-column prop="indWeight" label="指标权重（维内）" width="130" align="center">
+              <template #default="{ row }">{{ (row.indWeight * 100).toFixed(2) }}%</template>
+            </el-table-column>
+            <el-table-column label="综合权重（维×指）" width="150" align="center">
+              <template #default="{ row }">
+                <el-tag type="danger" size="small" effect="dark">{{ (row.combinedWeight * 100).toFixed(4) }}%</el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
 
         <!-- 综合权重结果 -->
@@ -537,6 +576,8 @@ const savingScores = ref(false)
 const calculating = ref(false)
 const result = ref(null)
 const activeIndicatorTab = ref('')
+const eqAhpResultSectionRef = ref(null)
+const eqResultIndicatorTab = ref('')
 const combinedSunburstRef = ref(null)
 let combinedSunburstChart = null
 
@@ -862,6 +903,8 @@ const calculateWeights = async () => {
     ElMessage.success('AHP权重计算成功！')
     await nextTick()
     renderCombinedSunburst()
+    await nextTick()
+    eqAhpResultSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     emit('weights-calculated', {
       dimensionResult: result.value.dimensionResult,
       indicatorResults: result.value.indicatorResults,
@@ -890,20 +933,24 @@ const dimensionResultTable = computed(() => {
 })
 
 const formatIndicatorResult = (indResult) => {
-  return indResult.elementNames.map((name, idx) => ({
+  const names = indResult?.elementNames
+  const weights = indResult?.weights
+  if (!names?.length || !weights?.length) return []
+  return names.map((name, idx) => ({
     name,
-    weight: indResult.weights[idx]
+    weight: weights[idx]
   }))
 }
 
 const combinedWeightTable = computed(() => {
-  if (!result.value) return []
+  if (!result.value?.dimensionResult?.elementNames?.length) return []
   const table = []
   const dimResult = result.value.dimensionResult
+  const indMap = result.value.indicatorResults || {}
   for (let dIdx = 0; dIdx < dimResult.elementNames.length; dIdx++) {
     const dimName = dimResult.elementNames[dIdx]
     const dimWeight = dimResult.weights[dIdx]
-    const indResult = result.value.indicatorResults[dimName]
+    const indResult = indMap[dimName]
     if (!indResult) continue
     for (let iIdx = 0; iIdx < indResult.elementNames.length; iIdx++) {
       const indName = indResult.elementNames[iIdx]
@@ -921,6 +968,35 @@ const combinedWeightTable = computed(() => {
   }
   return table
 })
+
+const combinedWeightSorted = computed(() => {
+  const rows = combinedWeightTable.value
+  if (!rows?.length) return []
+  return [...rows].sort((a, b) => (b.combinedWeight || 0) - (a.combinedWeight || 0))
+})
+
+const equipLeafSumPct = computed(() =>
+  combinedWeightTable.value.reduce((s, r) => s + (Number(r.combinedWeight) || 0), 0) * 100
+)
+
+watch(
+  () => result.value?.indicatorResults,
+  (ir) => {
+    if (!ir || typeof ir !== 'object') {
+      eqResultIndicatorTab.value = ''
+      return
+    }
+    const keys = Object.keys(ir)
+    if (!keys.length) {
+      eqResultIndicatorTab.value = ''
+      return
+    }
+    if (!keys.includes(eqResultIndicatorTab.value)) {
+      eqResultIndicatorTab.value = keys[0]
+    }
+  },
+  { immediate: true }
+)
 
 const SUNBURST_DIM_COLORS = ['#0074D9', '#39CCCC', '#3D9970', '#FF851B', '#FFDC00', '#B10DC9', '#85144b']
 
@@ -1506,6 +1582,42 @@ defineExpose({
     justify-content: center;
     gap: 20px;
     margin: 30px 0;
+  }
+
+  .ahp-result-scroll-hint {
+    margin: 12px 0 0;
+  }
+
+  .ahp-result-indicator-intro {
+    margin-bottom: 12px;
+  }
+
+  .ahp-result-indicator-tabs {
+    margin-top: 4px;
+
+    :deep(.el-tabs__content) {
+      padding-top: 12px;
+    }
+  }
+
+  .ahp-result-tab-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .ahp-result-tab-meta {
+    font-size: 12px;
+    color: #909399;
+  }
+
+  .ahp-result-total-alert {
+    margin-bottom: 12px;
+  }
+
+  .combined-total-table {
+    width: 100%;
   }
 
   .result-section {

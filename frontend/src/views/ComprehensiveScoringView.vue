@@ -2,22 +2,20 @@
   <div class="comprehensive-scoring-page">
     <div class="page-header">
       <div>
-        <h2>
-          <el-icon><DataAnalysis /></el-icon>
-          评估结果计算
-        </h2>
-        <p class="subtitle">综合打分 — 原始作战指标与集结加权后的综合评估得分（对应原权重集结打分模块五、六）</p>
+        <h2><el-icon><DataAnalysis /></el-icon> 综合评分</h2>
+        <p class="subtitle">基于集结权重的效能指标、装备定量指标、装备定性指标综合评估</p>
       </div>
     </div>
 
     <el-alert
-      type="info"
+      type="warning"
       :closable="false"
       show-icon
       class="hint-alert"
-      title="请先在「权重集结打分」执行「执行集结计算」（仅生成集结权重），再在本页选择同一批次并点击「加载综合结果」以计算并保存「权重×归一化得分」的综合结果。"
+      title="重要：效能数据和装备数据必须使用相同的批次ID才能正确关联计算。"
     />
 
+    <!-- 批次选择和操作 -->
     <el-card class="toolbar-card" shadow="hover">
       <el-form :inline="true" label-width="100px">
         <el-form-item label="评估批次">
@@ -29,555 +27,621 @@
             style="width: 380px"
             @change="onBatchChange"
           >
-            <el-option v-for="id in evaluationIds" :key="id" :label="id" :value="id" />
+            <el-option v-for="id in evaluationBatches" :key="id" :label="id" :value="id" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Refresh" :loading="loadResultLoading" :disabled="!evaluationId" @click="loadSavedResults">
-            加载综合结果
+          <el-button type="primary" :icon="Refresh" :loading="calculating" :disabled="!evaluationId" @click="calculateScores">
+            计算综合评分
+          </el-button>
+          <el-button type="success" :icon="List" :loading="loading" :disabled="!evaluationId" @click="loadResults">
+            加载结果
+          </el-button>
+          <el-button type="danger" :icon="Delete" :disabled="!evaluationId" @click="deleteResults">
+            删除结果
           </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <!-- 一、原始指标对照（原五） -->
-    <el-card v-if="evaluationId" class="content-card metrics-raw-card" shadow="hover">
+    <!-- 权重快照信息 -->
+    <el-card v-if="weightSnapshot" class="weight-info-card" shadow="hover">
       <template #header>
-        <div class="card-header">
-          <span><el-icon><List /></el-icon> 一、原始指标对照（metrics_military_comm_effect）</span>
-          <el-tag type="info" size="small">{{ metricsRows.length }} 条作战记录</el-tag>
-        </div>
+        <span><el-icon><Key /></el-icon> 当前集结权重</span>
       </template>
-      <p class="metrics-hint">
-        以下为「计算指标」写入库的<strong>未归一化</strong>原始值；经「生成归一化 score」后与集结权重相乘得到综合得分。
-      </p>
-      <el-table
-        v-loading="metricsLoading"
-        :data="metricsRows"
-        border
-        stripe
-        size="small"
-        max-height="380"
-        class="metrics-raw-table"
-      >
-        <el-table-column prop="operation_id" label="作战ID" width="90" fixed align="center" />
-        <el-table-column
-          v-for="col in metricsFieldMeta"
-          :key="col.prop"
-          :prop="col.prop"
-          :label="col.label"
-          align="center"
-          min-width="108"
-        >
-          <template #default="{ row }">
-            {{ formatMetricCell(row[col.prop]) }}
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <el-divider content-position="left">归一化得分（score_military_comm_effect）</el-divider>
-      <p class="metrics-hint">
-        以下为该评估批次内对原始指标做 <strong>Min-Max</strong> 归一化后的得分（0~1，越大越好），数据来自
-        <code>score_military_comm_effect</code>；需先在指标计算流程中执行「生成归一化 score」。
-      </p>
-      <el-table
-        v-loading="scoreLoading"
-        :data="scoreRows"
-        border
-        stripe
-        size="small"
-        max-height="380"
-        class="metrics-raw-table"
-      >
-        <el-table-column prop="operation_id" label="作战ID" width="90" fixed align="center" />
-        <el-table-column
-          v-for="col in scoreFieldMeta"
-          :key="col.prop"
-          :prop="col.prop"
-          :label="col.label"
-          align="center"
-          min-width="100"
-        >
-          <template #default="{ row }">
-            {{ formatScoreCell(row[col.prop]) }}
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <el-collapse class="metrics-legend-collapse">
-        <el-collapse-item title="指标字段含义与对应 AHP 打分项" name="legend">
-          <el-table :data="metricsFieldMeta" border size="small" max-height="320">
-            <el-table-column prop="category" label="维度" width="100" align="center" />
-            <el-table-column prop="label" label="字段（列名）" min-width="160" />
-            <el-table-column prop="prop" label="库字段名" width="200">
-              <template #default="{ row: r }">
-                <code class="code-field">{{ r.prop }}</code>
-              </template>
-            </el-table-column>
-            <el-table-column prop="meaning" label="含义" min-width="260" />
-            <el-table-column prop="scoreName" label="对应归一化得分项" width="140" align="center" />
-          </el-table>
-        </el-collapse-item>
-      </el-collapse>
+      <div class="weight-info">
+        <el-tag type="primary" size="large">效能体系权重: {{ Number(weightSnapshot.effDomainWeight || 0.5).toFixed(4) }}</el-tag>
+        <el-tag type="success" size="large">装备体系权重: {{ Number(weightSnapshot.eqDomainWeight || 0.5).toFixed(4) }}</el-tag>
+      </div>
     </el-card>
 
-    <!-- 二、综合评估得分（原六） -->
-    <el-card v-if="collectiveResult" class="content-card" shadow="hover">
+    <!-- 综合评分结果 -->
+    <el-card v-if="results.length > 0" class="content-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span><el-icon><Finished /></el-icon> 二、综合评估得分（集结权重 × 归一化 score）</span>
-          <el-button type="danger" size="small" :icon="Delete" @click="deleteResults">删除结果</el-button>
+          <span><el-icon><Finished /></el-icon> 综合评分结果</span>
+          <el-tag type="info">{{ results.length }} 个作战</el-tag>
         </div>
       </template>
 
       <div class="result-section">
         <div class="result-toolbar">
-          <h5>2.1 各作战任务一级维度得分对比</h5>
-          <el-radio-group v-model="primaryDimChartType" size="small" @change="renderPrimaryDimensionByExperimentChart">
-            <el-radio-button value="bar">分组柱状图</el-radio-button>
+          <h5>综合总分对比</h5>
+          <el-radio-group v-model="totalScoreChartType" size="small">
+            <el-radio-button value="bar">柱状图</el-radio-button>
             <el-radio-button value="line">折线图</el-radio-button>
           </el-radio-group>
         </div>
-        <p class="chart-hint">
-          横轴为各作战实验；不同颜色代表五大一级维度得分（0~1）。纵轴固定 0~1。底部<strong>滑块</strong>可缩放横轴，也可在图内<strong>滚轮</strong>缩放、按住拖拽平移。
-        </p>
-        <div ref="primaryDimByExperimentChartRef" class="chart-container-large"></div>
+        <div ref="totalScoreChartRef" class="chart-container-large"></div>
       </div>
 
       <div class="result-section">
         <div class="result-toolbar">
-          <h5>2.2 各作战任务二级指标加权得分对比</h5>
-          <el-radio-group v-model="dimensionScoreChartType" size="small" @change="renderDimensionScoreDetailChart">
-            <el-radio-button value="bar">分组柱状图</el-radio-button>
-            <el-radio-button value="line">折线图</el-radio-button>
-          </el-radio-group>
+          <h5>各维度得分对比</h5>
+          <div class="filter-group">
+            <el-checkbox-group v-model="selectedDomains" size="small">
+              <el-checkbox-button value="eff">效能维度</el-checkbox-button>
+              <el-checkbox-button value="eq">装备维度</el-checkbox-button>
+            </el-checkbox-group>
+            <el-select v-model="selectedDimensions" multiple collapse-tags collapse-tags-tooltip placeholder="选择维度" size="small" style="width: 300px; margin-left: 8px">
+              <el-option v-for="dim in availableDimensions" :key="dim" :label="dim" :value="dim" />
+            </el-select>
+          </div>
         </div>
-        <p class="chart-hint">
-          柱高为 <strong>归一化得分 × 该指标集结二级权重</strong>（对综合分的分项贡献）。横轴为 18 个二级指标，标签下行为权重占比。纵轴为加权得分，刻度随数据自动缩放。请用底部滑块或图内滚轮缩放横轴。
-        </p>
-        <div ref="dimensionScoreChartRef" class="chart-container-large"></div>
+        <div ref="domainScoreChartRef" class="chart-container-large"></div>
+      </div>
+
+      <!-- 指标细分图表 -->
+      <div v-for="(indData, dimName) in indicatorScores" :key="dimName" class="result-section">
+        <div class="result-toolbar">
+          <h5>{{ dimName }} - 指标细分 <el-tag size="small" type="info">权重: {{ formatScore(dimensionWeights[dimName]) }}</el-tag></h5>
+        </div>
+        <div :ref="el => { if (el) indicatorChartRefs[dimName] = el }" class="chart-container-large"></div>
       </div>
 
       <div class="result-section">
-        <h5>2.3 各作战任务综合得分对比</h5>
-        <div ref="scoreChartRef" class="chart-container-large"></div>
+        <h5>综合得分排名</h5>
+        <el-table :data="rankedResults" border stripe size="small">
+          <el-table-column type="index" label="排名" width="80" align="center" />
+          <el-table-column prop="operationId" label="作战ID" width="120" align="center" />
+          <el-table-column label="综合总分" align="center">
+            <template #default="{ row }">
+              <span class="score-cell total"><strong>{{ formatScore(row.totalScore) }}</strong></span>
+            </template>
+          </el-table-column>
+          <el-table-column label="效能分" align="center">
+            <template #default="{ row }">
+              <span class="score-cell eff">{{ formatScore(row.effectivenessScore) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="装备分" align="center">
+            <template #default="{ row }">
+              <span class="score-cell eq">{{ formatScore(row.equipmentScore) }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
-import request from '../utils/request'
-import { getCollectiveEvaluationIds, computeCollectiveResults, deleteCollectiveResults } from '../api/index'
-import { DataAnalysis, List, Finished, Delete, Refresh } from '@element-plus/icons-vue'
+import { DataAnalysis, Finished, Delete, Refresh, List, Key } from '@element-plus/icons-vue'
+import {
+  getComprehensiveBatches,
+  calculateComprehensiveScores,
+  getComprehensiveResults,
+  deleteComprehensiveResults
+} from '../api/index'
 
-const evaluationIds = ref([])
+const evaluationBatches = ref([])
 const evaluationId = ref('')
-const collectiveResult = ref(null)
-const loadResultLoading = ref(false)
+const results = ref([])
+const weightSnapshot = ref(null)
+const calculating = ref(false)
+const loading = ref(false)
+const dimensionWeights = ref({})
 
-const metricsFieldMeta = [
-  { prop: 'security_key_leakage_count', label: '密钥泄露次数', category: '安全性', meaning: '统计窗口内密钥泄露事件次数；越小越好，归一化后进入「密钥泄露得分」。', scoreName: '密钥泄露得分' },
-  { prop: 'security_detected_probability', label: '被侦察概率', category: '安全性', meaning: '被侦察通信占比(%)；越小越好，归一化后进入「被侦察得分」。', scoreName: '被侦察得分' },
-  { prop: 'security_interception_resistance_probability', label: '抗拦截(被拦占比)', category: '安全性', meaning: '被拦截通信占比(%)；数值含义与业务定义一致，归一化后进入「抗拦截得分」。', scoreName: '抗拦截得分' },
-  { prop: 'reliability_crash_count', label: '网络崩溃次数', category: '可靠性', meaning: '链路崩溃类中断次数；越少越好，归一化后进入「崩溃比例得分」。', scoreName: '崩溃比例得分' },
-  { prop: 'reliability_recovery_time', label: '平均恢复时间', category: '可靠性', meaning: '成功恢复事件的平均耗时(ms)；越短越好，归一化后进入「恢复能力得分」。', scoreName: '恢复能力得分' },
-  { prop: 'reliability_communication_availability', label: '通信可用性', category: '可靠性', meaning: '可用时间占比(%)；越大越好，归一化后进入「通信可用得分」。', scoreName: '通信可用得分' },
-  { prop: 'transmission_bandwidth', label: '平均带宽', category: '传输能力', meaning: '平均带宽(Mbps)；越大越好，归一化后进入「带宽得分」。', scoreName: '带宽得分' },
-  { prop: 'transmission_call_setup_time', label: '呼叫建立时间', category: '传输能力', meaning: '平均呼叫建立耗时(ms)；越短越好，归一化后进入「呼叫建立得分」。', scoreName: '呼叫建立得分' },
-  { prop: 'transmission_delay', label: '传输时延', category: '传输能力', meaning: '平均传输时延(ms)；越短越好，归一化后进入「传输时延得分」。', scoreName: '传输时延得分' },
-  { prop: 'transmission_bit_error_rate', label: '误码率', category: '传输能力', meaning: '平均误码率(%)；越低越好，归一化后进入「误码率得分」。', scoreName: '误码率得分' },
-  { prop: 'transmission_throughput', label: '吞吐量', category: '传输能力', meaning: '平均吞吐量(Mbps)；越大越好，归一化后进入「吞吐量得分」。', scoreName: '吞吐量得分' },
-  { prop: 'transmission_spectral_efficiency', label: '频谱效率', category: '传输能力', meaning: 'bit/Hz 类效率指标；越大越好，归一化后进入「频谱效率得分」。', scoreName: '频谱效率得分' },
-  { prop: 'anti_jamming_sinr', label: '信干噪比', category: '抗干扰能力', meaning: '平均 SINR(dB)；越大越好，归一化后进入「信干噪比得分」。', scoreName: '信干噪比得分' },
-  { prop: 'anti_jamming_margin', label: '抗干扰余量', category: '抗干扰能力', meaning: '平均抗干扰余量(dB)；越大越好，归一化后进入「抗干扰余量得分」。', scoreName: '抗干扰余量得分' },
-  { prop: 'anti_jamming_communication_distance', label: '通信距离', category: '抗干扰能力', meaning: '平均通信距离(km)；越大越好，归一化后进入「通信距离得分」。', scoreName: '通信距离得分' },
-  { prop: 'effect_damage_rate', label: '毁伤率', category: '效能影响', meaning: '装备毁伤占比(%)；越低越好，归一化后进入「战损率得分」。', scoreName: '战损率得分' },
-  { prop: 'effect_mission_completion_rate', label: '任务完成率', category: '效能影响', meaning: '通信成功占比(%)；越高越好，归一化后进入「任务完成率得分」。', scoreName: '任务完成率得分' },
-  { prop: 'effect_blind_rate', label: '盲区率', category: '效能影响', meaning: '孤立节点占比(%)；越低越好，归一化后进入「致盲率得分」。', scoreName: '致盲率得分' }
-]
+const totalScoreChartRef = ref(null)
+const domainScoreChartRef = ref(null)
+let totalScoreChart = null
+let domainScoreChart = null
 
-/** score_military_comm_effect 指标列（顺序与后端 MetricsDirection.getScoreFields 一致） */
-const scoreFieldMeta = [
-  { prop: 'security_key_leakage_qt', label: '密钥泄露得分' },
-  { prop: 'security_detected_probability_qt', label: '被侦察得分' },
-  { prop: 'security_interception_resistance_ql', label: '抗拦截得分' },
-  { prop: 'reliability_crash_rate_qt', label: '崩溃比例得分' },
-  { prop: 'reliability_recovery_capability_qt', label: '恢复能力得分' },
-  { prop: 'reliability_communication_availability_qt', label: '通信可用得分' },
-  { prop: 'transmission_bandwidth_qt', label: '带宽得分' },
-  { prop: 'transmission_call_setup_time_qt', label: '呼叫建立得分' },
-  { prop: 'transmission_transmission_delay_qt', label: '传输时延得分' },
-  { prop: 'transmission_bit_error_rate_qt', label: '误码率得分' },
-  { prop: 'transmission_throughput_qt', label: '吞吐量得分' },
-  { prop: 'transmission_spectral_efficiency_qt', label: '频谱效率得分' },
-  { prop: 'anti_jamming_sinr_qt', label: '信干噪比得分' },
-  { prop: 'anti_jamming_anti_jamming_margin_qt', label: '抗干扰余量得分' },
-  { prop: 'anti_jamming_communication_distance_qt', label: '通信距离得分' },
-  { prop: 'effect_damage_rate_qt', label: '战损率得分' },
-  { prop: 'effect_mission_completion_rate_qt', label: '任务完成率得分' },
-  { prop: 'effect_blind_rate_qt', label: '致盲率得分' }
-]
+// 指标图表引用
+const indicatorChartRefs = {}
+const indicatorCharts = {}
 
-/** 18 个二级指标得分项名称（与集结结果 indicatorScores 的 key 一致） */
-const INDICATOR_LABELS = scoreFieldMeta.map((c) => c.label)
+const totalScoreChartType = ref('bar')
+const selectedDomains = ref(['eff', 'eq'])
+const selectedDimensions = ref([])
+const availableDimensions = ref([])
 
-const metricsRows = ref([])
-const metricsLoading = ref(false)
-const scoreRows = ref([])
-const scoreLoading = ref(false)
+// 指标得分数据（用于指标细分图表）
+const indicatorScores = ref({})
 
-const scoreChartRef = ref(null)
-const dimensionScoreChartRef = ref(null)
-const primaryDimByExperimentChartRef = ref(null)
-let scoreChart = null
-let dimensionScoreChart = null
-let primaryDimByExperimentChart = null
+const rankedResults = computed(() => {
+  return [...results.value]
+    .filter(r => r.totalScore != null)
+    .sort((a, b) => Number(b.totalScore) - Number(a.totalScore))
+})
 
-const dimensionScoreChartType = ref('bar')
-const primaryDimChartType = ref('bar')
-
-function formatMetricCell(v) {
-  if (v === null || v === undefined || v === '') return '—'
-  const n = Number(v)
-  if (!Number.isFinite(n)) return String(v)
-  return Math.abs(n) >= 1000 ? n.toFixed(2) : n.toFixed(4)
-}
-
-function formatScoreCell(v) {
-  if (v === null || v === undefined || v === '') return '—'
-  const n = Number(v)
-  if (!Number.isFinite(n)) return String(v)
-  return n.toFixed(2)
-}
-
-function normalizeMetricsRows(list) {
-  return list.map((row) => {
-    const o = {}
-    for (const [k, val] of Object.entries(row)) {
-      o[String(k).toLowerCase()] = val
-    }
-    return o
-  })
-}
-
-async function loadMetricsForBatch() {
-  const id = evaluationId.value
-  if (!id) {
-    metricsRows.value = []
-    scoreRows.value = []
-    return
+// 根据选择计算要显示的维度键
+const selectedDimensionKeys = computed(() => {
+  if (selectedDimensions.value.length === 0) {
+    return availableDimensions.value
   }
-  metricsLoading.value = true
-  scoreLoading.value = true
+  return selectedDimensions.value
+})
+
+function formatScore(val) {
+  if (val == null) return '—'
+  const n = Number(val)
+  if (isNaN(n)) return '—'
+  return n.toFixed(4)
+}
+
+function getScoreClass(val) {
+  const n = Number(val)
+  if (isNaN(n)) return ''
+  if (n >= 0.8) return 'score-high'
+  if (n >= 0.5) return 'score-mid'
+  return 'score-low'
+}
+
+function getScoreTagType(val) {
+  const n = Number(val)
+  if (isNaN(n)) return 'info'
+  if (n >= 0.8) return 'success'
+  if (n >= 0.5) return 'warning'
+  return 'danger'
+}
+
+async function loadBatches() {
   try {
-    const list = await request.get('/metrics/results', { params: { evaluationId: id } })
-    metricsRows.value = Array.isArray(list) ? normalizeMetricsRows(list) : []
+    const data = await getComprehensiveBatches()
+    evaluationBatches.value = Array.isArray(data) ? data : []
   } catch (e) {
-    console.error('加载原始指标失败:', e)
-    metricsRows.value = []
-  } finally {
-    metricsLoading.value = false
-  }
-  try {
-    const scores = await request.get('/metrics/scores', { params: { evaluationId: id } })
-    scoreRows.value = Array.isArray(scores) ? normalizeMetricsRows(scores) : []
-  } catch (e) {
-    console.error('加载归一化 score 失败:', e)
-    scoreRows.value = []
-  } finally {
-    scoreLoading.value = false
+    console.error(e)
+    evaluationBatches.value = []
   }
 }
 
 function onBatchChange() {
-  collectiveResult.value = null
-  disposeResultCharts()
-  loadMetricsForBatch()
-}
-
-function disposeResultCharts() {
-  scoreChart?.dispose()
-  dimensionScoreChart?.dispose()
-  primaryDimByExperimentChart?.dispose()
-  scoreChart = null
-  dimensionScoreChart = null
-  primaryDimByExperimentChart = null
-}
-
-function paletteForExperimentSeries(n) {
-  const base = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#409EFF']
-  if (n <= base.length) return base.slice(0, n)
-  const out = [...base]
-  for (let i = base.length; i < n; i++) {
-    const h = Math.round((360 * i) / n) % 360
-    out.push(`hsl(${h}, 62%, 52%)`)
-  }
-  return out
-}
-
-/** 横轴缩放：滑块 + 图内滚轮/拖拽（类目轴） */
-function buildCategoryAxisDataZoom() {
-  return [
-    {
-      type: 'inside',
-      xAxisIndex: 0,
-      zoomOnMouseWheel: true,
-      moveOnMouseMove: true,
-      moveOnMouseWheel: false
-    },
-    {
-      type: 'slider',
-      xAxisIndex: 0,
-      height: 22,
-      bottom: 4,
-      showDetail: false,
-      handleStyle: { color: '#409eff' },
-      dataBackground: { lineStyle: { opacity: 0.3 }, areaStyle: { opacity: 0.1 } },
-      borderColor: '#dcdfe6'
-    }
-  ]
-}
-
-function renderScoreChart() {
-  if (!scoreChartRef.value || !collectiveResult.value?.results) return
-  if (!scoreChart) scoreChart = echarts.init(scoreChartRef.value)
-  const results = collectiveResult.value.results
-  const option = {
-    title: { text: '各作战任务综合得分对比', left: 'center', textStyle: { fontSize: 16 } },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      formatter: (params) => {
-        const p = params[0]
-        return `<strong>${p.name}</strong><br/>综合得分: <strong style="color:#67C23A">${Number(p.value).toFixed(2)}</strong>`
-      }
-    },
-    grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true },
-    xAxis: {
-      type: 'category',
-      data: results.map((r) => `实验${r.operationId}`),
-      axisLabel: { fontSize: 12 }
-    },
-    yAxis: {
-      type: 'value',
-      name: '综合得分',
-      min: 0,
-      max: 1,
-      axisLabel: { formatter: (v) => Number(v).toFixed(2) }
-    },
-    series: [{
-      type: 'bar',
-      data: results.map((r) => ({
-        value: Number(r.totalScore),
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#67C23A' },
-            { offset: 1, color: '#95D475' }
-          ])
-        }
-      })),
-      label: { show: true, position: 'top', formatter: (p) => Number(p.value).toFixed(2), fontSize: 11 },
-      barWidth: '50%'
-    }]
-  }
-  scoreChart.setOption(option)
-  scoreChart.resize()
-}
-
-function renderDimensionScoreDetailChart() {
-  if (!dimensionScoreChartRef.value || !collectiveResult.value?.results?.length) return
-  if (!dimensionScoreChart) dimensionScoreChart = echarts.init(dimensionScoreChartRef.value)
-  const results = collectiveResult.value.results
-  const iw = collectiveResult.value.indicatorWeights || {}
-  const weightPctInd = (name) => {
-    const v = Number(iw[name] ?? 0)
-    return (v * 100).toFixed(1)
-  }
-  const weightNum = (name) => Number(iw[name] ?? 0)
-  const weightedValue = (r, name) => {
-    const s = Number(r.indicatorScores?.[name] ?? 0)
-    return s * weightNum(name)
-  }
-  let peak = 0
-  for (const r of results) {
-    for (const name of INDICATOR_LABELS) {
-      peak = Math.max(peak, weightedValue(r, name))
-    }
-  }
-  const yMax = peak > 1e-9 ? Math.min(1, peak * 1.12) : 0.1
-
-  const xCategories = INDICATOR_LABELS.map((n) => `${n}\n权重 ${weightPctInd(n)}%`)
-  const chartType = dimensionScoreChartType.value === 'line' ? 'line' : 'bar'
-  const colors = paletteForExperimentSeries(results.length)
-  const series = results.map((r, idx) => ({
-    name: `实验${r.operationId}`,
-    type: chartType,
-    data: INDICATOR_LABELS.map((name) => weightedValue(r, name)),
-    itemStyle: { color: colors[idx] },
-    lineStyle: chartType === 'line' ? { width: 2 } : undefined,
-    smooth: chartType === 'line',
-    symbolSize: chartType === 'line' ? 7 : undefined,
-    barMaxWidth: chartType === 'bar' ? 10 : undefined
-  }))
-  const option = {
-    title: {
-      text: '各二级指标加权得分 — 按实验对比（得分 × 集结二级权重）',
-      left: 'center',
-      textStyle: { fontSize: 15 }
-    },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      formatter(params) {
-        if (!params?.length) return ''
-        const dataIndex = params[0].dataIndex
-        const indTitle = INDICATOR_LABELS[dataIndex] ?? ''
-        const w = weightNum(indTitle)
-        let head = `<strong>${indTitle}</strong>`
-        if (indTitle) {
-          head += `<br/><span style="opacity:.85">集结二级权重：${weightPctInd(indTitle)}%（${w.toFixed(2)}）</span>`
-        }
-        const lines = params
-          .filter((p) => p.value != null && !Number.isNaN(Number(p.value)))
-          .map((p) => {
-            const weighted = Number(p.value)
-            const raw = w > 1e-12 ? weighted / w : 0
-            return `${p.marker} ${p.seriesName}: 归一化得分 ${raw.toFixed(2)} × 权重 → <strong>${weighted.toFixed(2)}</strong>`
-          })
-        return `${head}<br/>${lines.join('<br/>')}`
-      }
-    },
-    legend: { type: 'scroll', bottom: 36, left: 'center', data: results.map((r) => `实验${r.operationId}`) },
-    grid: { left: '3%', right: '4%', top: 58, bottom: 118, containLabel: true },
-    dataZoom: buildCategoryAxisDataZoom(),
-    xAxis: {
-      type: 'category',
-      data: xCategories,
-      axisLabel: { interval: 0, rotate: 32, fontSize: 9, lineHeight: 12 }
-    },
-    yAxis: {
-      type: 'value',
-      name: '加权得分（得分×权重）',
-      min: 0,
-      max: yMax,
-      axisLabel: { formatter: (v) => Number(v).toFixed(2) },
-      splitLine: { lineStyle: { type: 'dashed' } }
-    },
-    series
-  }
-  dimensionScoreChart.setOption(option, true)
-  dimensionScoreChart.resize()
-}
-
-function renderPrimaryDimensionByExperimentChart() {
-  if (!primaryDimByExperimentChartRef.value || !collectiveResult.value?.results?.length) return
-  if (!primaryDimByExperimentChart) primaryDimByExperimentChart = echarts.init(primaryDimByExperimentChartRef.value)
-  const results = collectiveResult.value.results
-  const dimNames = ['安全性', '可靠性', '传输能力', '抗干扰能力', '效能影响']
-  const labels = results.map((r) => `实验${r.operationId}`)
-  const chartType = primaryDimChartType.value === 'line' ? 'line' : 'bar'
-  const palette = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399']
-  const series = dimNames.map((d, idx) => ({
-    name: d,
-    type: chartType,
-    data: results.map((r) => Number(r.dimensionScores?.[d] ?? 0)),
-    itemStyle: { color: palette[idx] },
-    smooth: chartType === 'line',
-    symbolSize: chartType === 'line' ? 6 : undefined,
-    barMaxWidth: chartType === 'bar' ? 22 : undefined,
-    lineStyle: chartType === 'line' ? { width: 2 } : undefined
-  }))
-  const option = {
-    title: { text: '各作战任务 — 一级维度得分对比', left: 'center', textStyle: { fontSize: 15 } },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      formatter(params) {
-        if (!params?.length) return ''
-        const expName = params[0].name
-        const lines = params
-          .filter((p) => p.value != null && !Number.isNaN(Number(p.value)))
-          .map((p) => `${p.marker} ${p.seriesName}: <strong>${Number(p.value).toFixed(2)}</strong>`)
-        return `<strong>${expName}</strong><br/>${lines.join('<br/>')}`
-      }
-    },
-    legend: { type: 'scroll', bottom: 36, left: 'center', data: dimNames },
-    grid: { left: '3%', right: '4%', top: 55, bottom: 100, containLabel: true },
-    dataZoom: buildCategoryAxisDataZoom(),
-    xAxis: { type: 'category', data: labels, axisLabel: { rotate: labels.length > 8 ? 25 : 0, fontSize: 11 } },
-    yAxis: {
-      type: 'value',
-      name: '得分(0~1)',
-      min: 0,
-      max: 1,
-      axisLabel: { formatter: (v) => Number(v).toFixed(2) },
-      splitLine: { lineStyle: { type: 'dashed' } }
-    },
-    series
-  }
-  primaryDimByExperimentChart.setOption(option, true)
-  primaryDimByExperimentChart.resize()
-}
-
-async function loadEvaluationIds() {
-  try {
-    const ids = await getCollectiveEvaluationIds()
-    evaluationIds.value = Array.isArray(ids) ? ids : []
-  } catch (e) {
-    console.error(e)
-    evaluationIds.value = []
+  results.value = []
+  weightSnapshot.value = null
+  disposeCharts()
+  // 选择批次后自动加载
+  if (evaluationId.value) {
+    // nothing to do
   }
 }
 
-async function loadSavedResults() {
+async function calculateScores() {
   if (!evaluationId.value) return
-  loadResultLoading.value = true
+  calculating.value = true
   try {
-    const data = await computeCollectiveResults(evaluationId.value)
-    collectiveResult.value = data
-    ElMessage.success('已计算并加载该批次综合评估结果（保留两位小数）')
-    await nextTick()
-    renderPrimaryDimensionByExperimentChart()
-    renderDimensionScoreDetailChart()
-    renderScoreChart()
+    const data = await calculateComprehensiveScores(evaluationId.value)
+    if (data?.success) {
+      results.value = data.results || []
+      weightSnapshot.value = data.weightSnapshot || null
+      // 从第一个结果中提取维度权重
+      if (data.results && data.results.length > 0) {
+        dimensionWeights.value = data.results[0].dimensionWeights || {}
+      }
+      extractAvailableDimensions()
+      ElMessage.success(data.message || '计算成功')
+      await nextTick()
+      renderCharts()
+    } else {
+      ElMessage.error(data?.message || '计算失败')
+    }
   } catch (e) {
-    collectiveResult.value = null
-    disposeResultCharts()
-    ElMessage.error(e?.message || '加载失败，请确认已执行集结计算')
+    ElMessage.error(e?.message || '计算失败')
   } finally {
-    loadResultLoading.value = false
+    calculating.value = false
+  }
+}
+
+async function loadResults() {
+  if (!evaluationId.value) return
+  loading.value = true
+  try {
+    const data = await getComprehensiveResults(evaluationId.value)
+    if (data?.success) {
+      results.value = data.results || []
+      weightSnapshot.value = data.weightSnapshot || null
+      // 从第一个结果中提取维度权重
+      if (data.results && data.results.length > 0) {
+        dimensionWeights.value = data.results[0].dimensionWeights || {}
+      }
+      extractAvailableDimensions()
+      await nextTick()
+      renderCharts()
+    } else {
+      ElMessage.warning(data?.message || '暂无结果，请先计算')
+    }
+  } catch (e) {
+    ElMessage.error('加载失败')
+  } finally {
+    loading.value = false
   }
 }
 
 async function deleteResults() {
   if (!evaluationId.value) return
   try {
-    await ElMessageBox.confirm('确定要删除该批次的综合评估结果吗？', '确认删除', {
+    await ElMessageBox.confirm('确定要删除该批次的综合评分结果吗？', '确认删除', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning'
     })
-    await deleteCollectiveResults(evaluationId.value)
-    collectiveResult.value = null
-    disposeResultCharts()
+    await deleteComprehensiveResults(evaluationId.value)
+    results.value = []
+    weightSnapshot.value = null
+    disposeCharts()
     ElMessage.success('删除成功')
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error(error?.message || '删除失败')
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error('删除失败')
     }
   }
 }
 
+function disposeCharts() {
+  totalScoreChart?.dispose()
+  domainScoreChart?.dispose()
+  totalScoreChart = null
+  domainScoreChart = null
+  // 销毁指标图表
+  Object.values(indicatorCharts).forEach(chart => chart?.dispose())
+  Object.keys(indicatorCharts).forEach(key => delete indicatorCharts[key])
+}
+
+function renderCharts() {
+  if (results.value.length === 0) return
+  console.log('开始渲染所有图表...')
+  renderTotalScoreChart()
+  renderDomainScoreChart()
+  extractAvailableDimensions()
+  console.log('indicatorScores.value:', indicatorScores.value)
+  renderIndicatorCharts()
+}
+
+// 提取所有可用维度
+function extractAvailableDimensions() {
+  const dims = new Set()
+  results.value.forEach(r => {
+    // 从 dimensionScores 提取
+    const dimsData = r.dimensionScores || {}
+    Object.keys(dimsData).forEach(key => dims.add(key))
+    // 从 indicatorScores 提取
+    const indData = r.indicatorScores || {}
+    Object.keys(indData).forEach(key => dims.add(key))
+  })
+  availableDimensions.value = Array.from(dims).sort()
+  // 默认选择所有维度
+  selectedDimensions.value = [...availableDimensions.value]
+}
+
+// 提取指标得分数据
+function extractIndicatorScores() {
+  const data = {}
+
+  console.log('开始提取指标得分...')
+  console.log('results:', results.value)
+
+  // 遍历所有结果，从 indicatorScores 中提取数据
+  results.value.forEach(r => {
+    const indScores = r.indicatorScores || {}
+    console.log(`作战 ${r.operationId} 的 indicatorScores:`, indScores)
+
+    Object.entries(indScores).forEach(([dimName, indicators]) => {
+      if (!data[dimName]) {
+        data[dimName] = {
+          labels: [],
+          datasets: {}
+        }
+      }
+      const opId = `作战${r.operationId}`
+      if (!data[dimName].labels.includes(opId)) {
+        data[dimName].labels.push(opId)
+      }
+      Object.entries(indicators).forEach(([indicator, score]) => {
+        if (!data[dimName].datasets[indicator]) {
+          data[dimName].datasets[indicator] = []
+        }
+        data[dimName].datasets[indicator].push(Number(score || 0))
+      })
+    })
+  })
+
+  indicatorScores.value = data
+  console.log('提取后的 indicatorScores:', indicatorScores.value)
+}
+
+// 渲染指标细分图表
+function renderIndicatorCharts() {
+  nextTick(() => {
+    extractIndicatorScores()
+  })
+}
+
+function renderSingleIndicatorChart(dimName) {
+  console.log(`渲染指标图表: ${dimName}`)
+  const el = indicatorChartRefs[dimName]
+  if (!el) {
+    console.log(`DOM 元素未找到: ${dimName}, 可用的 refs:`, Object.keys(indicatorChartRefs))
+    return
+  }
+
+  if (!indicatorCharts[dimName]) {
+    indicatorCharts[dimName] = echarts.init(el)
+  }
+  const chart = indicatorCharts[dimName]
+
+  const data = indicatorScores.value[dimName]
+  console.log(`图表 ${dimName} 的数据:`, data)
+
+  if (!data || !data.labels.length) {
+    console.log(`数据为空，跳过渲染`)
+    chart.clear()
+    return
+  }
+
+  const indicators = Object.keys(data.datasets)
+  if (indicators.length === 0) {
+    console.log(`没有指标数据，跳过渲染`)
+    chart.clear()
+    return
+  }
+
+  const xData = data.labels
+
+  // 计算所有数据的最大最小值
+  let allValues = []
+  indicators.forEach(ind => {
+    allValues = allValues.concat(data.datasets[ind])
+  })
+  const maxVal = Math.max(0.1, ...allValues)
+  const minVal = Math.min(0, ...allValues)
+
+  const series = indicators.map((ind, idx) => ({
+    name: ind,
+    type: 'bar',
+    data: data.datasets[ind],
+    itemStyle: {
+      color: idx % 2 === 0 ? '#409EFF' : '#67C23A'
+    },
+    label: {
+      show: xData.length <= 5,
+      formatter: (p) => p.value.toFixed(2),
+      position: 'top'
+    }
+  }))
+
+  const option = {
+    title: {
+      text: '',
+      left: 'center'
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
+    },
+    legend: {
+      data: indicators,
+      bottom: 10,
+      type: 'scroll'
+    },
+    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: xData,
+      axisLabel: { fontSize: 11, rotate: xData.length > 6 ? 25 : 0 }
+    },
+    yAxis: {
+      type: 'value',
+      name: '得分',
+      min: 0,
+      max: Math.ceil(maxVal * 10) / 10 + 0.1,
+      axisLabel: { formatter: (v) => v.toFixed(2) }
+    },
+    series
+  }
+
+  chart.setOption(option, true)
+  chart.resize()
+}
+
+function renderTotalScoreChart() {
+  if (!totalScoreChartRef.value) return
+  if (!totalScoreChart) totalScoreChart = echarts.init(totalScoreChartRef.value)
+
+  const chartType = totalScoreChartType.value
+  const xData = results.value.map(r => `作战${r.operationId}`)
+  const yData = results.value.map(r => Number(r.totalScore || 0))
+
+  const option = {
+    title: { text: '各作战综合总分对比', left: 'center', textStyle: { fontSize: 16 } },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params) => {
+        const p = params[0]
+        return `<strong>${p.name}</strong><br/>综合总分: <strong style="color:#67C23A">${Number(p.value).toFixed(4)}</strong>`
+      }
+    },
+    grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: xData,
+      axisLabel: { fontSize: 12, rotate: xData.length > 6 ? 25 : 0 }
+    },
+    yAxis: {
+      type: 'value',
+      name: '综合总分',
+      min: 0,
+      max: 1,
+      axisLabel: { formatter: (v) => v.toFixed(2) }
+    },
+    series: [{
+      type: chartType,
+      data: yData,
+      itemStyle: chartType === 'bar' ? {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: '#409EFF' },
+          { offset: 1, color: '#67C23A' }
+        ])
+      } : { color: '#409EFF' },
+      lineStyle: chartType === 'line' ? { width: 3 } : undefined,
+      smooth: chartType === 'line',
+      barWidth: chartType === 'bar' ? '50%' : undefined
+    }]
+  }
+
+  totalScoreChart.setOption(option, true)
+  totalScoreChart.resize()
+}
+
+function renderDomainScoreChart() {
+  if (!domainScoreChartRef.value) return
+  if (!domainScoreChart) domainScoreChart = echarts.init(domainScoreChartRef.value)
+
+  // 根据选择过滤维度
+  const filteredDimensions = selectedDimensionKeys.value.filter(key => {
+    if (key.startsWith('效能_') && !selectedDomains.value.includes('eff')) return false
+    if (key.startsWith('装备_') && !selectedDomains.value.includes('eq')) return false
+    return true
+  })
+
+  if (filteredDimensions.length === 0) {
+    domainScoreChart.clear()
+    return
+  }
+
+  const xData = results.value.map(r => `作战${r.operationId}`)
+
+  // 准备数据：每个维度一个系列
+  const effDims = filteredDimensions.filter(d => d.startsWith('效能_')).map(d => d.replace('效能_', ''))
+  const eqDims = filteredDimensions.filter(d => d.startsWith('装备_')).map(d => d.replace('装备_', ''))
+
+  const series = []
+
+  // 效能维度用蓝色系
+  const effColors = ['#409EFF', '#79BBFF', '#A0CFFF', '#C6E2FF', '#D9ECFF']
+  effDims.forEach((dim, idx) => {
+    const data = results.value.map(r => {
+      const dimsData = r.dimensionScores || {}
+      return Number(dimsData[`效能_${dim}`] || 0)
+    })
+    series.push({
+      name: `效能_${dim}`,
+      type: 'bar',
+      data,
+      itemStyle: { color: effColors[idx % effColors.length] },
+      label: {
+        show: results.value.length <= 8,
+        formatter: (p) => p.value.toFixed(2),
+        position: 'top'
+      }
+    })
+  })
+
+  // 装备维度用绿色系
+  const eqColors = ['#67C23A', '#95D475', '#B3E19D', '#D1FCAC', '#E8F7D8']
+  eqDims.forEach((dim, idx) => {
+    const data = results.value.map(r => {
+      const dimsData = r.dimensionScores || {}
+      return Number(dimsData[`装备_${dim}`] || 0)
+    })
+    series.push({
+      name: `装备_${dim}`,
+      type: 'bar',
+      data,
+      itemStyle: { color: eqColors[idx % eqColors.length] },
+      label: {
+        show: results.value.length <= 8,
+        formatter: (p) => p.value.toFixed(2),
+        position: 'top'
+      }
+    })
+  })
+
+  // 构建图例名称（带权重）
+  const legendData = series.map(s => s.name)
+
+  // 计算 Y 轴范围
+  let allDimValues = []
+  filteredDimensions.forEach(dimKey => {
+    results.value.forEach(r => {
+      const dimsData = r.dimensionScores || {}
+      allDimValues.push(Number(dimsData[dimKey] || 0))
+    })
+  })
+  const maxDimVal = Math.max(0.1, ...allDimValues)
+
+  const option = {
+    title: {
+      text: '各维度得分对比',
+      left: 'center',
+      textStyle: { fontSize: 16 }
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        let html = `<strong>${params[0].name}</strong><br/>`
+        params.forEach(p => {
+          html += `${p.marker} ${p.seriesName}: <strong>${Number(p.value).toFixed(4)}</strong><br/>`
+        })
+        return html
+      }
+    },
+    legend: {
+      data: legendData,
+      bottom: 10,
+      type: 'scroll'
+    },
+    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: xData,
+      axisLabel: { fontSize: 12, rotate: xData.length > 6 ? 25 : 0 }
+    },
+    yAxis: {
+      type: 'value',
+      name: '得分',
+      min: 0,
+      max: Math.ceil(maxDimVal * 10) / 10 + 0.1,
+      axisLabel: { formatter: (v) => v.toFixed(2) }
+    },
+    series
+  }
+
+  domainScoreChart.setOption(option, true)
+  domainScoreChart.resize()
+}
+
+watch(totalScoreChartType, () => renderTotalScoreChart())
+watch([selectedDomains, selectedDimensions], () => renderDomainScoreChart(), { deep: true })
+
+// 监听 indicatorScores 变化，确保 DOM 更新后渲染图表
+watch(indicatorScores, () => {
+  nextTick(() => {
+    Object.keys(indicatorScores.value).forEach(dimName => {
+      renderSingleIndicatorChart(dimName)
+    })
+  })
+}, { deep: true })
+
 onMounted(() => {
-  loadEvaluationIds()
+  loadBatches()
   window.addEventListener('resize', () => {
-    scoreChart?.resize()
-    dimensionScoreChart?.resize()
-    primaryDimByExperimentChart?.resize()
+    totalScoreChart?.resize()
+    domainScoreChart?.resize()
+    Object.values(indicatorCharts).forEach(chart => chart?.resize())
   })
 })
 </script>
@@ -612,6 +676,14 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.weight-info-card {
+  margin-bottom: 16px;
+  .weight-info {
+    display: flex;
+    gap: 16px;
+  }
+}
+
 .content-card {
   margin-bottom: 16px;
 }
@@ -620,6 +692,35 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.batch-list {
+  .batch-section {
+    margin-bottom: 8px;
+    strong {
+      display: inline-block;
+      width: 150px;
+      color: #606266;
+    }
+  }
+}
+
+.operation-compare {
+  margin-bottom: 12px;
+  div {
+    margin-bottom: 4px;
+    font-size: 13px;
+  }
+}
+
+.composite-score {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  strong {
+    margin-right: 12px;
+  }
 }
 
 .chart-container-large {
@@ -640,13 +741,11 @@ onMounted(() => {
     font-size: 14px;
     font-weight: 600;
   }
-}
-
-.chart-hint {
-  font-size: 12px;
-  color: #909399;
-  margin: 0 0 10px 0;
-  line-height: 1.5;
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
 }
 
 .result-section {
@@ -659,22 +758,19 @@ onMounted(() => {
   }
 }
 
-.metrics-hint {
-  font-size: 13px;
-  color: #606266;
-  line-height: 1.6;
-  margin: 0 0 12px 0;
+.score-cell {
+  font-family: 'Monaco', 'Menlo', monospace;
+  &.eff { color: #409EFF; }
+  &.eq { color: #67C23A; }
+  &.total { color: #E6A23C; }
 }
 
-.metrics-legend-collapse {
-  margin-top: 14px;
-}
+.score-high { color: #67C23A; }
+.score-mid { color: #E6A23C; }
+.score-low { color: #F56C6C; }
 
-.metrics-raw-table {
-  width: 100%;
-}
-
-.code-field {
-  font-size: 12px;
+.empty-text {
+  color: #909399;
+  font-style: italic;
 }
 </style>

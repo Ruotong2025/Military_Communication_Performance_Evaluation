@@ -1,8 +1,14 @@
 package com.ccnu.military.service;
 
+import com.ccnu.military.dto.AhpIndividualResult;
 import com.ccnu.military.dto.CollectiveCalculateRequest;
 import com.ccnu.military.dto.CollectiveCalculateResponse;
 import com.ccnu.military.dto.CollectiveWeightPreview;
+import com.ccnu.military.dto.MatrixCalculationRequest;
+import com.ccnu.military.dto.MatrixCalculationResult;
+import com.ccnu.military.dto.AhpIndividualResult.CrossDomainResult;
+import com.ccnu.military.dto.AhpIndividualResult.EffectivenessResult;
+import com.ccnu.military.dto.AhpIndividualResult.EquipmentResult;
 import com.ccnu.military.entity.ExpertAhpComparisonScore;
 import com.ccnu.military.entity.ExpertAhpGroupWeights;
 import com.ccnu.military.entity.ExpertCredibilityScore;
@@ -57,6 +63,8 @@ public class ExpertAggregationCollectiveService {
     private final ExpertWeightedEvaluationResultRepository weightedEvaluationResultRepository;
     private final MetricsCalculationService metricsCalculationService;
     private final ExpertAHPService ahpService;
+    private final EquipmentAhpService equipmentAhpService;
+    private final AhpIndividualService ahpIndividualService;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
 
@@ -100,23 +108,25 @@ public class ExpertAggregationCollectiveService {
 
     /**
      * 获取所有评估批次ID（从前端计算指标得分时使用）
+     * 注意：score_military_comm_effect 表使用 evaluation_batch_id 字段
      */
     public List<String> getEvaluationIds() {
         return jdbcTemplate.queryForList(
-                "SELECT DISTINCT evaluation_id FROM score_military_comm_effect ORDER BY evaluation_id DESC",
+                "SELECT DISTINCT evaluation_batch_id FROM score_military_comm_effect ORDER BY evaluation_batch_id DESC",
                 String.class
         );
     }
 
     /**
      * 根据批次ID获取作战任务ID列表（从score表直接查询，不依赖预存结果）
+     * 注意：score_military_comm_effect 表使用 evaluation_batch_id 字段
      */
     public List<String> getOperationIdsByEvaluationId(String evaluationId) {
         if (!StringUtils.hasText(evaluationId)) {
             throw new IllegalArgumentException("评估批次不能为空");
         }
         return jdbcTemplate.queryForList(
-                "SELECT DISTINCT operation_id FROM score_military_comm_effect WHERE evaluation_id = ? ORDER BY operation_id ASC",
+                "SELECT DISTINCT operation_id FROM score_military_comm_effect WHERE evaluation_batch_id = ? ORDER BY operation_id ASC",
                 String.class,
                 evaluationId.trim()
         );
@@ -138,7 +148,12 @@ public class ExpertAggregationCollectiveService {
         // Step ④：构造集体比较打分
         Map<String, Double> collectiveScores = buildCollectiveScores(grouped, perKeyWeights);
 
+        // Step ⑤：构造效能矩阵
         Map<String, MatrixContext> matrixResults = buildAndCalculateMatrices(collectiveScores);
+
+        // Step ⑥：构造装备侧矩阵
+        MatrixCalculationResult eqCalc = buildEquipmentCollectiveMatrices(collectiveScores);
+
         Map<String, Double> dimWeights = matrixResults.get("__dim__").weights;
         Map<String, Double> combinedWeights = calculateCombinedWeights(dimWeights, matrixResults);
         Map<String, Map<String, Double>> indWeightsByDim = buildIndicatorWeightsByDimension(matrixResults);
@@ -155,6 +170,10 @@ public class ExpertAggregationCollectiveService {
         for (String dim : DIMENSIONS) {
             MatrixContext ctx = matrixResults.get(dim);
             crResults.put(dim, toBd(ctx != null ? ctx.cr : 0.0));
+        }
+        // 装备侧 CR
+        if (eqCalc != null && eqCalc.getDimensionResult() != null) {
+            crResults.put("eq_dimension", toBd(eqCalc.getDimensionResult().getCr()));
         }
         preview.setCrResults(crResults);
 
@@ -175,6 +194,9 @@ public class ExpertAggregationCollectiveService {
 
         // 每个 key 下各专家的归一化权重（供前端展示计算过程）
         preview.setPerKeyExpertWeights(toBdMapPerKey(perKeyWeights));
+
+        // 集结统一快照
+        preview.setAggregatedUnified(computeAggregatedUnified(collectiveScores, matrixResults, eqCalc));
 
         return preview;
     }
@@ -198,49 +220,37 @@ public class ExpertAggregationCollectiveService {
         // ③ 构造集体比较打分
         Map<String, Double> collectiveScores = buildCollectiveScores(grouped, perKeyWeights);
 
-        // ④ 构造并计算 6 个矩阵
+        // ④ 构造并计算效能矩阵
         Map<String, MatrixContext> matrixResults = buildAndCalculateMatrices(collectiveScores);
         Map<String, Double> dimWeights = matrixResults.get("__dim__").weights;
 
-        // ⑤ 计算 18 个指标综合权重（归一化到对总目标）
+        // ⑤ 计算效能指标综合权重（归一化到对总目标）
         Map<String, Double> combinedWeights = calculateCombinedWeights(dimWeights, matrixResults);
         Map<String, Map<String, Double>> indWeightsByDim = buildIndicatorWeightsByDimension(matrixResults);
 
-        // ⑥ Upsert 集结权重到 expert_ahp_group_weights 表
-        String groupId = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        ExpertAhpGroupWeights entity = buildGroupWeightsEntity(
-                groupId, expertIdsStr, expertIds, matrixResults,
-                dimWeights, combinedWeights, indWeightsByDim,
-                credMap, perKeyWeights);
+        // ⑥ 构造装备侧集体矩阵并计算
+        MatrixCalculationResult eqCalc = buildEquipmentCollectiveMatrices(collectiveScores);
 
-        // 查询是否存在相同专家集合的记录
-        Optional<ExpertAhpGroupWeights> existingOpt = groupWeightsRepository.findByExpertIds(expertIdsStr);
-        if (existingOpt.isPresent()) {
-            // 更新：保留原 groupId，更新其他字段
-            ExpertAhpGroupWeights existing = existingOpt.get();
-            entity.setId(existing.getId());
-            entity.setGroupId(existing.getGroupId());
-            groupWeightsRepository.save(entity);
-            log.info("更新专家集结权重，groupId={}, expertIds={}", existing.getGroupId(), expertIdsStr);
-        } else {
-            // 新增
-            groupWeightsRepository.save(entity);
-            log.info("新增专家集结权重，groupId={}, expertIds={}", groupId, expertIdsStr);
-        }
+        // ⑦ 保存集结统一快照（JSON 存储，参照 expert_ahp_individual_weights 模式）
+        persistUnified(expertIds, expertIdsStr, collectiveScores, matrixResults, eqCalc);
 
-        // ⑦ 构建响应
+        // ⑧ 构建响应
         CollectiveCalculateResponse response = new CollectiveCalculateResponse();
         response.setEvaluationId(request.getEvaluationId());
         response.setExpertCount(expertIds.size());
         response.setExpertIds(expertIds);
 
-        // CR结果
+        // CR结果（效能维度层 + 各指标层）
         Map<String, BigDecimal> crResults = new LinkedHashMap<>();
         MatrixContext dimCtxR = matrixResults.get("__dim__");
         crResults.put("dim", toBd(dimCtxR != null ? dimCtxR.cr : 0.0));
         for (String dim : DIMENSIONS) {
             MatrixContext ctx = matrixResults.get(dim);
             crResults.put(dim, toBd(ctx != null ? ctx.cr : 0.0));
+        }
+        // 装备侧 CR
+        if (eqCalc != null && eqCalc.getDimensionResult() != null) {
+            crResults.put("eq_dimension", toBd(eqCalc.getDimensionResult().getCr()));
         }
         response.setCrResults(crResults);
 
@@ -251,7 +261,9 @@ public class ExpertAggregationCollectiveService {
         response.setCollectiveScores(collectiveScores);
         response.setPerKeyExpertWeights(toBdMapPerKey(perKeyWeights));
 
-        log.info("专家集结计算完成（仅权重），expertCount={}, expertIds={}", expertIds.size(), expertIdsStr);
+        response.setAggregatedUnified(computeAggregatedUnified(collectiveScores, matrixResults, eqCalc));
+
+        log.info("专家集结计算完成（JSON存储），expertCount={}, expertIds={}", expertIds.size(), expertIdsStr);
         return response;
     }
 
@@ -326,26 +338,66 @@ public class ExpertAggregationCollectiveService {
         }
     }
 
+    /**
+     * 从 JSON 字段读取集结统一快照，提取所有叶子指标权重（效能+装备）
+     */
     private Map<String, Double> combinedWeightsDoubleFromEntity(ExpertAhpGroupWeights gw) {
         Map<String, Double> m = new LinkedHashMap<>();
-        m.put("密钥泄露得分", bdToDouble(gw.getIndWeightKeyLeakage()));
-        m.put("被侦察得分", bdToDouble(gw.getIndWeightDetectedProbability()));
-        m.put("抗拦截得分", bdToDouble(gw.getIndWeightInterceptionResistance()));
-        m.put("崩溃比例得分", bdToDouble(gw.getIndWeightCrashRate()));
-        m.put("恢复能力得分", bdToDouble(gw.getIndWeightRecoveryCapability()));
-        m.put("通信可用得分", bdToDouble(gw.getIndWeightCommunicationAvailability()));
-        m.put("带宽得分", bdToDouble(gw.getIndWeightBandwidth()));
-        m.put("呼叫建立得分", bdToDouble(gw.getIndWeightCallSetupTime()));
-        m.put("传输时延得分", bdToDouble(gw.getIndWeightTransmissionDelay()));
-        m.put("误码率得分", bdToDouble(gw.getIndWeightBitErrorRate()));
-        m.put("吞吐量得分", bdToDouble(gw.getIndWeightThroughput()));
-        m.put("频谱效率得分", bdToDouble(gw.getIndWeightSpectralEfficiency()));
-        m.put("信干噪比得分", bdToDouble(gw.getIndWeightSinr()));
-        m.put("抗干扰余量得分", bdToDouble(gw.getIndWeightAntiJammingMargin()));
-        m.put("通信距离得分", bdToDouble(gw.getIndWeightCommunicationDistance()));
-        m.put("战损率得分", bdToDouble(gw.getIndWeightDamageRate()));
-        m.put("任务完成率得分", bdToDouble(gw.getIndWeightMissionCompletionRate()));
-        m.put("致盲率得分", bdToDouble(gw.getIndWeightBlindRate()));
+
+        // 优先从完整快照 JSON 读取
+        if (StringUtils.hasText(gw.getAggregatedUnifiedJson())) {
+            try {
+                AhpIndividualResult unified = objectMapper.readValue(
+                        gw.getAggregatedUnifiedJson(), AhpIndividualResult.class);
+                if (unified != null && unified.getAllLeaves() != null) {
+                    for (AhpIndividualResult.LeafWeight leaf : unified.getAllLeaves()) {
+                        String indicator = leaf.getDomain() + "|" + leaf.getDimension() + "|" + leaf.getIndicator();
+                        m.put(indicator, leaf.getGlobalWeight());
+                    }
+                    return m;
+                }
+            } catch (Exception e) {
+                log.warn("解析 aggregated_unified_json 失败，尝试从叶子权重 JSON 读取", e);
+            }
+        }
+
+        // 回退：从 eff_leaf_weights_json 读取效能叶子
+        if (StringUtils.hasText(gw.getEffLeafWeightsJson())) {
+            try {
+                List<Map<String, Object>> leaves = objectMapper.readValue(
+                        gw.getEffLeafWeightsJson(),
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+                for (Map<String, Object> leaf : leaves) {
+                    String indicator = (String) leaf.get("indicator");
+                    Object w = leaf.get("globalWeight");
+                    if (indicator != null && w != null) {
+                        m.put(indicator, ((Number) w).doubleValue());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("解析 eff_leaf_weights_json 失败", e);
+            }
+        }
+
+        // 回退：从 eq_leaf_weights_json 读取装备叶子
+        if (StringUtils.hasText(gw.getEqLeafWeightsJson())) {
+            try {
+                List<Map<String, Object>> leaves = objectMapper.readValue(
+                        gw.getEqLeafWeightsJson(),
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+                for (Map<String, Object> leaf : leaves) {
+                    String indicator = (String) leaf.get("indicator");
+                    Object w = leaf.get("globalWeight");
+                    if (indicator != null && w != null) {
+                        // 装备叶子指标加前缀区分
+                        m.put("装备_" + indicator, ((Number) w).doubleValue());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("解析 eq_leaf_weights_json 失败", e);
+            }
+        }
+
         return m;
     }
 
@@ -353,51 +405,88 @@ public class ExpertAggregationCollectiveService {
         return b != null ? b.doubleValue() : 0.0;
     }
 
+    /**
+     * 从 JSON 字段构建响应（参照 expert_ahp_individual_weights 的 JSON 存储模式）
+     */
     private CollectiveCalculateResponse buildResponseShellFromGroupWeights(ExpertAhpGroupWeights gw, String evaluationId) {
         CollectiveCalculateResponse r = new CollectiveCalculateResponse();
         r.setEvaluationId(evaluationId);
         r.setExpertCount(gw.getExpertCount());
         r.setExpertIds(parseExpertIds(gw.getExpertIds()));
 
+        // 从 aggregated_unified_json 读取完整快照
+        AhpIndividualResult unified = null;
+        if (StringUtils.hasText(gw.getAggregatedUnifiedJson())) {
+            try {
+                unified = objectMapper.readValue(gw.getAggregatedUnifiedJson(), AhpIndividualResult.class);
+            } catch (Exception e) {
+                log.warn("解析 aggregated_unified_json 失败", e);
+            }
+        }
+
         Map<String, BigDecimal> cr = new LinkedHashMap<>();
-        cr.put("dim", gw.getCrDim());
-        cr.put("安全性", gw.getCrSecurity());
-        cr.put("可靠性", gw.getCrReliability());
-        cr.put("传输能力", gw.getCrTransmission());
-        cr.put("抗干扰能力", gw.getCrAntiJamming());
-        cr.put("效能影响", gw.getCrEffect());
+        Map<String, BigDecimal> dimWeights = new LinkedHashMap<>();
+        Map<String, BigDecimal> indicatorWeights = new LinkedHashMap<>();
+        Map<String, Map<String, BigDecimal>> indicatorWeightsByDim = new LinkedHashMap<>();
+
+        if (unified != null) {
+            // 域间权重
+            if (unified.getCrossDomain() != null) {
+                cr.put("cross_domain_confidence", toBd(unified.getCrossDomain().getConfidence()));
+            }
+            // 效能维度层
+            if (unified.getEffectiveness() != null) {
+                EffectivenessResult eff = unified.getEffectiveness();
+                cr.put("dim", toBd(eff.getCr()));
+                if (eff.getDimensionWeights() != null) {
+                    for (Map.Entry<String, Double> e : eff.getDimensionWeights().entrySet()) {
+                        dimWeights.put(e.getKey(), toBd(e.getValue()));
+                    }
+                }
+                if (eff.getIndicators() != null) {
+                    for (Map.Entry<String, Map<String, Double>> dimEntry : eff.getIndicators().entrySet()) {
+                        String dimName = dimEntry.getKey();
+                        Map<String, BigDecimal> indMap = new LinkedHashMap<>();
+                        for (Map.Entry<String, Double> indEntry : dimEntry.getValue().entrySet()) {
+                            String indName = indEntry.getKey();
+                            indMap.put(indName, toBd(indEntry.getValue()));
+                            // 累加到综合权重
+                            double combined = (eff.getDimensionWeights().getOrDefault(dimName, 0.0)) * indEntry.getValue();
+                            indicatorWeights.put(indName, toBd(combined));
+                        }
+                        indicatorWeightsByDim.put(dimName, indMap);
+                    }
+                }
+            }
+            // 装备 CR
+            if (unified.getEquipment() != null && unified.getEquipment().getCrByDimension() != null) {
+                for (Map.Entry<String, Double> e : unified.getEquipment().getCrByDimension().entrySet()) {
+                    cr.put("eq_" + e.getKey(), toBd(e.getValue()));
+                }
+            }
+        } else {
+            // 回退：从单独 JSON 字段读取
+            cr.put("dim", gw.getEffCr());
+            cr.put("eq_cr", StringUtils.hasText(gw.getEqCrJson()) ? toBd(0.0) : null);
+
+            if (StringUtils.hasText(gw.getEffDimWeightsJson())) {
+                try {
+                    Map<String, Double> dims = objectMapper.readValue(
+                            gw.getEffDimWeightsJson(),
+                            objectMapper.getTypeFactory().constructMapType(LinkedHashMap.class, String.class, Double.class));
+                    for (Map.Entry<String, Double> e : dims.entrySet()) {
+                        dimWeights.put(e.getKey(), toBd(e.getValue()));
+                    }
+                } catch (Exception e) {
+                    log.warn("解析 eff_dim_weights_json 失败", e);
+                }
+            }
+        }
+
         r.setCrResults(cr);
-
-        Map<String, BigDecimal> dw = new LinkedHashMap<>();
-        dw.put("安全性", gw.getDimWeightSecurity());
-        dw.put("可靠性", gw.getDimWeightReliability());
-        dw.put("传输能力", gw.getDimWeightTransmission());
-        dw.put("抗干扰能力", gw.getDimWeightAntiJamming());
-        dw.put("效能影响", gw.getDimWeightEffect());
-        r.setDimensionWeights(dw);
-
-        Map<String, BigDecimal> iw = new LinkedHashMap<>();
-        iw.put("密钥泄露得分", gw.getIndWeightKeyLeakage());
-        iw.put("被侦察得分", gw.getIndWeightDetectedProbability());
-        iw.put("抗拦截得分", gw.getIndWeightInterceptionResistance());
-        iw.put("崩溃比例得分", gw.getIndWeightCrashRate());
-        iw.put("恢复能力得分", gw.getIndWeightRecoveryCapability());
-        iw.put("通信可用得分", gw.getIndWeightCommunicationAvailability());
-        iw.put("带宽得分", gw.getIndWeightBandwidth());
-        iw.put("呼叫建立得分", gw.getIndWeightCallSetupTime());
-        iw.put("传输时延得分", gw.getIndWeightTransmissionDelay());
-        iw.put("误码率得分", gw.getIndWeightBitErrorRate());
-        iw.put("吞吐量得分", gw.getIndWeightThroughput());
-        iw.put("频谱效率得分", gw.getIndWeightSpectralEfficiency());
-        iw.put("信干噪比得分", gw.getIndWeightSinr());
-        iw.put("抗干扰余量得分", gw.getIndWeightAntiJammingMargin());
-        iw.put("通信距离得分", gw.getIndWeightCommunicationDistance());
-        iw.put("战损率得分", gw.getIndWeightDamageRate());
-        iw.put("任务完成率得分", gw.getIndWeightMissionCompletionRate());
-        iw.put("致盲率得分", gw.getIndWeightBlindRate());
-        r.setIndicatorWeights(iw);
-
-        r.setIndicatorWeightsByDimension(new LinkedHashMap<>());
+        r.setDimensionWeights(dimWeights);
+        r.setIndicatorWeights(indicatorWeights);
+        r.setIndicatorWeightsByDimension(indicatorWeightsByDim);
         r.setCollectiveScores(new LinkedHashMap<>());
         r.setPerKeyExpertWeights(new LinkedHashMap<>());
         r.setExpertWeights(parseExpertWeightDetails(gw.getExpertWeightsJson()));
@@ -851,96 +940,142 @@ public class ExpertAggregationCollectiveService {
         return result;
     }
 
-    // ==================== 实体构建 ====================
+    // ==================== 实体构建（JSON 存储模式）====================
 
-    private ExpertAhpGroupWeights buildGroupWeightsEntity(
-            String groupId,
-            String expertIdsStr,
+    /**
+     * 保存集结后的统一快照（效能+装备所有叶子全局权重）
+     * 参照 AhpIndividualService.persistUnified() 的逻辑，使用 JSON 存储
+     */
+    private void persistUnified(
             List<Long> expertIds,
+            String expertIdsStr,
+            Map<String, Double> collectiveScores,
             Map<String, MatrixContext> matrixResults,
-            Map<String, Double> dimWeights,
-            Map<String, Double> combinedWeights,
-            Map<String, Map<String, Double>> indWeightsByDim,
-            Map<Long, Double> credMap,
-            Map<String, Map<Long, Double>> perKeyWeights) {
+            MatrixCalculationResult eqCalc) {
 
+        // 1. 从 collectiveScores 解析域间一级
+        CrossDomainResult crossDomain = buildCrossDomainFromCollective(collectiveScores);
+
+        // 2. 从 matrixResults 提取效能结果
+        EffectivenessResult effectiveness = toEffectivenessResultDto(matrixResults);
+
+        // 3. 从 eqCalc 提取装备结果
+        EquipmentResult equipment = toEquipmentResultDto(eqCalc);
+
+        // 4. 调用 ahpIndividualService.composeUnifiedFromLayers() 合并
+        AhpIndividualResult unified = ahpIndividualService.composeUnifiedFromLayers(
+                crossDomain, effectiveness, equipment);
+
+        // 5. Upsert ExpertAhpGroupWeights 实体
+        String groupId = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         ExpertAhpGroupWeights entity = new ExpertAhpGroupWeights();
         entity.setGroupId(groupId);
         entity.setExpertIds(expertIdsStr);
         entity.setExpertCount(expertIds.size());
+        entity.setUpdatedAt(java.time.LocalDateTime.now());
 
-        // CR
-        MatrixContext dimCtx = matrixResults.get("__dim__");
-        entity.setCrDim(toBd(dimCtx != null ? dimCtx.cr : 0.0));
-        for (String dim : DIMENSIONS) {
-            MatrixContext ctx = matrixResults.get(dim);
-            if (ctx != null) setCr(entity, dim, ctx.cr);
+        // 域间一级
+        entity.setCrossDomainScore(toBd(crossDomain.getScore()));
+        entity.setCrossDomainConfidence(toBd(crossDomain.getConfidence()));
+        entity.setEffDomainWeight(toBd(crossDomain.getEffWeight()));
+        entity.setEqDomainWeight(toBd(crossDomain.getEqWeight()));
+
+        // 效能维度 + 叶子权重 JSON
+        if (effectiveness.getDimensionWeights() != null) {
+            entity.setEffDimWeightsJson(toJson(effectiveness.getDimensionWeights()));
+            entity.setEffDimCount(effectiveness.getDimensionWeights().size());
+        }
+        if (effectiveness.getIndicators() != null && effectiveness.getDimensionWeights() != null) {
+            double wEff = crossDomain.getEffWeight();
+            List<Map<String, Object>> effLeafList = buildLeafWeightsList(
+                    effectiveness.getDimensionWeights(), effectiveness.getIndicators(), wEff);
+            entity.setEffLeafWeightsJson(toJson(effLeafList));
+            entity.setEffLeafCount(effLeafList.size());
+        }
+        entity.setEffCr(toBd(effectiveness.getCr()));
+
+        // 装备维度 + 叶子权重 JSON
+        if (equipment.getDimensionWeights() != null) {
+            entity.setEqDimWeightsJson(toJson(equipment.getDimensionWeights()));
+            entity.setEqDimCount(equipment.getDimensionWeights().size());
+        }
+        if (equipment.getIndicators() != null && equipment.getDimensionWeights() != null) {
+            double wEq = crossDomain.getEqWeight();
+            List<Map<String, Object>> eqLeafList = buildLeafWeightsList(
+                    equipment.getDimensionWeights(), equipment.getIndicators(), wEq);
+            entity.setEqLeafWeightsJson(toJson(eqLeafList));
+            entity.setEqLeafCount(eqLeafList.size());
+        }
+        if (equipment.getCrByDimension() != null) {
+            entity.setEqCrJson(toJson(equipment.getCrByDimension()));
         }
 
-        // 维度权重
-        entity.setDimWeightSecurity(toBd(dimWeights.get("安全性")));
-        entity.setDimWeightReliability(toBd(dimWeights.get("可靠性")));
-        entity.setDimWeightTransmission(toBd(dimWeights.get("传输能力")));
-        entity.setDimWeightAntiJamming(toBd(dimWeights.get("抗干扰能力")));
-        entity.setDimWeightEffect(toBd(dimWeights.get("效能影响")));
-
-        // 指标综合权重
-        setIndWeight(entity, combinedWeights);
-
-        // 专家权重JSON（可信度 + 各 key 下的归一化权重均值）
+        // 专家权重明细 JSON（可信度信息）
         try {
             List<Map<String, Object>> details = new ArrayList<>();
+            Map<Long, Double> credMap = loadExpertCredibilities(expertIds);
             for (Long expertId : expertIds) {
                 Map<String, Object> d = new LinkedHashMap<>();
                 d.put("expertId", expertId);
                 ExpertCredibilityScore cred = credibilityRepository.findByExpertId(expertId).orElse(null);
                 d.put("expertName", cred != null ? cred.getExpertName() : "未知");
                 d.put("credibility", cred != null ? cred.getTotalScore() : BigDecimal.ZERO);
-                // 该专家在各 key 上归一化权重的均值（作为整体参考）
-                double avgW = perKeyWeights.values().stream()
-                        .filter(w -> w.containsKey(expertId))
-                        .mapToDouble(w -> w.get(expertId))
-                        .average().orElse(0.5);
-                d.put("avgNormalizedWeight", toBd(avgW));
                 details.add(d);
             }
-            entity.setExpertWeightsJson(objectMapper.writeValueAsString(details));
+            entity.setExpertWeightsJson(toJson(details));
         } catch (Exception e) {
             log.warn("序列化专家权重JSON失败", e);
         }
 
-        return entity;
+        // 完整快照 JSON
+        entity.setAggregatedUnifiedJson(toJson(unified));
+
+        // Upsert
+        groupWeightsRepository.findByExpertIds(expertIdsStr).ifPresent(existing -> {
+            entity.setId(existing.getId());
+            entity.setGroupId(existing.getGroupId());
+        });
+        groupWeightsRepository.save(entity);
+        log.info("集结统一快照已保存，expertIds={}, 叶子数={}", expertIdsStr, unified.getTotalLeafCount());
     }
 
-    private void setCr(ExpertAhpGroupWeights entity, String dim, double cr) {
-        switch (dim) {
-            case "安全性": entity.setCrSecurity(toBd(cr)); break;
-            case "可靠性": entity.setCrReliability(toBd(cr)); break;
-            case "传输能力": entity.setCrTransmission(toBd(cr)); break;
-            case "抗干扰能力": entity.setCrAntiJamming(toBd(cr)); break;
-            case "效能影响": entity.setCrEffect(toBd(cr)); break;
+    /**
+     * 构建叶子权重列表（参照 AhpIndividualService）
+     */
+    private List<Map<String, Object>> buildLeafWeightsList(
+            Map<String, Double> dimWeights,
+            Map<String, Map<String, Double>> indicators,
+            double domainWeight) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Map.Entry<String, Map<String, Double>> dimEntry : indicators.entrySet()) {
+            String dim = dimEntry.getKey();
+            double wDim = dimWeights.getOrDefault(dim, 0.0);
+            if (wDim == 0.0) continue;
+            for (Map.Entry<String, Double> indEntry : dimEntry.getValue().entrySet()) {
+                double global = domainWeight * wDim * indEntry.getValue();
+                Map<String, Object> leaf = new LinkedHashMap<>();
+                leaf.put("dim", dim);
+                leaf.put("indicator", indEntry.getKey());
+                leaf.put("globalWeight", round6(global));
+                list.add(leaf);
+            }
         }
+        return list;
     }
 
-    private void setIndWeight(ExpertAhpGroupWeights entity, Map<String, Double> weights) {
-        entity.setIndWeightKeyLeakage(toBd(weights.get("密钥泄露得分")));
-        entity.setIndWeightDetectedProbability(toBd(weights.get("被侦察得分")));
-        entity.setIndWeightInterceptionResistance(toBd(weights.get("抗拦截得分")));
-        entity.setIndWeightCrashRate(toBd(weights.get("崩溃比例得分")));
-        entity.setIndWeightRecoveryCapability(toBd(weights.get("恢复能力得分")));
-        entity.setIndWeightCommunicationAvailability(toBd(weights.get("通信可用得分")));
-        entity.setIndWeightBandwidth(toBd(weights.get("带宽得分")));
-        entity.setIndWeightCallSetupTime(toBd(weights.get("呼叫建立得分")));
-        entity.setIndWeightTransmissionDelay(toBd(weights.get("传输时延得分")));
-        entity.setIndWeightBitErrorRate(toBd(weights.get("误码率得分")));
-        entity.setIndWeightThroughput(toBd(weights.get("吞吐量得分")));
-        entity.setIndWeightSpectralEfficiency(toBd(weights.get("频谱效率得分")));
-        entity.setIndWeightSinr(toBd(weights.get("信干噪比得分")));
-        entity.setIndWeightAntiJammingMargin(toBd(weights.get("抗干扰余量得分")));
-        entity.setIndWeightCommunicationDistance(toBd(weights.get("通信距离得分")));
-        entity.setIndWeightDamageRate(toBd(weights.get("战损率得分")));
-        entity.setIndWeightMissionCompletionRate(toBd(weights.get("任务完成率得分")));
-        entity.setIndWeightBlindRate(toBd(weights.get("致盲率得分")));
+    private double round6(double v) {
+        if (!Double.isFinite(v)) return 0.0;
+        return BigDecimal.valueOf(v).setScale(6, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    private String toJson(Object obj) {
+        if (obj == null) return null;
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (Exception ex) {
+            log.warn("JSON序列化失败: {}", ex.getMessage());
+            return null;
+        }
     }
 
     private List<CollectiveCalculateResponse.ExpertWeightDetail> buildExpertWeightDetails(
@@ -1050,6 +1185,138 @@ public class ExpertAggregationCollectiveService {
             result.put(e.getKey(), inner);
         }
         return result;
+    }
+
+    // ==================== 集结完整层次（域间 + 效能 + 装备） ====================
+
+    private AhpIndividualResult computeAggregatedUnified(
+            Map<String, Double> collectiveScores,
+            Map<String, MatrixContext> matrixResults,
+            MatrixCalculationResult eqCalc) {
+        return ahpIndividualService.composeUnifiedFromLayers(
+                buildCrossDomainFromCollective(collectiveScores),
+                toEffectivenessResultDto(matrixResults),
+                toEquipmentResultDto(eqCalc));
+    }
+
+    private CrossDomainResult buildCrossDomainFromCollective(Map<String, Double> collectiveScores) {
+        Double raw = collectiveScores != null
+                ? collectiveScores.get(ExpertAhpComparisonScoreService.CROSS_DOMAIN_COMPARISON_KEY)
+                : null;
+        double a = raw != null ? raw : 1.0;
+        a = Math.max(1.0 / 9.0, Math.min(9.0, a));
+        CrossDomainResult c = new CrossDomainResult();
+        c.setScore(a);
+        c.setConfidence(0.8);
+        c.setEffWeight(a / (1.0 + a));
+        c.setEqWeight(1.0 / (1.0 + a));
+        return c;
+    }
+
+    private EffectivenessResult toEffectivenessResultDto(Map<String, MatrixContext> matrixResults) {
+        EffectivenessResult e = new EffectivenessResult();
+        MatrixContext dim = matrixResults != null ? matrixResults.get("__dim__") : null;
+        e.setCr(dim != null ? dim.cr : 0.0);
+        e.setDimensionWeights(dim != null ? new LinkedHashMap<>(dim.weights) : new LinkedHashMap<>());
+        Map<String, Map<String, Double>> ind = new LinkedHashMap<>();
+        for (String d : DIMENSIONS) {
+            MatrixContext ctx = matrixResults != null ? matrixResults.get(d) : null;
+            if (ctx != null) {
+                ind.put(d, new LinkedHashMap<>(ctx.weights));
+            }
+        }
+        e.setIndicators(ind);
+        return e;
+    }
+
+    private EquipmentResult toEquipmentResultDto(MatrixCalculationResult calc) {
+        if (calc == null) {
+            EquipmentResult e = new EquipmentResult();
+            e.setDimensionWeights(new LinkedHashMap<>());
+            e.setIndicators(new LinkedHashMap<>());
+            e.setCrByDimension(new LinkedHashMap<>());
+            return e;
+        }
+        EquipmentResult e = new EquipmentResult();
+        MatrixCalculationResult.MatrixResult dr = calc.getDimensionResult();
+        if (dr != null && dr.getWeightMap() != null) {
+            e.setDimensionWeights(new LinkedHashMap<>(dr.getWeightMap()));
+        } else {
+            e.setDimensionWeights(new LinkedHashMap<>());
+        }
+        Map<String, Map<String, Double>> ind = new LinkedHashMap<>();
+        Map<String, Double> crBy = new LinkedHashMap<>();
+        if (dr != null) {
+            crBy.put("dimension", dr.getCr());
+        }
+        if (calc.getIndicatorResults() != null) {
+            for (Map.Entry<String, MatrixCalculationResult.MatrixResult> en : calc.getIndicatorResults().entrySet()) {
+                MatrixCalculationResult.MatrixResult mr = en.getValue();
+                if (mr != null && mr.getWeightMap() != null) {
+                    ind.put(en.getKey(), new LinkedHashMap<>(mr.getWeightMap()));
+                }
+                if (mr != null) {
+                    crBy.put(en.getKey(), mr.getCr());
+                }
+            }
+        }
+        e.setIndicators(ind);
+        e.setCrByDimension(crBy);
+        return e;
+    }
+
+    /**
+     * 从集体比较打分构造装备操作侧矩阵并做 AHP（comparison_key 带「装备操作_」前缀）。
+     */
+    private MatrixCalculationResult buildEquipmentCollectiveMatrices(Map<String, Double> collectiveScores) {
+        if (collectiveScores == null || collectiveScores.isEmpty()) {
+            return null;
+        }
+        boolean any = collectiveScores.keySet().stream()
+                .anyMatch(k -> k != null && k.startsWith(EquipmentAhpService.PREFIX));
+        if (!any) {
+            return null;
+        }
+        List<String> dims = equipmentAhpService.getDimensions();
+        if (dims == null || dims.isEmpty()) {
+            return null;
+        }
+        List<MatrixCalculationRequest.MatrixEntry> dimEntries = new ArrayList<>();
+        for (int i = 0; i < dims.size(); i++) {
+            for (int j = i + 1; j < dims.size(); j++) {
+                String key = EquipmentAhpService.dimensionKey(dims.get(i), dims.get(j));
+                Double sc = collectiveScores.get(key);
+                if (sc != null) {
+                    dimEntries.add(new MatrixCalculationRequest.MatrixEntry(key, sc, null));
+                }
+            }
+        }
+        Map<String, List<MatrixCalculationRequest.MatrixEntry>> indMap = new LinkedHashMap<>();
+        Map<String, List<Map<String, Object>>> dimIndMeta = equipmentAhpService.getDimensionIndicators(null);
+        for (String dim : dims) {
+            List<Map<String, Object>> inds = dimIndMeta.getOrDefault(dim, Collections.emptyList());
+            String[] names = inds.stream().map(m -> (String) m.get("name")).toArray(String[]::new);
+            List<MatrixCalculationRequest.MatrixEntry> entries = new ArrayList<>();
+            for (int i = 0; i < names.length; i++) {
+                for (int j = i + 1; j < names.length; j++) {
+                    String key = EquipmentAhpService.indicatorKey(dim, names[i], names[j]);
+                    Double sc = collectiveScores.get(key);
+                    if (sc != null) {
+                        entries.add(new MatrixCalculationRequest.MatrixEntry(key, sc, null));
+                    }
+                }
+            }
+            indMap.put(dim, entries);
+        }
+        MatrixCalculationRequest req = new MatrixCalculationRequest();
+        req.setDimensionMatrix(dimEntries);
+        req.setIndicatorMatrices(indMap);
+        try {
+            return equipmentAhpService.calculate(req);
+        } catch (Exception ex) {
+            log.warn("装备操作集体矩阵计算失败: {}", ex.getMessage());
+            return null;
+        }
     }
 
     // ==================== 内部数据结构 ====================

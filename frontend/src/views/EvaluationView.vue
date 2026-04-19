@@ -37,16 +37,54 @@
         <div class="ahp-unified-legends-block">
           <el-alert type="info" :closable="false" show-icon class="ahp-unified-top-alert">
             <template v-if="!sharedExpertId">
-              请先在上方选择「当前专家」。下方先阅读 <strong>AHP 判断标度说明</strong>与<strong>把握度等级</strong>，再在其下的<strong>AHP 判断矩阵</strong>中录入；切换「效能指标 / 装备操作」不丢失已填内容。
+              请先在上方选择「当前专家」。先阅读 <strong>标度</strong>与<strong>把握度</strong>，再填写<strong>域间一级矩阵</strong>（效能 vs 装备）与下方两套<strong>下层 AHP 矩阵</strong>；切换 Tab 不丢失已填内容。
             </template>
             <template v-else>
-              已选择专家：效能指标矩阵保存于 <code>expert_ahp_comparison_score</code>（无「装备操作_」前缀）；装备操作矩阵保存为 <code>装备操作_</code> 前缀记录。两套数据互不影响。
+              已选择专家：域间比较键为 <code>域间一级_效能指标_装备操作</code>；效能下层矩阵无「装备操作_」前缀，装备下层为 <code>装备操作_</code> 前缀。点「保存到数据库」会同时保存当前 Tab 下层矩阵与域间对。
             </template>
           </el-alert>
           <AhpSharedLegends />
         </div>
 
-        <!-- 二、把握度说明正下方：两套 AHP 判断矩阵（效能 / 装备） -->
+        <!-- 操作条：置于一级域间判断之上（保存 / 重载 / 批量模拟 + 下层 Tab） -->
+        <div class="ahp-matrix-toolbar ahp-matrix-toolbar--above-cross">
+          <div class="ahp-matrix-toolbar__actions">
+            <el-button
+              type="primary"
+              :disabled="!sharedExpertId"
+              :loading="toolbarSaving"
+              @click="onToolbarSave"
+            >
+              保存到数据库
+            </el-button>
+            <el-button
+              :disabled="!sharedExpertId"
+              :loading="toolbarLoading"
+              @click="onToolbarReload"
+            >
+              重新加载
+            </el-button>
+            <el-button type="success" @click="onToolbarSimulate">批量模拟入库</el-button>
+          </div>
+          <el-radio-group v-model="activeAhpTab" size="default" class="ahp-matrix-toolbar__tabs">
+            <el-radio-button label="effectiveness">效能指标 AHP</el-radio-button>
+            <el-radio-button label="equipment">装备操作 AHP</el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <!-- 域间一级：效能指标体系 vs 装备操作体系（合并两套权重的依据） -->
+        <el-card class="ahp-cross-domain-card" shadow="hover">
+          <template #header>
+            <span class="ahp-cross-domain-card-head">域间一级判断（合并两套权重）</span>
+          </template>
+          <CrossDomainAhpPanel
+            ref="crossDomainPanelRef"
+            :expert-id="sharedExpertId"
+            :expert-name="sharedExpertName"
+          />
+        </el-card>
+
+        <!-- 下层 AHP：效能 / 装备 各维度与指标矩阵 -->
         <el-card class="ahp-matrices-card" shadow="hover">
           <template #header>
             <div class="ahp-matrices-card-header">
@@ -55,34 +93,10 @@
                 <span class="ahp-matrices-card-title">AHP 判断矩阵</span>
               </div>
               <el-tag type="info" effect="plain" size="small">
-                维度层与指标层成对比较；请先选择页顶「当前专家」后矩阵才会展开
+                各体系内部的维度层与指标层；请先选择页顶「当前专家」
               </el-tag>
             </div>
           </template>
-          <div class="ahp-matrix-toolbar">
-            <div class="ahp-matrix-toolbar__actions">
-              <el-button
-                type="primary"
-                :disabled="!sharedExpertId"
-                :loading="toolbarSaving"
-                @click="onToolbarSave"
-              >
-                保存到数据库
-              </el-button>
-              <el-button
-                :disabled="!sharedExpertId"
-                :loading="toolbarLoading"
-                @click="onToolbarReload"
-              >
-                重新加载
-              </el-button>
-              <el-button type="success" @click="onToolbarSimulate">批量模拟入库</el-button>
-            </div>
-            <el-radio-group v-model="activeAhpTab" size="default" class="ahp-matrix-toolbar__tabs">
-              <el-radio-button label="effectiveness">效能指标 AHP</el-radio-button>
-              <el-radio-button label="equipment">装备操作 AHP</el-radio-button>
-            </el-radio-group>
-          </div>
           <div class="ahp-unified-panes">
             <div v-show="activeAhpTab === 'effectiveness'" class="ahp-unified-pane">
               <AHPConfig
@@ -109,6 +123,36 @@
               />
             </div>
           </div>
+        </el-card>
+
+        <!-- 完整全局权重：库内统一快照（域间 w_eff/w_eq × 两套体系层次展开），依赖已保存的打分 -->
+        <el-card v-if="sharedExpertId" class="ahp-unified-leaves-card" shadow="hover">
+          <template #header>
+            <div class="ahp-unified-leaves-head">
+              <span class="ahp-unified-leaves-title">
+                <el-icon><Histogram /></el-icon>
+                完整全局权重（效能 + 装备 + 域间一级）
+              </span>
+              <el-tag type="warning" effect="plain" size="small">需已将域间、效能、装备矩阵保存到数据库</el-tag>
+            </div>
+          </template>
+          <el-alert type="info" :closable="false" show-icon class="ahp-unified-leaves-alert">
+            加载后展示与上方 AHP 结果区一致的分块样式：<strong>一级</strong>域间体系权重、<strong>二级</strong>维度层（对总目标与体系内）、<strong>三级</strong>叶子指标及<strong>旭日图</strong>（内圈体系·中圈维度·外圈叶子）。数据来自
+            <code>expert_ahp_individual_weights</code>。若尚未保存矩阵，请先「保存到数据库」再「重算并加载」。
+          </el-alert>
+          <div class="ahp-unified-leaves-actions">
+            <el-button type="primary" :loading="unifiedLoading" @click="refreshUnifiedAhpFromDb(true)">
+              重算并加载完整全局权重
+            </el-button>
+            <el-button :loading="unifiedLoading" @click="refreshUnifiedAhpFromDb(false)">
+              仅加载（不重算）
+            </el-button>
+            <span v-if="unifiedLeafSum > 0" class="ahp-unified-leaves-sum">
+              叶子权重合计：{{ (unifiedLeafSum * 100).toFixed(4) }}%
+            </span>
+          </div>
+          <UnifiedGlobalWeightsPanel v-if="unifiedAhpSnapshot" :snapshot="unifiedAhpSnapshot" />
+          <el-empty v-else description="暂无数据：请先保存打分，再点击「重算并加载」" />
         </el-card>
       </div>
     </el-card>
@@ -189,11 +233,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { Trophy, Setting, Grid } from '@element-plus/icons-vue'
+import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Trophy, Setting, Grid, Histogram } from '@element-plus/icons-vue'
+import { getExpertUnifiedWeights, recalculateExpertUnifiedWeights } from '@/api'
 import AHPConfig from '@/components/AHPConfig.vue'
 import EquipmentAhpConfig from '@/components/EquipmentAhpConfig.vue'
 import AhpSharedLegends from '@/components/AhpSharedLegends.vue'
+import CrossDomainAhpPanel from '@/components/CrossDomainAhpPanel.vue'
+import UnifiedGlobalWeightsPanel from '@/components/UnifiedGlobalWeightsPanel.vue'
 import DimensionCharts from '@/components/DimensionCharts.vue'
 
 const activeAhpTab = ref('effectiveness')
@@ -203,8 +251,14 @@ const expertOptionsForAhp = ref([])
 
 const ahpEffectivenessRef = ref(null)
 const ahpEquipmentRef = ref(null)
+const crossDomainPanelRef = ref(null)
 const toolbarSaving = ref(false)
 const toolbarLoading = ref(false)
+
+const sharedExpertName = computed(() => {
+  const e = expertOptionsForAhp.value.find((x) => x.expertId === sharedExpertId.value)
+  return e?.expertName ?? ''
+})
 
 function activeAhpPaneRef() {
   return activeAhpTab.value === 'effectiveness' ? ahpEffectivenessRef.value : ahpEquipmentRef.value
@@ -216,6 +270,7 @@ async function onToolbarSave() {
   toolbarSaving.value = true
   try {
     await pane.saveScoresToDb()
+    await crossDomainPanelRef.value?.saveToDb?.()
   } finally {
     toolbarSaving.value = false
   }
@@ -227,6 +282,7 @@ async function onToolbarReload() {
   toolbarLoading.value = true
   try {
     await pane.reloadScoresFromDb()
+    await crossDomainPanelRef.value?.reload?.()
   } finally {
     toolbarLoading.value = false
   }
@@ -242,9 +298,12 @@ function onAhpExpertOptions(list) {
   }
 }
 
-const handleEquipmentWeightsCalculated = (data) => {
-  // 装备操作 AHP 权重计算后的处理（可根据业务需求扩展）
-  console.log('装备操作 AHP 权重已计算', data)
+const handleEquipmentWeightsCalculated = () => {
+  ElMessage.info({
+    message:
+      '装备侧层次总排序已算完。若需「效能+装备+域间」合并后的叶子全局权重，请先保存打分，再在本页底部「完整全局权重」卡片中点击加载。',
+    duration: 6000
+  })
 }
 
 const dimensions = [
@@ -261,9 +320,39 @@ const dimensions = [
 const ahpWeights = ref(null)
 const evaluationResult = ref(null)
 
-const handleWeightsCalculated = (data) => {
-  ahpWeights.value = data.weights
-  evaluationResult.value = data.pythonResult
+const unifiedAhpSnapshot = ref(null)
+const unifiedLoading = ref(false)
+
+const unifiedLeafSum = computed(() => {
+  const list = unifiedAhpSnapshot.value?.allLeaves
+  if (!Array.isArray(list)) return 0
+  return list.reduce((s, x) => s + (Number(x.globalWeight) || 0), 0)
+})
+
+async function refreshUnifiedAhpFromDb(recalculate) {
+  if (!sharedExpertId.value) return
+  unifiedLoading.value = true
+  try {
+    if (recalculate) {
+      await recalculateExpertUnifiedWeights(sharedExpertId.value)
+    }
+    unifiedAhpSnapshot.value = await getExpertUnifiedWeights(sharedExpertId.value)
+    ElMessage.success(recalculate ? '已重算并加载完整全局权重' : '已加载完整全局权重')
+  } catch (e) {
+    unifiedAhpSnapshot.value = null
+    ElMessage.error(e?.message || '加载统一权重失败')
+  } finally {
+    unifiedLoading.value = false
+  }
+}
+
+const handleWeightsCalculated = (payload) => {
+  ahpWeights.value = payload
+  ElMessage.info({
+    message:
+      '效能侧层次总排序已算完（见下方结果区）。若需「效能+装备+域间」合并后的叶子全局权重，请先保存打分，再在本页底部「完整全局权重」卡片中点击加载。',
+    duration: 6000
+  })
 }
 
 // 获取排名类型
@@ -359,6 +448,27 @@ const getScoreColor = (score) => {
     padding: 16px 18px 8px;
   }
 
+  .ahp-cross-domain-card {
+    margin: 0 18px 16px;
+    border: 1px solid #e4e7ed;
+
+    :deep(.el-card__header) {
+      padding: 10px 18px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e4e7ed;
+    }
+
+    :deep(.el-card__body) {
+      padding: 16px 18px 18px;
+    }
+  }
+
+  .ahp-cross-domain-card-head {
+    font-size: 15px;
+    font-weight: 600;
+    color: #303133;
+  }
+
   .ahp-unified-top-alert {
     margin-bottom: 16px;
   }
@@ -408,6 +518,15 @@ const getScoreColor = (score) => {
     margin-bottom: 16px;
     padding-bottom: 14px;
     border-bottom: 1px dashed #d0d9e8;
+
+    &--above-cross {
+      margin: 8px 18px 14px;
+      padding: 14px 16px 16px;
+      background: #fff;
+      border: 1px solid #e4e7ed;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0, 31, 63, 0.06);
+    }
   }
 
   .ahp-matrix-toolbar__actions {
@@ -447,6 +566,62 @@ const getScoreColor = (score) => {
 
   .ahp-unified-pane {
     min-height: 1px;
+  }
+
+  .ahp-unified-leaves-card {
+    margin: 0 18px 20px;
+    border: 1px solid #e4e7ed;
+
+    :deep(.el-card__header) {
+      padding: 12px 18px;
+      background: linear-gradient(180deg, #f0f7ff 0%, #e8f2fc 100%);
+      border-bottom: 1px solid #e4e7ed;
+    }
+
+    :deep(.el-card__body) {
+      padding: 16px 18px 20px;
+    }
+  }
+
+  .ahp-unified-leaves-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    justify-content: space-between;
+  }
+
+  .ahp-unified-leaves-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #303133;
+
+    .el-icon {
+      font-size: 20px;
+      color: var(--navy-primary, #0d3a66);
+    }
+  }
+
+  .ahp-unified-leaves-alert {
+    margin-bottom: 14px;
+  }
+
+  .ahp-unified-leaves-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .ahp-unified-leaves-sum {
+    margin-left: auto;
+    font-size: 13px;
+    color: #606266;
+    font-variant-numeric: tabular-nums;
   }
 
   .results-section {

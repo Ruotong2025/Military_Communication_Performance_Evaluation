@@ -1,6 +1,6 @@
 package com.ccnu.military.repository;
 
-import com.ccnu.military.entity.QlAggregationResult;
+import com.ccnu.military.entity.EquipmentQlAggregationResult;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -8,15 +8,15 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface QlAggregationResultRepository extends JpaRepository<QlAggregationResult, Long> {
+public interface EquipmentQlAggregationResultRepository extends JpaRepository<EquipmentQlAggregationResult, Long> {
 
-    Optional<QlAggregationResult> findByEvaluationBatchIdAndOperationIdAndIndicatorKey(
+    Optional<EquipmentQlAggregationResult> findByEvaluationBatchIdAndOperationIdAndIndicatorKey(
             String evaluationBatchId, String operationId, String indicatorKey);
 
-    List<QlAggregationResult> findByEvaluationBatchIdAndOperationId(
+    List<EquipmentQlAggregationResult> findByEvaluationBatchIdAndOperationId(
             String evaluationBatchId, String operationId);
 
-    List<QlAggregationResult> findByEvaluationBatchId(String evaluationBatchId);
+    List<EquipmentQlAggregationResult> findByEvaluationBatchId(String evaluationBatchId);
 
     void deleteByEvaluationBatchId(String evaluationBatchId);
 
