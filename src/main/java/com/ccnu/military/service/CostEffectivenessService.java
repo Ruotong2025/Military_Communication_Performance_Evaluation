@@ -3,11 +3,13 @@ package com.ccnu.military.service;
 import com.ccnu.military.dto.CostEffectivenessCalculateRequest;
 import com.ccnu.military.dto.CostEffectivenessCalculateResponse;
 import com.ccnu.military.dto.CostEffectivenessResultDTO;
+import com.ccnu.military.entity.AhpCommunicationScoringResult;
 import com.ccnu.military.entity.CostEvaluationBatch;
 import com.ccnu.military.entity.CostEvaluationRecord;
 import com.ccnu.military.entity.CostIndicatorConfig;
 import com.ccnu.military.entity.ExpertWeightedEvaluationResult;
 import com.ccnu.military.entity.PenaltyModelResult;
+import com.ccnu.military.repository.AhpCommunicationScoringResultRepository;
 import com.ccnu.military.repository.CostEvaluationBatchRepository;
 import com.ccnu.military.repository.CostEvaluationRecordRepository;
 import com.ccnu.military.repository.CostIndicatorConfigRepository;
@@ -40,6 +42,7 @@ public class CostEffectivenessService {
     private final PenaltyModelResultRepository penaltyResultRepository;
     private final ExpertWeightedEvaluationResultRepository weightedResultRepository;
     private final RecordsMilitaryOperationInfoRepository operationInfoRepository;
+    private final AhpCommunicationScoringResultRepository scoringResultRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -344,14 +347,30 @@ public class CostEffectivenessService {
     }
 
     /**
-     * 获取效能得分（优先级：专家集结加权得分 > 惩罚模型最终得分）
+     * 获取效能得分（优先级：综合评分 > 专家集结加权得分 > 惩罚模型最终得分）
+     * - ahp_communication_scoring_result.total_score：综合评分结果
      * - expert_weighted_evaluation_result.total_score：专家集结后的综合得分（覆盖所有批次）
      * - penalty_model_result.final_score：惩罚模型处理后的最终得分（部分批次可能有）
      */
     private Map<String, BigDecimal> fetchEffectivenessScores(String evaluationId, List<String> operationIds) {
         Map<String, BigDecimal> scores = new HashMap<>();
 
-        // Step 1: 尝试从专家集结加权结果获取（total_score，覆盖所有批次）
+        // Step 1: 优先从综合评分结果获取（ahp_communication_scoring_result.total_score）
+        List<AhpCommunicationScoringResult> scoringResults =
+                scoringResultRepository.findByEvaluationBatchIdOrderByOperationIdAsc(evaluationId);
+        if (!scoringResults.isEmpty()) {
+            for (AhpCommunicationScoringResult sr : scoringResults) {
+                if (operationIds.contains(sr.getOperationId()) && sr.getTotalScore() != null) {
+                    scores.put(sr.getOperationId(), sr.getTotalScore());
+                }
+            }
+            log.info("从综合评分结果(ahp_communication_scoring_result)加载了 {} 条效能得分", scores.size());
+            if (!scores.isEmpty()) {
+                return scores;
+            }
+        }
+
+        // Step 2: 尝试从专家集结加权结果获取（total_score，覆盖所有批次）
         List<ExpertWeightedEvaluationResult> weightedResults =
                 weightedResultRepository.findByEvaluationIdOrderByOperationIdAsc(evaluationId);
         if (!weightedResults.isEmpty()) {
@@ -364,7 +383,7 @@ public class CostEffectivenessService {
             return scores;
         }
 
-        // Step 2: 尝试从惩罚模型结果获取（final_score，仅部分批次）
+        // Step 3: 尝试从惩罚模型结果获取（final_score，仅部分批次）
         if (scores.isEmpty()) {
             List<PenaltyModelResult> penaltyResults =
                     penaltyResultRepository.findByEvaluationId(evaluationId);
@@ -379,7 +398,7 @@ public class CostEffectivenessService {
         }
 
         if (scores.isEmpty()) {
-            log.warn("评估批次 [{}] 找不到任何效能得分数据（既无专家集结结果，也无惩罚模型结果）", evaluationId);
+            log.warn("评估批次 [{}] 找不到任何效能得分数据（综合评分/专家集结/惩罚模型均无数据）", evaluationId);
         }
 
         return scores;
