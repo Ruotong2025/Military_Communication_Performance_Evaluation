@@ -110,6 +110,12 @@
                   <el-tag type="danger" size="small" class="must-tag">必做</el-tag>
                 </div>
                 <el-icon class="phase-arrow"><ArrowRight /></el-icon>
+                <div class="module-node optional" @click="go('/simulation-training/results/penalty-factor')">
+                  <el-icon><Warning /></el-icon>
+                  <span>惩罚因子分析</span>
+                  <el-tag type="info" size="small">可选</el-tag>
+                </div>
+                <el-icon class="phase-arrow"><ArrowRight /></el-icon>
                 <div class="module-node optional" @click="go('/simulation-training/results/cost-effectiveness')">
                   <el-icon><PieChart /></el-icon>
                   <span>效费分析</span>
