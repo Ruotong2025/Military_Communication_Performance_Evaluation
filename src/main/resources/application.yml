@@ -88,6 +88,7 @@ python:
   executable: python
   script:
     path: python_service/evaluation_service.py
+  dynamic-parser-script: python_service/dynamic_parser.py
   timeout: 300
   combat-data-script: military_operational_effectiveness_evaluation/generate/generate_all_data.py
   combat-timeout: 600

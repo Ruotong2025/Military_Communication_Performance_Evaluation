@@ -11,7 +11,7 @@
       </div>
       <div class="hero-stats">
         <div class="stat-item">
-          <span class="stat-number">9</span>
+          <span class="stat-number">10</span>
           <span class="stat-label">功能模块</span>
         </div>
         <div class="stat-item">
@@ -353,6 +353,28 @@ const phase1Cards = [
     accentColor: '#1c4a9a',
     iconBg: 'rgba(28, 74, 154, 0.1)',
     whenToUse: '可信度评估后，专家进行定性评估'
+  },
+  {
+    path: '/simulation-training/dynamic-indicator',
+    title: '动态指标管理',
+    desc: '通过Excel导入自定义指标体系',
+    icon: TrendCharts,
+    required: true,
+    phase: '阶段一',
+    accentColor: '#2563eb',
+    iconBg: 'rgba(37, 99, 235, 0.1)',
+    whenToUse: '导入指标定义后进行AHP权重配置'
+  },
+  {
+    path: '/simulation-training/dynamic-quantitative',
+    title: '动态定量评估',
+    desc: '根据指标模板动态生成评估表格，支持模拟数据',
+    icon: Grid,
+    required: false,
+    phase: '阶段一',
+    accentColor: '#059669',
+    iconBg: 'rgba(5, 150, 105, 0.1)',
+    whenToUse: '指标模板配置完成后，进行定量数据评估'
   }
 ]
 

@@ -29236,3 +29236,16 @@ spring-boot-devtools.properties
 /frontend/node_modules/zrender/package.README.md
 /frontend/node_modules/zrender/README.md
 /frontend/node_modules/.package-lock.json
+ 
+ #   B u i l d   o u t p u t  
+ f r o n t e n d / d i s t /  
+  
+ #   P y t h o n   c a c h e  
+ * * / _ _ p y c a c h e _ _ /  
+ 
+# Additional ignores
+frontend/node_modules/
+frontend/node_modules/.vite/deps/
+python_service/__pycache__/
+military_operational_effectiveness_evaluation/__pycache__/
+military_operational_effectiveness_evaluation/generate/__pycache__/

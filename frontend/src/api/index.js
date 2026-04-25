@@ -933,3 +933,317 @@ export function getOperationData(evaluationBatchId, operationId) {
     params: { evaluationBatchId, operationId },
   });
 }
+
+// ============================================================
+// 动态指标系统 API
+// ============================================================
+
+/**
+ * 解析Excel指标文件（不保存到数据库）
+ */
+export function parseExcelIndicators(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request({
+    url: "/dynamic-indicator/parse",
+    method: "post",
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+}
+
+/**
+ * 导入指标到数据库
+ */
+export function importIndicators(file, templateName) {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (templateName) {
+    formData.append('templateName', templateName);
+  }
+  return request({
+    url: "/dynamic-indicator/import",
+    method: "post",
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+}
+
+/**
+ * 获取指标模板列表
+ */
+export function getIndicatorTemplates() {
+  return request({
+    url: "/dynamic-indicator/templates",
+    method: "get",
+  });
+}
+
+/**
+ * 获取指标树结构
+ */
+export function getIndicatorTree(templateId) {
+  return request({
+    url: "/dynamic-indicator/tree",
+    method: "get",
+    params: { templateId },
+  });
+}
+
+/**
+ * 获取指定层级的一级维度列表
+ */
+export function getPrimaryDimensions(levelId) {
+  return request({
+    url: "/dynamic-indicator/level/primaries",
+    method: "get",
+    params: { levelId },
+  });
+}
+
+/**
+ * 获取指定一级维度的二级维度列表
+ */
+export function getSecondaryDimensions(primaryId) {
+  return request({
+    url: "/dynamic-indicator/primary/secondaries",
+    method: "get",
+    params: { primaryId },
+  });
+}
+
+/**
+ * 获取AHP判断矩阵数据
+ */
+export function getAhpMatrix(levelId) {
+  return request({
+    url: "/dynamic-indicator/ahp/matrix",
+    method: "get",
+    params: { levelId },
+  });
+}
+
+/**
+ * 计算AHP权重
+ */
+export function calculateAhpWeights(levelId, matrix) {
+  return request({
+    url: "/dynamic-indicator/ahp/calculate",
+    method: "post",
+    data: { levelId, matrix },
+  });
+}
+
+/**
+ * 保存AHP权重
+ */
+export function saveAhpWeights(levelId, weights) {
+  return request({
+    url: "/dynamic-indicator/ahp/save",
+    method: "post",
+    data: { levelId, weights },
+  });
+}
+
+/**
+ * 更新二级维度配置
+ */
+export function updateSecondaryConfig(id, config) {
+  return request({
+    url: `/dynamic-indicator/secondary/${id}`,
+    method: "put",
+    data: config,
+  });
+}
+
+/**
+ * 删除指标模板
+ */
+export function deleteTemplate(templateId) {
+  return request({
+    url: `/dynamic-indicator/template/${templateId}`,
+    method: "delete",
+  });
+}
+
+/**
+ * 通过矩阵计算AHP权重（直接传入矩阵，前端计算用）
+ */
+export function calculateAhpByMatrix(matrix) {
+  return request({
+    url: "/python/ahp/calculate",
+    method: "post",
+    data: { matrix },
+  });
+}
+
+// ============================================
+// 动态定量评估 API
+// ============================================
+
+/**
+ * 获取动态评估批次列表
+ */
+export function getDynamicQtBatches() {
+  return request({
+    url: "/dynamic-qt/batches",
+    method: "get",
+  });
+}
+
+/**
+ * 创建新批次（只创建批次，不创建记录）
+ */
+export function createDynamicQtBatch(templateId, description = '') {
+  return request({
+    url: "/dynamic-qt/batch",
+    method: "post",
+    data: { templateId, description },
+  });
+}
+
+/**
+ * 获取批次的定量指标列表（按一级维度分组）
+ */
+export function getDynamicQtIndicators(batchId) {
+  return request({
+    url: "/dynamic-qt/indicators",
+    method: "get",
+    params: { batchId },
+  });
+}
+
+/**
+ * 获取评估记录（转置表格：行=作战ID，列=指标）
+ */
+export function getDynamicQtRecords(batchId) {
+  return request({
+    url: "/dynamic-qt/records",
+    method: "get",
+    params: { batchId },
+  });
+}
+
+/**
+ * 模拟单个单元格
+ */
+export function simulateDynamicQtCell(batchId, operationId, secondaryCode) {
+  return request({
+    url: "/dynamic-qt/simulate",
+    method: "post",
+    data: { batchId, operationId, secondaryCode },
+  });
+}
+
+/**
+ * 全局模拟：根据指定次数生成作战数据
+ */
+export function globalSimulateDynamicQt(batchId, count) {
+  return request({
+    url: "/dynamic-qt/global-simulate",
+    method: "post",
+    data: { batchId, count },
+  });
+}
+
+/**
+ * 批量模拟
+ */
+export function batchSimulateDynamicQt(batchId, cells) {
+  return request({
+    url: "/dynamic-qt/batch-simulate",
+    method: "post",
+    data: { batchId, cells },
+  });
+}
+
+/**
+ * 保存单条记录
+ */
+export function saveDynamicQtRecord(batchId, operationId, secondaryCode, value) {
+  return request({
+    url: "/dynamic-qt/record",
+    method: "post",
+    data: { batchId, operationId, secondaryCode, value },
+  });
+}
+
+/**
+ * 批量保存记录
+ */
+export function saveDynamicQtRecords(records) {
+  return request({
+    url: "/dynamic-qt/records",
+    method: "post",
+    data: { records },
+  });
+}
+
+/**
+ * 生成归一化得分
+ */
+export function normalizeDynamicQt(batchId) {
+  return request({
+    url: "/dynamic-qt/normalize",
+    method: "post",
+    params: { batchId },
+  });
+}
+
+/**
+ * 获取归一化后的记录
+ */
+export function getNormalizedDynamicQtRecords(batchId) {
+  return request({
+    url: "/dynamic-qt/normalized-records",
+    method: "get",
+    params: { batchId },
+  });
+}
+
+/**
+ * 删除批次
+ */
+export function deleteDynamicQtBatch(batchId) {
+  return request({
+    url: "/dynamic-qt/batch",
+    method: "delete",
+    params: { batchId },
+  });
+}
+
+/**
+ * 获取可用的作战ID列表
+ */
+export function getDynamicQtOperations() {
+  return request({
+    url: "/dynamic-qt/operations",
+    method: "get",
+  });
+}
+
+/**
+ * 获取批次已有的作战ID列表
+ */
+export function getDynamicQtBatchOperations(batchId) {
+  return request({
+    url: "/dynamic-qt/batch/operations",
+    method: "get",
+    params: { batchId },
+  });
+}
+
+/**
+ * 为批次添加新的作战ID
+ */
+export function addDynamicQtOperations(batchId, operationIds) {
+  return request({
+    url: "/dynamic-qt/batch/operations",
+    method: "post",
+    data: { batchId, operationIds },
+  });
+}

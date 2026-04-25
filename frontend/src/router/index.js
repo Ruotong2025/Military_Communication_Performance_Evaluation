@@ -9,6 +9,8 @@ import ComprehensiveScoringView from '../views/ComprehensiveScoringView.vue'
 import PenaltyFactorAnalysisView from '../views/PenaltyFactorAnalysisView.vue'
 import CostEffectivenessAnalysisView from '../views/CostEffectivenessAnalysisView.vue'
 import ExpertEquipmentEvaluation from '../views/ExpertEquipmentEvaluation.vue'
+import DynamicIndicatorView from '../views/DynamicIndicatorView.vue'
+import DynamicQuantitativeView from '../views/DynamicQuantitativeView.vue'
 
 const routes = [
   {
@@ -94,6 +96,16 @@ const routes = [
         path: 'equipment-evaluation',
         name: 'EquipmentEvaluation',
         component: ExpertEquipmentEvaluation
+      },
+      {
+        path: 'dynamic-indicator',
+        name: 'DynamicIndicator',
+        component: DynamicIndicatorView
+      },
+      {
+        path: 'dynamic-quantitative',
+        name: 'DynamicQuantitative',
+        component: DynamicQuantitativeView
       }
     ]
   }

@@ -43,6 +43,10 @@
               <el-icon><EditPen /></el-icon>
               <span>专家定性数据评估</span>
             </el-menu-item>
+            <el-menu-item index="simulation-training/dynamic-indicator">
+              <el-icon><TrendCharts /></el-icon>
+              <span>动态指标管理</span>
+            </el-menu-item>
           </el-sub-menu>
 
           <el-sub-menu index="sub-simulation-weights">
@@ -123,7 +127,8 @@ const defaultOpenSubmenus = computed(() => {
   if (
     route.path.startsWith('/simulation-training/data') ||
     route.path.startsWith('/simulation-training/equipment-evaluation') ||
-    route.path.startsWith('/simulation-training/weights/expert')
+    route.path.startsWith('/simulation-training/weights/expert') ||
+    route.path.startsWith('/simulation-training/dynamic-indicator')
   ) {
     open.push('sub-simulation-data')
   }
