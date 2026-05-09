@@ -8,6 +8,8 @@ Excel格式：
 - 第1列: 层级（含描述信息，可合并单元格）
 - 第2列: 一级维度
 - 第3列: 二级维度（最小粒度）
+- 第4列: 指标性质（定性/定量）
+- 第5列: 平均数（用于归一化参考）
 """
 
 import sys
@@ -48,6 +50,7 @@ class SecondaryDimension:
     code: str                    # 编码（自动生成）
     sort_order: int = 0          # 排序顺序
     metric_type: str = 'QUALITATIVE'  # 指标性质：定性/定量
+    average_value: float = None  # 平均数（用于归一化参考）
 
 
 @dataclass
@@ -65,7 +68,7 @@ class DynamicIndicatorParser:
     动态指标Excel解析器
     
     核心逻辑：
-    1. 按列位置读取（第1列=层级，第2列=一级维度，第3列=二级维度）
+    1. 按列位置读取（第1列=层级，第2列=一级维度，第3列=二级维度，第4列=指标性质，第5列=平均数）
     2. 自动检测合并单元格（用于层级描述）
     3. 不写死任何层级名称，完全动态识别
     """
@@ -150,14 +153,15 @@ class DynamicIndicatorParser:
 
         # 遍历每一行
         for row_idx in range(len(df)):
-            # 获取四列的值
+            # 获取五列的值
             col0_val = self._get_cell_value(df, row_idx, 0)  # 层级
             col1_val = self._get_cell_value(df, row_idx, 1)  # 一级维度
             col2_val = self._get_cell_value(df, row_idx, 2)  # 二级维度
             col3_val = self._get_cell_value(df, row_idx, 3)  # 指标性质（定性/定量）
+            col4_val = self._get_cell_value(df, row_idx, 4)  # 平均数
 
             # 跳过空行（全部为空）
-            if not col0_val and not col1_val and not col2_val:
+            if not col0_val and not col1_val and not col2_val and not col4_val:
                 continue
 
             # 跳过标题行（如果第一行是表头的话）
@@ -207,6 +211,8 @@ class DynamicIndicatorParser:
                     if col2_val and col2_val.strip():
                         # 解析指标性质
                         metric_type = self._parse_metric_type(col3_val)
+                        # 解析平均数
+                        average_value = self._parse_average_value(col4_val)
                         # 检查二级维度是否已存在
                         existing_sec = None
                         for s in current_primary.secondary_dimensions:
@@ -219,7 +225,8 @@ class DynamicIndicatorParser:
                                 name=col2_val,
                                 code=self._generate_code(col2_val),
                                 sort_order=secondary_counter,
-                                metric_type=metric_type
+                                metric_type=metric_type,
+                                average_value=average_value
                             )
                             current_primary.secondary_dimensions.append(secondary)
                         
@@ -256,6 +263,8 @@ class DynamicIndicatorParser:
                 if col2_val and col2_val.strip():
                     # 解析指标性质
                     metric_type = self._parse_metric_type(col3_val)
+                    # 解析平均数
+                    average_value = self._parse_average_value(col4_val)
                     # 检查二级维度是否已存在
                     existing_sec = None
                     for s in current_primary.secondary_dimensions:
@@ -269,7 +278,8 @@ class DynamicIndicatorParser:
                         name=col2_val,
                         code=self._generate_code(col2_val),
                         sort_order=secondary_counter,
-                        metric_type=metric_type
+                        metric_type=metric_type,
+                        average_value=average_value
                     )
                     current_primary.secondary_dimensions.append(secondary)
                     
@@ -286,11 +296,14 @@ class DynamicIndicatorParser:
                 secondary_counter += 1
                 # 解析指标性质
                 metric_type = self._parse_metric_type(col3_val)
+                # 解析平均数
+                average_value = self._parse_average_value(col4_val)
                 secondary = SecondaryDimension(
                     name=col2_val,
                     code=self._generate_code(col2_val),
                     sort_order=secondary_counter,
-                    metric_type=metric_type
+                    metric_type=metric_type,
+                    average_value=average_value
                 )
                 current_primary.secondary_dimensions.append(secondary)
         
@@ -401,24 +414,77 @@ class DynamicIndicatorParser:
     def _parse_metric_type(self, value: str) -> str:
         """
         解析指标性质
-        
+
         Args:
-            value: 单元格值，如 "定性", "定量"
-            
+            value: 单元格值，如 "定性", "定量", "√", "✓", "★", "●" 等符号
+
         Returns:
             'QUALITATIVE' (定性) 或 'QUANTITATIVE' (定量)
         """
-        if not value:
-            return 'QUALITATIVE'  # 默认定性
-        
-        value = value.strip().upper()
-        
-        if '定性' in value or value == 'QUALITATIVE':
+        if not value or value.strip() == '':
+            return 'QUALITATIVE'  # 空白单元格默认为定性
+
+        value_stripped = value.strip()
+
+        # 明确标记为定性
+        if '定性' in value_stripped or value_stripped.upper() == 'QUALITATIVE':
             return 'QUALITATIVE'
-        elif '定量' in value or value == 'QUANTITATIVE':
+
+        # 明确标记为定量
+        if '定量' in value_stripped or value_stripped.upper() == 'QUANTITATIVE':
             return 'QUANTITATIVE'
-        else:
-            return 'QUALITATIVE'  # 默认定性
+
+        # 有符号的单元格视为定量指标
+        # 常见的定量标记符号
+        quantitative_markers = ['√', '✓', '★', '●', '○', '■', '□', '◆', '◇', '+', '×', '◆', '▶', '►', '✔', '◇']
+        for marker in quantitative_markers:
+            if marker in value_stripped:
+                return 'QUANTITATIVE'
+
+        # 其他有内容的单元格也视为定量
+        if len(value_stripped) > 0:
+            return 'QUANTITATIVE'
+
+        return 'QUALITATIVE'  # 默认定性
+
+    def _parse_average_value(self, value: str) -> Optional[float]:
+        """
+        解析平均数字段
+
+        Args:
+            value: 单元格值，如 "168.5", "80", "70-90", ">80" 等
+
+        Returns:
+            解析后的数值，如果无法解析则返回 None
+        """
+        if not value or value.strip() == '':
+            return None
+
+        value_stripped = value.strip()
+
+        # 尝试直接解析为数值
+        try:
+            return float(value_stripped)
+        except ValueError:
+            pass
+
+        # 处理范围格式: "70-90" 或 "70~90"
+        match = re.match(r'(\d+\.?\d*)\s*[-~]\s*(\d+\.?\d*)', value_stripped)
+        if match:
+            low, high = float(match.group(1)), float(match.group(2))
+            return (low + high) / 2
+
+        # 处理大于格式: ">80" 或 "≥80"
+        match = re.match(r'[>≥]\s*(\d+\.?\d*)', value_stripped)
+        if match:
+            return float(match.group(1))
+
+        # 处理小于格式: "<80" 或 "≤80"
+        match = re.match(r'[<≤]\s*(\d+\.?\d*)', value_stripped)
+        if match:
+            return float(match.group(1))
+
+        return None
     
     def _calculate_statistics(self) -> Dict:
         """计算统计信息"""
@@ -438,9 +504,14 @@ class DynamicIndicatorParser:
             }
         }
     
-    def to_dict(self) -> Dict:
+    def to_dict(self, template_name: str = None) -> Dict:
         """转换为字典格式（API响应）"""
+        # 如果没有传入模板名，使用第一个层级的名称作为模板名
+        if not template_name and self.levels:
+            template_name = self.levels[0].name if self.levels else "未命名模板"
+        
         return {
+            'template_name': template_name,
             'levels': [
                 {
                     'name': level.name,
@@ -456,7 +527,8 @@ class DynamicIndicatorParser:
                                     'name': sec.name,
                                     'code': sec.code,
                                     'sortOrder': sec.sort_order,
-                                    'metricType': sec.metric_type  # 指标性质
+                                    'metricType': sec.metric_type,
+                                    'averageValue': sec.average_value
                                 }
                                 for sec in primary.secondary_dimensions
                             ]
@@ -469,9 +541,9 @@ class DynamicIndicatorParser:
             'statistics': self.statistics
         }
     
-    def to_json(self) -> str:
+    def to_json(self, template_name: str = None) -> str:
         """转换为JSON字符串"""
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+        return json.dumps(self.to_dict(template_name=template_name), ensure_ascii=False, indent=2)
 
 # ============================================================================
 # 辅助函数
@@ -573,7 +645,12 @@ if __name__ == '__main__':
                 if file_path:
                     parser = DynamicIndicatorParser()
                     result = parser.parse_file(file_path)
-                    print(parser.to_json())
+                    
+                    # 从文件路径中提取模板名称
+                    import os
+                    template_name = os.path.splitext(os.path.basename(file_path))[0]
+                    
+                    print(parser.to_json(template_name=template_name))
                 else:
                     print(json.dumps({
                         'success': False,

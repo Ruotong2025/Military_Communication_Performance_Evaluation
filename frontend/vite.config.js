@@ -15,7 +15,8 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
-        // 与批量模拟 AHP 等长耗时接口对齐，避免开发环境代理先断开导致前端一直 loading
+        // 不设置 rewrite，Vite 默认会保留 /api 前缀
+        // /api/xxx → http://localhost:8080/api/xxx (后端 context-path)
         timeout: 300000,
         proxyTimeout: 300000
       }

@@ -14,9 +14,11 @@ public class AhpJudgmentMatrix {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "level_id", nullable = false)
-    private LevelDefinition level;
+    @Column(name = "level_id")
+    private Long levelId;
+
+    @Column(name = "level_name")
+    private String levelName;
 
     @Column(name = "matrix_data", columnDefinition = "JSON")
     private String matrixData;

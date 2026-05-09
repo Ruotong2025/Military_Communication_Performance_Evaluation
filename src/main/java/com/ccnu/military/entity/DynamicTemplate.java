@@ -1,15 +1,13 @@
 package com.ccnu.military.entity;
 
-import javax.persistence.*;
 import lombok.Data;
+import javax.persistence.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Data
 @Entity
-@Table(name = "mtl_indicator_template")
-public class IndicatorTemplate {
+@Table(name = "dynamic_template")
+public class DynamicTemplate {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -18,10 +16,10 @@ public class IndicatorTemplate {
     @Column(name = "template_name", nullable = false)
     private String templateName;
 
-    @Column(name = "template_code", unique = true, nullable = false)
+    @Column(name = "template_code", nullable = false, unique = true)
     private String templateCode;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "level_count")
@@ -46,11 +44,10 @@ public class IndicatorTemplate {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    @OneToMany(mappedBy = "template", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<LevelDefinition> levels = new ArrayList<>();
-
     public enum Status {
-        DRAFT, ACTIVE, ARCHIVED
+        DRAFT,      // 草稿
+        ACTIVE,     // 激活
+        ARCHIVED    // 归档
     }
 
     @PreUpdate

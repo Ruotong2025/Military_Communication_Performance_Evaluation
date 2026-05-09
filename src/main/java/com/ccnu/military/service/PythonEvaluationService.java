@@ -168,6 +168,98 @@ public class PythonEvaluationService {
         }
     }
 
+    /**
+     * 解析Excel文件中的指标数据
+     *
+     * @param filePath Excel文件路径
+     * @return 解析结果
+     */
+    public Map<String, Object> parseExcel(String filePath) {
+        try {
+            log.info("开始调用 Python 解析 Excel，文件路径: {}", filePath);
+
+            // 构建输入 JSON
+            Map<String, Object> input = new HashMap<>();
+            input.put("action", "parse");
+            input.put("filePath", filePath);
+            String inputJson = objectMapper.writeValueAsString(input);
+
+            // 构建命令
+            ProcessBuilder processBuilder = new ProcessBuilder(
+                    pythonExecutable,
+                    "-u",
+                    "python_service/dynamic_parser.py"
+            );
+
+            // 设置环境变量
+            Map<String, String> env = processBuilder.environment();
+            env.put("PYTHONIOENCODING", "utf-8");
+
+            // 启动进程
+            Process process = processBuilder.start();
+
+            // 通过标准输入传递 JSON
+            try (java.io.OutputStream writer = process.getOutputStream()) {
+                writer.write(inputJson.getBytes(StandardCharsets.UTF_8));
+                writer.flush();
+            }
+
+            // 读取输出
+            StringBuilder output = new StringBuilder();
+            StringBuilder errorOutput = new StringBuilder();
+
+            Thread errorThread = new Thread(() -> {
+                try (BufferedReader errorReader = new BufferedReader(
+                        new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = errorReader.readLine()) != null) {
+                        errorOutput.append(line).append("\n");
+                        if (line.contains("[DEBUG]") || line.contains("[ERROR]")) {
+                            log.info("Python 调试信息: {}", line);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("读取 Python stderr 失败", e);
+                }
+            });
+            errorThread.start();
+
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+
+            errorThread.join(5000);
+
+            boolean finished = process.waitFor(pythonTimeout, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroy();
+                log.error("Python 脚本执行超时");
+                return createErrorResponse("Python 脚本执行超时");
+            }
+
+            int exitCode = process.exitValue();
+            if (exitCode != 0) {
+                log.error("Python 脚本执行失败，退出码: {}, 错误输出: {}", exitCode, errorOutput);
+                return createErrorResponse("Python 脚本执行失败: " + errorOutput);
+            }
+
+            // 解析 JSON 输出
+            String jsonOutput = output.toString().trim();
+            log.info("Python 脚本执行成功，输出长度: {} 字符", jsonOutput.length());
+
+            Map<String, Object> result = objectMapper.readValue(jsonOutput, Map.class);
+            return result;
+
+        } catch (Exception e) {
+            log.error("调用 Python 解析 Excel 失败", e);
+            return createErrorResponse("调用 Python 解析 Excel 失败: " + e.getMessage());
+        }
+    }
+
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);

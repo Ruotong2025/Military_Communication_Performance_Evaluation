@@ -1096,6 +1096,27 @@ export function getDynamicQtBatches() {
 }
 
 /**
+ * 根据模板获取批次列表
+ */
+export function getDynamicQtBatchesByTemplate(templateId) {
+  return request({
+    url: "/dynamic-qt/batches/by-template",
+    method: "get",
+    params: { templateId },
+  });
+}
+
+/**
+ * 获取批次信息
+ */
+export function getDynamicQtBatchInfo(batchId) {
+  return request({
+    url: `/dynamic-qt/batch/info/${batchId}`,
+    method: "get",
+  });
+}
+
+/**
  * 创建新批次（只创建批次，不创建记录）
  */
 export function createDynamicQtBatch(templateId, description = '') {
@@ -1109,11 +1130,11 @@ export function createDynamicQtBatch(templateId, description = '') {
 /**
  * 获取批次的定量指标列表（按一级维度分组）
  */
-export function getDynamicQtIndicators(batchId) {
+export function getDynamicQtIndicators(batchId, templateId) {
   return request({
     url: "/dynamic-qt/indicators",
     method: "get",
-    params: { batchId },
+    params: { batchId, templateId },
   });
 }
 
@@ -1141,12 +1162,35 @@ export function simulateDynamicQtCell(batchId, operationId, secondaryCode) {
 
 /**
  * 全局模拟：根据指定次数生成作战数据
+ * @param {string} batchId - 批次ID
+ * @param {number} count - 生成数量
+ * @param {number} templateId - 模板ID
+ * @param {string} templateName - 模板名称
+ * @param {string} mode - 模式: COVER-覆盖当前批次, APPEND-追加到当前批次
+ * @param {number} dispersion - 全局离散度（0-1），仅在 dispersions 为空时使用
+ * @param {object} dispersions - 各指标独立离散度，格式: {指标code: 离散度}
  */
-export function globalSimulateDynamicQt(batchId, count) {
+export function globalSimulateDynamicQt(batchId, count, templateId, templateName, mode = 'APPEND', dispersion = 0.2, dispersions = null) {
+  const data = { batchId, count, templateId, templateName, mode, dispersion };
+  if (dispersions && Object.keys(dispersions).length > 0) {
+    data.dispersions = dispersions;
+  }
   return request({
     url: "/dynamic-qt/global-simulate",
     method: "post",
-    data: { batchId, count },
+    data: data,
+  });
+}
+
+/**
+ * 获取定量指标统计信息（用于模拟配置）
+ * @param {number} templateId - 模板ID
+ */
+export function getQtIndicatorStats(templateId) {
+  return request({
+    url: "/dynamic-qt/indicator-stats",
+    method: "get",
+    params: { templateId },
   });
 }
 
@@ -1164,11 +1208,11 @@ export function batchSimulateDynamicQt(batchId, cells) {
 /**
  * 保存单条记录
  */
-export function saveDynamicQtRecord(batchId, operationId, secondaryCode, value) {
+export function saveDynamicQtRecord(batchId, operationId, secondaryCode, value, level = null) {
   return request({
     url: "/dynamic-qt/record",
     method: "post",
-    data: { batchId, operationId, secondaryCode, value },
+    data: { batchId, operationId, secondaryCode, value, level },
   });
 }
 
@@ -1190,7 +1234,7 @@ export function normalizeDynamicQt(batchId) {
   return request({
     url: "/dynamic-qt/normalize",
     method: "post",
-    params: { batchId },
+    data: { batchId },
   });
 }
 
@@ -1210,9 +1254,8 @@ export function getNormalizedDynamicQtRecords(batchId) {
  */
 export function deleteDynamicQtBatch(batchId) {
   return request({
-    url: "/dynamic-qt/batch",
+    url: `/dynamic-qt/batch/${batchId}`,
     method: "delete",
-    params: { batchId },
   });
 }
 
@@ -1245,5 +1288,590 @@ export function addDynamicQtOperations(batchId, operationIds) {
     url: "/dynamic-qt/batch/operations",
     method: "post",
     data: { batchId, operationIds },
+  });
+}
+
+// ============================================
+// 动态定量评估 - 归一化管理 API
+// ============================================
+
+/**
+ * 获取某批次的所有归一化批次列表
+ */
+export function getNormalizationBatches(batchId) {
+  return request({
+    url: "/dynamic-qt/normalization-batches",
+    method: "get",
+    params: { batchId },
+  });
+}
+
+/**
+ * 创建归一化
+ * @param {string} batchId - 评估批次ID
+ * @param {string} normalizationName - 归一化名称（如"第1次归一化"），不传则自动生成
+ * @param {string} description - 描述
+ */
+export function createNormalization(batchId, normalizationName = null, description = '') {
+  return request({
+    url: "/dynamic-qt/normalize",
+    method: "post",
+    data: { batchId, normalizationName, description },
+  });
+}
+
+/**
+ * 删除归一化
+ */
+export function deleteNormalization(batchId, normalizationName) {
+  return request({
+    url: "/dynamic-qt/normalization",
+    method: "delete",
+    params: { batchId, normalizationName },
+  });
+}
+
+/**
+ * 获取归一化结果数据
+ * @param {string} batchId - 评估批次ID
+ * @param {string} normalizationName - 归一化名称，不传则获取最新的
+ */
+export function getNormalizationRecords(batchId, normalizationName = null) {
+  return request({
+    url: "/dynamic-qt/normalization-records",
+    method: "get",
+    params: { batchId, normalizationName },
+  });
+}
+
+// ============================================
+// 动态定性评估 API
+// ============================================
+
+/**
+ * 获取定性指标列表（按层级分组）
+ * 选择模板后即可调用
+ */
+export function getDynamicQlIndicators(templateId) {
+  return request({
+    url: "/dynamic-ql/indicators",
+    method: "get",
+    params: { templateId },
+  });
+}
+
+/**
+ * 获取所有层级名称
+ */
+export function getDynamicQlLevels(templateId) {
+  return request({
+    url: "/dynamic-ql/levels",
+    method: "get",
+    params: { templateId },
+  });
+}
+
+/**
+ * 获取可用的定量评估批次列表
+ */
+export function getDynamicQlBatches(templateId = null) {
+  return request({
+    url: "/dynamic-ql/batches",
+    method: "get",
+    params: templateId ? { templateId } : {},
+  });
+}
+
+/**
+ * 获取批次下的作战列表
+ */
+export function getDynamicQlOperations(batchId) {
+  return request({
+    url: "/dynamic-ql/operations",
+    method: "get",
+    params: { batchId },
+  });
+}
+
+/**
+ * 获取作战的定量参考数据
+ */
+export function getDynamicQlReference(batchId, operationId) {
+  return request({
+    url: "/dynamic-ql/reference",
+    method: "get",
+    params: { batchId, operationId },
+  });
+}
+
+/**
+ * 获取可选专家列表
+ */
+export function getDynamicQlExperts() {
+  return request({
+    url: "/dynamic-ql/experts",
+    method: "get",
+  });
+}
+
+/**
+ * 批量获取专家可信度
+ */
+export function getDynamicQlExpertsCredibility(expertIds) {
+  return request({
+    url: "/dynamic-ql/experts/credibility",
+    method: "get",
+    params: { expertIds },
+  });
+}
+
+/**
+ * 获取表格数据（完整结构，用于前端渲染）
+ */
+export function getDynamicQlTableData(batchId, templateId, levelName = null, expertIds = null) {
+  const params = { templateId };
+  if (batchId) params.batchId = batchId;
+  if (levelName) params.levelName = levelName;
+  if (expertIds && expertIds.length > 0) params.expertIds = expertIds;
+  return request({
+    url: "/dynamic-ql/table-data",
+    method: "get",
+    params,
+  });
+}
+
+/**
+ * 获取已保存的评估记录
+ */
+export function getDynamicQlRecords(batchId, expertId = null, operationId = null) {
+  const params = {};
+  if (batchId) params.batchId = batchId;
+  if (expertId) params.expertId = expertId;
+  if (operationId) params.operationId = operationId;
+  return request({
+    url: "/dynamic-ql/records",
+    method: "get",
+    params,
+  });
+}
+
+/**
+ * 保存评估记录
+ */
+export function saveDynamicQlRecord(batchId, templateId, expertId, operationId, scores) {
+  return request({
+    url: "/dynamic-ql/records",
+    method: "post",
+    data: { batchId, templateId, expertId, operationId, scores },
+  });
+}
+
+/**
+ * 批量保存评估记录
+ */
+export function saveDynamicQlRecordsBatch(records) {
+  return request({
+    url: "/dynamic-ql/records/batch",
+    method: "post",
+    data: records,
+  });
+}
+
+/**
+ * 执行集结计算
+ * @param {string} batchId - 批次ID
+ * @param {string} operationId - 作战ID（可选）
+ * @param {string} levelName - 层级名称（可选）
+ * @param {number} weightAlpha - 权威度权重（0-1）
+ * @param {number} weightLambda - 把握度权重（0-1）
+ */
+export function aggregateDynamicQlScores(batchId, operationId = null, levelName = null, weightAlpha = 0.5, weightLambda = 0.5) {
+  return request({
+    url: "/dynamic-ql/aggregate",
+    method: "post",
+    data: { batchId, operationId, levelName, weightAlpha, weightLambda },
+  });
+}
+
+/**
+ * 获取集结结果
+ */
+export function getDynamicQlAggregation(batchId, operationId = null) {
+  return request({
+    url: "/dynamic-ql/aggregation",
+    method: "get",
+    params: { batchId, operationId },
+  });
+}
+
+/**
+ * 创建评估会话
+ */
+export function createDynamicQlSession(templateId, batchId = null, expertIds = null) {
+  return request({
+    url: "/dynamic-ql/session",
+    method: "post",
+    data: { templateId, batchId, expertIds },
+  });
+}
+
+/**
+ * 获取会话详情
+ */
+export function getDynamicQlSession(sessionId) {
+  return request({
+    url: `/dynamic-ql/session/${sessionId}`,
+    method: "get",
+  });
+}
+
+// ============================================
+// 动态AHP权重配置 API
+// ============================================
+
+/**
+ * 获取动态指标模板列表
+ */
+export function getDynamicAhpTemplates() {
+  return request({
+    url: "/dynamic-ahp/templates",
+    method: "get",
+  });
+}
+
+/**
+ * 获取指标树结构
+ */
+export function getDynamicAhpTree(templateId) {
+  return request({
+    url: "/dynamic-ahp/tree",
+    method: "get",
+    params: { templateId },
+  });
+}
+
+/**
+ * 获取专家列表
+ */
+export function getDynamicAhpExperts() {
+  return request({
+    url: "/dynamic-ahp/experts",
+    method: "get",
+  });
+}
+
+/**
+ * 获取层级列表
+ */
+export function getDynamicAhpLevels(templateId) {
+  return request({
+    url: "/dynamic-ahp/levels",
+    method: "get",
+    params: { templateId },
+  });
+}
+
+/**
+ * 获取一级维度列表
+ */
+export function getDynamicAhpPrimaries(templateId, levelName) {
+  return request({
+    url: "/dynamic-ahp/primaries",
+    method: "get",
+    params: { templateId, levelName },
+  });
+}
+
+/**
+ * 获取二级指标列表
+ */
+export function getDynamicAhpSecondaries(templateId, levelName, primaryCode) {
+  return request({
+    url: "/dynamic-ahp/secondaries",
+    method: "get",
+    params: { templateId, levelName, primaryCode },
+  });
+}
+
+/**
+ * 获取层级间比较矩阵
+ */
+export function getDynamicAhpLevelBetweenMatrix(templateId, expertId) {
+  return request({
+    url: "/dynamic-ahp/matrix/level-between",
+    method: "get",
+    params: { templateId, expertId },
+  });
+}
+
+/**
+ * 获取一级维度间比较矩阵
+ */
+export function getDynamicAhpPrimaryBetweenMatrix(templateId, levelName, expertId) {
+  return request({
+    url: "/dynamic-ahp/matrix/primary-between",
+    method: "get",
+    params: { templateId, levelName, expertId },
+  });
+}
+
+/**
+ * 获取二级指标间比较矩阵
+ */
+export function getDynamicAhpSecondaryBetweenMatrix(templateId, levelName, primaryCode, expertId) {
+  return request({
+    url: "/dynamic-ahp/matrix/secondary-between",
+    method: "get",
+    params: { templateId, levelName, primaryCode, expertId },
+  });
+}
+
+/**
+ * 保存AHP矩阵打分
+ */
+export function saveDynamicAhpMatrix(data) {
+  return request({
+    url: "/dynamic-ahp/matrix/save",
+    method: "post",
+    data,
+  });
+}
+
+/**
+ * 计算AHP权重
+ */
+export function calculateDynamicAhpWeights(templateId, expertId, levelName, matrixType, parentCode = null) {
+  const params = { templateId, expertId, levelName, matrixType };
+  if (parentCode) {
+    params.parentCode = parentCode;
+  }
+  return request({
+    url: "/dynamic-ahp/calculate",
+    method: "post",
+    params,
+  });
+}
+
+/**
+ * 计算所有AHP权重
+ */
+export function calculateAllDynamicAhpWeights(templateId, expertId) {
+  return request({
+    url: "/dynamic-ahp/calculate/all",
+    method: "post",
+    params: { templateId, expertId },
+  });
+}
+
+/**
+ * 保存权重计算结果
+ */
+export function saveDynamicAhpWeights(templateId, expertId) {
+  return request({
+    url: "/dynamic-ahp/weights/save",
+    method: "post",
+    params: { templateId, expertId },
+  });
+}
+
+/**
+ * 获取已保存的权重
+ */
+export function getDynamicAhpWeights(templateId, expertId) {
+  return request({
+    url: "/dynamic-ahp/weights",
+    method: "get",
+    params: { templateId, expertId },
+  });
+}
+
+/**
+ * 获取指定层级的权重
+ */
+export function getDynamicAhpWeightsByLevel(templateId, expertId, levelName) {
+  return request({
+    url: "/dynamic-ahp/weights/by-level",
+    method: "get",
+    params: { templateId, expertId, levelName },
+  });
+}
+
+/**
+ * 模拟AHP打分
+ */
+export function simulateDynamicAhpScores(templateId, expertIds) {
+  return request({
+    url: "/dynamic-ahp/simulate",
+    method: "post",
+    params: { templateId, expertIds },
+    paramsSerializer: {
+      serialize: (params) => {
+        const parts = [];
+        if (params.templateId != null) parts.push(`templateId=${params.templateId}`);
+        if (params.expertIds && Array.isArray(params.expertIds)) {
+          params.expertIds.forEach(id => parts.push(`expertIds=${id}`));
+        }
+        return parts.join('&');
+      }
+    }
+  });
+}
+
+/**
+ * 批量模拟AHP打分（为所有专家）
+ */
+export function batchSimulateDynamicAhpScores(templateId) {
+  return request({
+    url: "/dynamic-ahp/batch-simulate",
+    method: "post",
+    params: { templateId },
+  });
+}
+
+/**
+ * 清除AHP打分
+ */
+export function clearDynamicAhpMatrix(templateId, expertId) {
+  return request({
+    url: "/dynamic-ahp/matrix",
+    method: "delete",
+    params: { templateId, expertId },
+  });
+}
+
+/**
+ * 获取AHP配置状态
+ */
+export function getDynamicAhpStatus(templateId, expertId) {
+  return request({
+    url: "/dynamic-ahp/status",
+    method: "get",
+    params: { templateId, expertId },
+  });
+}
+
+// ==================== 动态AHP专家集结相关API ====================
+
+/**
+ * 获取可用模板列表
+ */
+export function getDynamicAhpAggregationTemplates() {
+  return request({
+    url: "/dynamic-ahp/collective/templates",
+    method: "get",
+  });
+}
+
+/**
+ * 获取可用专家列表
+ */
+export function getDynamicAhpAggregationExperts(templateId) {
+  return request({
+    url: "/dynamic-ahp/collective/experts",
+    method: "get",
+    params: { templateId },
+  });
+}
+
+/**
+ * 预览集结结果
+ */
+export function previewDynamicAhpAggregation(data) {
+  return request({
+    url: "/dynamic-ahp/collective/preview",
+    method: "post",
+    data,
+  });
+}
+
+/**
+ * 执行集结计算
+ */
+export function executeDynamicAhpAggregation(data) {
+  return request({
+    url: "/dynamic-ahp/collective/calculate",
+    method: "post",
+    data,
+  });
+}
+
+/**
+ * 获取集结结果列表
+ */
+export function getDynamicAhpAggregationResults(templateId) {
+  return request({
+    url: "/dynamic-ahp/collective/results",
+    method: "get",
+    params: { templateId },
+  });
+}
+
+/**
+ * 获取单个集结结果
+ */
+export function getDynamicAhpAggregationResult(groupId) {
+  return request({
+    url: `/dynamic-ahp/collective/results/${groupId}`,
+    method: "get",
+  });
+}
+
+/**
+ * 删除集结结果
+ */
+export function deleteDynamicAhpAggregationResult(groupId) {
+  return request({
+    url: `/dynamic-ahp/collective/results/${groupId}`,
+    method: "delete",
+  });
+}
+
+// ============================================
+// 动态综合评分 API
+// ============================================
+
+/**
+ * 获取动态综合评分批次列表
+ */
+export function getDynamicComprehensiveBatches(templateId = null) {
+  return request({
+    url: "/dynamic-comprehensive/batches",
+    method: "get",
+    params: templateId ? { templateId } : {},
+  });
+}
+
+/**
+ * 获取原始数据集结表
+ * 横向：指标（一级维度 > 二级指标）
+ * 纵向：作战ID
+ */
+export function getDynamicComprehensiveRawData(batchId) {
+  return request({
+    url: "/dynamic-comprehensive/raw-data",
+    method: "get",
+    params: { batchId },
+  });
+}
+
+/**
+ * 获取综合评分结果
+ */
+export function getDynamicComprehensiveScores(batchId) {
+  return request({
+    url: "/dynamic-comprehensive/scores",
+    method: "get",
+    params: { batchId },
+  });
+}
+
+/**
+ * 获取指标树结构
+ */
+export function getDynamicComprehensiveIndicatorTree(templateId) {
+  return request({
+    url: "/dynamic-comprehensive/indicator-tree",
+    method: "get",
+    params: { templateId },
   });
 }

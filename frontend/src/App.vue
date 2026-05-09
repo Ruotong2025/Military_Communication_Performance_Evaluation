@@ -58,6 +58,10 @@
               <el-icon><TrendCharts /></el-icon>
               <span>专家 AHP 打分</span>
             </el-menu-item>
+            <el-menu-item index="simulation-training/dynamic-ahp">
+              <el-icon><Grid /></el-icon>
+              <span>动态AHP配置</span>
+            </el-menu-item>
             <el-menu-item index="simulation-training/weights/ahp-dispersion">
               <el-icon><DataLine /></el-icon>
               <span>权重离散度分析</span>
@@ -115,7 +119,8 @@ import {
   CircleCheck,
   Warning,
   Coin,
-  EditPen
+  EditPen,
+  Grid
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -133,8 +138,8 @@ const defaultOpenSubmenus = computed(() => {
     open.push('sub-simulation-data')
   }
   if (
-    route.path.startsWith('/simulation-training/weights') &&
-    !route.path.startsWith('/simulation-training/weights/expert')
+    route.path.startsWith('/simulation-training/weights') ||
+    route.path.startsWith('/simulation-training/dynamic-ahp')
   ) {
     open.push('sub-simulation-weights')
   }

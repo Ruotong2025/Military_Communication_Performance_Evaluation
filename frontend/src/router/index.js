@@ -11,6 +11,10 @@ import CostEffectivenessAnalysisView from '../views/CostEffectivenessAnalysisVie
 import ExpertEquipmentEvaluation from '../views/ExpertEquipmentEvaluation.vue'
 import DynamicIndicatorView from '../views/DynamicIndicatorView.vue'
 import DynamicQuantitativeView from '../views/DynamicQuantitativeView.vue'
+import DynamicQualitativeView from '../views/DynamicQualitativeView.vue'
+import DynamicAhpView from '../views/DynamicAhpView.vue'
+import DynamicAhpAggregation from '../views/DynamicAhpAggregation.vue'
+import DynamicComprehensiveScoring from '../views/DynamicComprehensiveScoring.vue'
 
 const routes = [
   {
@@ -106,6 +110,26 @@ const routes = [
         path: 'dynamic-quantitative',
         name: 'DynamicQuantitative',
         component: DynamicQuantitativeView
+      },
+      {
+        path: 'dynamic-qualitative',
+        name: 'DynamicQualitative',
+        component: DynamicQualitativeView
+      },
+      {
+        path: 'dynamic-ahp',
+        name: 'DynamicAhp',
+        component: DynamicAhpView
+      },
+      {
+        path: 'dynamic-ahp-aggregation',
+        name: 'DynamicAhpAggregation',
+        component: DynamicAhpAggregation
+      },
+      {
+        path: 'results/dynamic-comprehensive-scoring',
+        name: 'ResultsDynamicComprehensiveScoring',
+        component: DynamicComprehensiveScoring
       }
     ]
   }

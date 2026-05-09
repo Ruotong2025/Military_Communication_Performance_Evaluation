@@ -73,8 +73,19 @@
         </el-button>
       </div>
 
+      <!-- 模板名称输入 -->
+      <div class="template-name-input" v-if="currentFile">
+        <el-input
+          v-model="templateName"
+          placeholder="请输入模板名称（用于保存）"
+          style="width: 300px"
+        >
+          <template #prepend>模板名称</template>
+        </el-input>
+      </div>
+
       <!-- Excel格式说明 -->
-      <div class="format-tip">
+      <div class="format-tip" v-if="!currentFile">
         <el-alert type="info" :closable="false" show-icon>
           <template #title>
             <strong>Excel格式要求</strong>
@@ -87,17 +98,6 @@
             </ul>
           </template>
         </el-alert>
-      </div>
-
-      <!-- 模板名称输入 -->
-      <div class="template-name-input" v-if="currentFile">
-        <el-input
-          v-model="templateName"
-          placeholder="请输入模板名称（用于保存）"
-          style="width: 300px"
-        >
-          <template #prepend>模板名称</template>
-        </el-input>
       </div>
     </el-card>
 
@@ -149,7 +149,7 @@
                     <div class="primary-header">
                       <span class="primary-name">{{ primary.name }}</span>
                       <div class="primary-actions">
-                        <el-tag size="small" type="primary">
+                        <el-tag size="small" type="info">
                           {{ primary.secondaryDimensions?.length || 0 }}项
                         </el-tag>
                       </div>
@@ -162,15 +162,24 @@
                       v-for="sec in primary.secondaryDimensions"
                       :key="sec.code"
                       class="secondary-item"
+                      :class="{ 'is-quantitative': sec.metricType === 'QUANTITATIVE' }"
                     >
                       <span class="sec-name">{{ sec.name }}</span>
                       <div class="sec-tags">
-                        <el-tag size="small" type="info">{{ sec.code }}</el-tag>
-                        <el-tag 
-                          size="small" 
-                          :type="sec.metricType === 'QUANTITATIVE' ? 'success' : 'warning'"
+                        <el-tag
+                          size="small"
+                          :type="sec.metricType === 'QUANTITATIVE' ? 'primary' : 'warning'"
                         >
                           {{ sec.metricType === 'QUANTITATIVE' ? '定量' : '定性' }}
+                        </el-tag>
+                        <!-- 定性指标灰色部分已隐藏，定量指标显示平均值 -->
+                        <el-tag
+                          v-if="sec.metricType === 'QUANTITATIVE' && sec.averageValue !== null && sec.averageValue !== undefined"
+                          size="small"
+                          type="info"
+                          effect="plain"
+                        >
+                          平均值: {{ formatAverageValue(sec.averageValue) }}
                         </el-tag>
                       </div>
                     </div>
@@ -270,6 +279,16 @@ const primarySpan = computed(() => {
 })
 
 // 方法
+// 格式化平均值显示
+const formatAverageValue = (value) => {
+  if (value === null || value === undefined) return '—'
+  const num = Number(value)
+  if (Number.isNaN(num)) return '—'
+  // 保留合理的小数位数
+  if (Number.isInteger(num)) return num.toString()
+  return num.toFixed(3)
+}
+
 const triggerUpload = () => {
   document.querySelector('.el-upload__input')?.click()
 }
@@ -566,14 +585,20 @@ onMounted(() => {
     border-radius: 4px;
     font-size: 13px;
 
+    &.is-quantitative {
+      background: #f5f7fa !important;
+    }
+
     .sec-name {
       flex: 1;
+      font-weight: 500;
     }
 
     .sec-tags {
       display: flex;
       gap: 6px;
       align-items: center;
+      flex-wrap: wrap;
     }
   }
 

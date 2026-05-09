@@ -2,6 +2,8 @@ import axios from 'axios'
 
 const request = axios.create({
   // 使用环境变量配置 API 基础地址
+  // 开发环境: /api (走 vite 代理到 localhost:8080)
+  // 生产环境: 需要配置 VITE_API_BASE_URL 为完整路径
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 30000
 })

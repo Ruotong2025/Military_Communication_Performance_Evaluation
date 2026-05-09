@@ -11,7 +11,7 @@
       </div>
       <div class="hero-stats">
         <div class="stat-item">
-          <span class="stat-number">10</span>
+          <span class="stat-number">13</span>
           <span class="stat-label">功能模块</span>
         </div>
         <div class="stat-item">
@@ -93,7 +93,7 @@
       <div class="phase-title-bar" style="--phase-color: #001f3f;">
         <el-icon><Document /></el-icon>
         <span>阶段一：数据准备</span>
-        <el-tag style="background: #1c4a9a; border-color: #1c4a9a;" size="small" effect="dark">3个模块</el-tag>
+        <el-tag style="background: #1c4a9a; border-color: #1c4a9a;" size="small" effect="dark">6个模块</el-tag>
       </div>
       <div class="cards-grid">
         <div v-for="card in phase1Cards" :key="card.path" class="module-card" @click="go(card.path)">
@@ -129,7 +129,7 @@
       <div class="phase-title-bar" style="--phase-color: #003580;">
         <el-icon><DataAnalysis /></el-icon>
         <span>阶段二：权重确定</span>
-        <el-tag style="background: #003580; border-color: #003580;" size="small" effect="dark">3个模块</el-tag>
+        <el-tag style="background: #003580; border-color: #003580;" size="small" effect="dark">5个模块</el-tag>
       </div>
       <div class="cards-grid">
         <div v-for="card in phase2Cards" :key="card.path" class="module-card" @click="go(card.path)">
@@ -165,7 +165,7 @@
       <div class="phase-title-bar" style="--phase-color: #0050a0;">
         <el-icon><PieChart /></el-icon>
         <span>阶段三：结果计算</span>
-        <el-tag style="background: #0050a0; border-color: #0050a0;" size="small" effect="dark">3个模块</el-tag>
+        <el-tag style="background: #0050a0; border-color: #0050a0;" size="small" effect="dark">4个模块</el-tag>
       </div>
       <div class="cards-grid">
         <div v-for="card in phase3Cards" :key="card.path" class="module-card" @click="go(card.path)">
@@ -248,7 +248,8 @@ import {
   Timer,
   FolderOpened,
   QuestionFilled,
-  Connection
+  Connection,
+  Cpu
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -375,6 +376,17 @@ const phase1Cards = [
     accentColor: '#059669',
     iconBg: 'rgba(5, 150, 105, 0.1)',
     whenToUse: '指标模板配置完成后，进行定量数据评估'
+  },
+  {
+    path: '/simulation-training/dynamic-qualitative',
+    title: '动态定性评估',
+    desc: '专家对定性指标进行打分与集结计算',
+    icon: EditPen,
+    required: false,
+    phase: '阶段一',
+    accentColor: '#7c3aed',
+    iconBg: 'rgba(124, 58, 237, 0.1)',
+    whenToUse: '定量评估完成后，进行定性指标评估'
   }
 ]
 
@@ -390,6 +402,28 @@ const phase2Cards = [
     accentColor: '#2e66da',
     iconBg: 'rgba(46, 102, 218, 0.1)',
     whenToUse: '定性评估完成后，进行权重分析'
+  },
+  {
+    path: '/simulation-training/dynamic-ahp',
+    title: '动态AHP配置',
+    desc: '基于动态指标模板的层次分析法权重配置',
+    icon: DataLine,
+    required: false,
+    phase: '阶段二',
+    accentColor: '#059669',
+    iconBg: 'rgba(5, 150, 105, 0.1)',
+    whenToUse: '动态指标模板导入后进行AHP配置'
+  },
+  {
+    path: '/simulation-training/dynamic-ahp-aggregation',
+    title: '动态AHP集结',
+    desc: '对多个专家的动态指标AHP打分进行集结',
+    icon:Cpu,
+    required: false,
+    phase: '阶段二',
+    accentColor: '#8b5cf6',
+    iconBg: 'rgba(139, 92, 246, 0.1)',
+    whenToUse: '动态指标模板AHP打分完成后进行集结'
   },
   {
     path: '/simulation-training/weights/ahp-dispersion',
@@ -427,6 +461,17 @@ const phase3Cards = [
     accentColor: '#5390ff',
     iconBg: 'rgba(83, 144, 255, 0.1)',
     whenToUse: '权重集结后，计算最终综合得分'
+  },
+  {
+    path: '/simulation-training/results/dynamic-comprehensive-scoring',
+    title: '动态综合打分',
+    desc: '基于动态指标体系的综合评估计算',
+    icon: DataLine,
+    required: false,
+    phase: '阶段三',
+    accentColor: '#10b981',
+    iconBg: 'rgba(16, 185, 129, 0.1)',
+    whenToUse: '动态指标AHP集结后，计算动态综合得分'
   },
   {
     path: '/simulation-training/results/penalty-factor',
