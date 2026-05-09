@@ -147,47 +147,49 @@
         </el-col>
       </el-row>
 
-      <!-- 综合权重分布表 -->
+      <!-- 综合权重分布表 - 按层级分Tab -->
       <div class="weight-section" v-if="combinedWeights && combinedWeights.length > 0">
         <h4>综合权重分布</h4>
-        <el-table
-          :data="weightTableData"
-          border
-          stripe
-          size="small"
-          max-height="350"
-          show-summary
-        >
-          <el-table-column prop="levelName" label="层级" width="120" align="center" fixed>
-            <template #default="{ row }">
-              <span v-if="row.levelRowspan">
-                {{ row.levelName }}
-                <br />
-                <el-tag size="small" type="primary">{{ formatWeight(row.levelWeight) }}</el-tag>
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="primaryName" label="一级维度" width="150" align="center" fixed>
-            <template #default="{ row }">
-              <span v-if="row.primaryRowspan">
-                {{ row.primaryName }}
-                <br />
-                <el-tag size="small" type="success">{{ formatWeight(row.primaryWeight) }}</el-tag>
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="secondaryName" label="二级指标" align="center" min-width="120" />
-          <el-table-column label="综合权重" width="100" align="center">
-            <template #default="{ row }">
-              <el-tag size="small" type="warning">{{ formatWeight(row.combinedWeight) }}</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="weight-summary" v-if="totalWeight !== null">
-          权重合计: <el-tag type="success">{{ formatWeight(totalWeight) }}</el-tag>
-          <span v-if="Math.abs(totalWeight - 1) < 0.001" class="weight-ok">(验证通过)</span>
-          <span v-else class="weight-error">(权重之和不等于1，请检查AHP计算)</span>
-        </div>
+        <el-tabs v-model="activeWeightTab" type="border-card" class="weight-tabs">
+          <!-- 按层级显示Tab -->
+          <el-tab-pane
+            v-for="level in levelList"
+            :key="level"
+            :label="level"
+            :name="level"
+          >
+            <el-table
+              :data="getFlatWeightByLevel(level)"
+              border
+              stripe
+              size="small"
+              max-height="400"
+              :span-method="(p) => primarySpanMethod(p)"
+            >
+              <el-table-column label="一级维度" width="160" align="center" fixed>
+                <template #default="{ row }">
+                  <span v-if="row.primaryRowspan > 0">
+                    <strong>{{ row.primaryName }}</strong>
+                    <br />
+                    <el-tag size="small" type="success">{{ formatWeight(row.primaryWeight) }}</el-tag>
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="secondaryName" label="二级指标" min-width="150" align="center" />
+              <el-table-column label="综合权重" width="120" align="center">
+                <template #default="{ row }">
+                  <el-tag size="small" type="warning" effect="dark">
+                    {{ formatWeight(row.combinedWeight) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div class="weight-footer">
+              <span>{{ level }} 权重合计：</span>
+              <el-tag type="primary" size="large">{{ formatWeight(getLevelTotalWeight(level)) }}</el-tag>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
       </div>
 
       <!-- 得分明细Tab -->
@@ -344,6 +346,7 @@ const rawData = ref(null)
 const scoreResults = ref([])
 const activeTab = ref('overview')
 const activeLevelTab = ref('')
+const activeWeightTab = ref('')
 const loading = ref(false)
 
 // 图表引用
@@ -382,72 +385,6 @@ const combinedWeights = computed(() => {
   return scoreResults.value[0].combinedWeights || []
 })
 
-// 综合权重表格数据（带 rowspan 信息）
-const weightTableData = computed(() => {
-  const weights = combinedWeights.value
-  if (!weights || weights.length === 0) return []
-
-  const result = []
-  let currentLevel = null
-  let currentPrimary = null
-  let levelRowspan = 0
-  let primaryRowspan = 0
-  let levelWeightSum = 0
-  let primaryWeightSum = 0
-
-  weights.forEach((w, index) => {
-    const row = { ...w }
-
-    if (w.levelName !== currentLevel) {
-      // 新层级开始
-      if (currentLevel !== null) {
-        // 记录上一层的统计（已在上一行处理）
-      }
-      currentLevel = w.levelName
-      currentPrimary = null
-      levelRowspan = 0
-      levelWeightSum = 0
-
-      // 查找该层级下所有指标的权重和
-      const levelItems = weights.filter(x => x.levelName === w.levelName)
-      levelRowspan = levelItems.length
-      levelWeightSum = levelItems.reduce((sum, x) => sum + (x.levelWeight || 0), 0)
-    }
-
-    if (w.primaryName !== currentPrimary) {
-      // 新一级维度开始
-      if (currentPrimary !== null) {
-        // 记录上一维度的统计（已在上一行处理）
-      }
-      currentPrimary = w.primaryName
-      primaryRowspan = 0
-      primaryWeightSum = 0
-
-      // 查找该一级维度下所有指标的权重和
-      const primaryItems = weights.filter(x => x.levelName === w.levelName && x.primaryName === w.primaryName)
-      primaryRowspan = primaryItems.length
-      primaryWeightSum = primaryItems.reduce((sum, x) => sum + (x.primaryWeight || 0), 0)
-    }
-
-    // 确定当前行是否需要显示层级/一级维度（用于 rowspan）
-    const isFirstInLevel = w === weights.find(x => x.levelName === w.levelName)
-    const isFirstInPrimary = w === weights.find(x => x.levelName === w.levelName && x.primaryName === w.primaryName)
-
-    if (isFirstInLevel) {
-      row.levelRowspan = levelRowspan
-      row.levelWeight = levelWeightSum
-    }
-    if (isFirstInPrimary) {
-      row.primaryRowspan = primaryRowspan
-      row.primaryWeight = primaryWeightSum
-    }
-
-    result.push(row)
-  })
-
-  return result
-})
-
 // 权重合计
 const totalWeight = computed(() => {
   const weights = combinedWeights.value
@@ -483,6 +420,67 @@ const formatScore = (score) => {
 const formatWeight = (weight) => {
   if (weight === null || weight === undefined) return '-'
   return (Number(weight) * 100).toFixed(2) + '%'
+}
+
+// 层级列表
+const levelList = computed(() => {
+  if (!combinedWeights.value || combinedWeights.value.length === 0) return []
+  const levels = [...new Set(combinedWeights.value.map(w => w.levelName))]
+  return levels.sort()
+})
+
+// 颜色辅助方法
+const getLevelColor = (levelName) => {
+  const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#009688']
+  const index = levelList.value.indexOf(levelName) % colors.length
+  return colors[index]
+}
+
+// 获取指定层级的扁平化权重数据
+const getFlatWeightByLevel = (levelName) => {
+  if (!combinedWeights.value) return []
+  const levelItems = combinedWeights.value.filter(w => w.levelName === levelName)
+  if (levelItems.length === 0) return []
+
+  const result = []
+  const sortedPrimaries = [...new Set(levelItems.map(w => w.primaryName))].sort()
+
+  sortedPrimaries.forEach(primaryName => {
+    const primaryItems = levelItems.filter(w => w.primaryName === primaryName)
+    const primaryWeightSum = primaryItems.reduce((sum, w) => sum + (w.combinedWeight || 0), 0)
+
+    primaryItems.forEach((w, idx) => {
+      result.push({
+        levelName: w.levelName,
+        primaryName: w.primaryName,
+        primaryWeight: primaryWeightSum,
+        primaryRowspan: idx === 0 ? primaryItems.length : 0,
+        secondaryName: w.secondaryName,
+        combinedWeight: w.combinedWeight
+      })
+    })
+  })
+
+  return result
+}
+
+// 获取指定层级的总权重
+const getLevelTotalWeight = (levelName) => {
+  if (!combinedWeights.value) return 0
+  return combinedWeights.value
+    .filter(w => w.levelName === levelName)
+    .reduce((sum, w) => sum + (w.combinedWeight || 0), 0)
+}
+
+// 一级维度列合并方法
+const primarySpanMethod = ({ row, columnIndex }) => {
+  if (columnIndex === 0) {
+    if (row.primaryRowspan > 0) {
+      return { rowspan: row.primaryRowspan, colspan: 1 }
+    }
+    return { rowspan: 0, colspan: 0 }
+  }
+  return { rowspan: 1, colspan: 1 }
 }
 
 const getScoreTagType = (score) => {
@@ -623,6 +621,8 @@ const handleTemplateChange = () => {
   scoreResults.value = []
   activeTab.value = 'overview'
   activeLevelTab.value = ''
+  activeWeightLevelTab.value = 'overview'
+  activePrimaryTab.value = 'summary'
   loadBatches()
 }
 
@@ -635,6 +635,8 @@ const handleBatchChange = () => {
     scoreResults.value = []
     activeTab.value = 'overview'
     activeLevelTab.value = ''
+    activeWeightLevelTab.value = 'overview'
+    activePrimaryTab.value = 'summary'
   }
 }
 
@@ -979,10 +981,19 @@ onMounted(() => {
 }
 
 .weight-section {
-  background: #fafafa;
-  border-radius: 8px;
-  padding: 15px;
   margin-bottom: 20px;
+}
+
+.weight-tabs {
+  margin-top: 10px;
+}
+
+.weight-level-tabs {
+  margin-bottom: 16px;
+}
+
+.weight-progress {
+  margin: 4px 0;
 }
 
 .weight-summary {
@@ -1000,6 +1011,29 @@ onMounted(() => {
 .weight-error {
   color: #f56c6c;
   margin-left: 8px;
+}
+
+.weight-footer {
+  margin-top: 10px;
+  text-align: right;
+  font-size: 14px;
+  color: #606266;
+}
+
+.level-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.level-progress .level-name {
+  min-width: 80px;
+  font-weight: 500;
+}
+
+.level-progress .level-pct {
+  font-size: 12px;
+  color: #909399;
 }
 
 .score-tabs {

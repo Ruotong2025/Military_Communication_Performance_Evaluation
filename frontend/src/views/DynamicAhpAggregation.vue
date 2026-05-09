@@ -265,39 +265,131 @@
         </template>
 
         <!-- 层级Tab切换 -->
-        <el-radio-group v-model="activeWeightLevel" size="small" class="level-tabs" style="margin-bottom: 16px;">
-          <el-radio-button v-for="level in levels" :key="level" :value="level">
-            {{ level }}
-          </el-radio-button>
-        </el-radio-group>
-
-        <el-table :data="filteredCombinedWeights" border stripe max-height="400" size="small">
-          <el-table-column type="index" label="#" width="50" align="center" />
-          <el-table-column prop="primaryName" label="一级维度" min-width="120" />
-          <el-table-column prop="secondaryName" label="二级指标" min-width="150" />
-          <el-table-column label="层级权重" align="center" width="100">
-            <template #default="{ row }">
-              {{ (row.levelWeight * 100).toFixed(2) }}%
-            </template>
-          </el-table-column>
-          <el-table-column label="维度内权重" align="center" width="110">
-            <template #default="{ row }">
-              {{ (row.primaryWeight * 100).toFixed(2) }}%
-            </template>
-          </el-table-column>
-          <el-table-column label="指标权重" align="center" width="100">
-            <template #default="{ row }">
-              {{ (row.secondaryWeight * 100).toFixed(2) }}%
-            </template>
-          </el-table-column>
-          <el-table-column label="综合权重" align="center" width="120">
-            <template #default="{ row }">
-              <el-tag type="primary" size="small">
-                {{ (row.combinedWeight * 100).toFixed(2) }}%
-              </el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
+        <el-tabs v-model="activeWeightLevel" type="border-card" class="weight-level-tabs" style="margin-bottom: 16px;">
+          <!-- 权重概览Tab -->
+          <el-tab-pane label="权重概览" name="overview">
+            <el-table
+              :data="weightOverviewData"
+              border
+              stripe
+              size="small"
+              max-height="300"
+              show-summary
+            >
+              <el-table-column prop="levelName" label="层级" width="140" align="center" fixed />
+              <el-table-column label="层级权重" width="200" align="center">
+                <template #default="{ row }">
+                  <el-progress
+                    :percentage="row.levelWeight * 100"
+                    :stroke-width="12"
+                    :format="(val) => val.toFixed(1) + '%'"
+                    :color="getLevelColor(row.levelName)"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="一级维度数量" prop="primaryCount" width="120" align="center" />
+              <el-table-column label="二级指标数量" prop="secondaryCount" width="120" align="center" />
+            </el-table>
+          </el-tab-pane>
+          
+          <!-- 按层级显示Tab -->
+          <el-tab-pane
+            v-for="level in levels"
+            :key="level"
+            :label="level"
+            :name="level"
+          >
+            <!-- 一级维度权重子Tab -->
+            <el-tabs v-model="activeWeightPrimaryTab" type="card" class="weight-primary-tabs">
+              <!-- 一级维度汇总 -->
+              <el-tab-pane label="一级维度汇总" name="summary">
+                <el-table
+                  :data="getPrimaryWeightsForLevel(level)"
+                  border
+                  stripe
+                  size="small"
+                  max-height="300"
+                  show-summary
+                >
+                  <el-table-column prop="primaryName" label="一级维度" min-width="150" align="center" fixed />
+                  <el-table-column label="维度内权重" width="200" align="center">
+                    <template #default="{ row }">
+                      <div class="weight-cell">
+                        <el-progress
+                          :percentage="row.primaryWeight * 100"
+                          :stroke-width="14"
+                          :format="(val) => val.toFixed(2) + '%'"
+                          :color="getPrimaryColor(row.index)"
+                        />
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="占层级权重" width="140" align="center">
+                    <template #default="{ row }">
+                      <el-tag size="small" type="success">
+                        {{ formatWeight(row.levelPortion) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="二级指标数" prop="secondaryCount" width="100" align="center" />
+                </el-table>
+              </el-tab-pane>
+              
+              <!-- 各一级维度下的二级指标 -->
+              <el-tab-pane
+                v-for="(primary, idx) in getPrimaryListForLevel(level)"
+                :key="primary"
+                :label="primary"
+                :name="primary"
+              >
+                <el-table
+                  :data="getSecondaryWeightsForPrimary(level, primary)"
+                  border
+                  stripe
+                  size="small"
+                  max-height="300"
+                  show-summary
+                >
+                  <el-table-column type="index" label="#" width="50" align="center" />
+                  <el-table-column prop="secondaryName" label="二级指标" min-width="150" align="center" />
+                  <el-table-column label="指标权重" width="180" align="center">
+                    <template #default="{ row }">
+                      <div class="weight-cell">
+                        <el-progress
+                          :percentage="row.secondaryWeight * 100"
+                          :stroke-width="12"
+                          :format="(val) => val.toFixed(4) + '%'"
+                          :color="getSecondaryColor(idx, row.index)"
+                        />
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="维度内权重" width="130" align="center">
+                    <template #default="{ row }">
+                      <el-tag size="small" type="warning">
+                        {{ formatWeight(row.primaryWeight) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="层级权重" width="130" align="center">
+                    <template #default="{ row }">
+                      <el-tag size="small" type="success">
+                        {{ formatWeight(row.levelWeight) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="综合权重" width="130" align="center">
+                    <template #default="{ row }">
+                      <el-tag size="small" type="primary" effect="dark">
+                        {{ formatWeight(row.combinedWeight) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </el-tab-pane>
+            </el-tabs>
+          </el-tab-pane>
+        </el-tabs>
 
         <div class="sunburst-section">
           <h4><el-icon><DataLine /></el-icon> 综合权重旭日图</h4>
@@ -362,6 +454,7 @@ const executeLoading = ref(false)
 const activeLevel = ref('LEVEL_BETWEEN')
 const selectedPrimaryForSecondary = ref('')
 const activeWeightLevel = ref('')
+const activeWeightPrimaryTab = ref('summary')
 const sunburstChartRef = ref(null)
 
 // ==================== 计算属性 ====================
@@ -528,6 +621,118 @@ const filteredCombinedWeights = computed(() => {
   return combinedWeightsTable.value.filter(w => w.levelName === activeWeightLevel.value)
 })
 
+// 工具方法
+const formatWeight = (weight) => {
+  if (weight === null || weight === undefined) return '-'
+  return (Number(weight) * 100).toFixed(2) + '%'
+}
+
+// 层级概览数据
+const weightOverviewData = computed(() => {
+  const combinedWeights = aggregationResult.value?.combinedWeights || []
+  if (combinedWeights.length === 0) return []
+  
+  const levelMap = {}
+  combinedWeights.forEach(w => {
+    if (!levelMap[w.levelName]) {
+      levelMap[w.levelName] = {
+        levelName: w.levelName,
+        levelWeight: 0,
+        primaryCount: new Set(),
+        secondaryCount: 0
+      }
+    }
+    levelMap[w.levelName].primaryCount.add(w.primaryName)
+    levelMap[w.levelName].secondaryCount++
+  })
+  
+  // 计算层级权重（该层级下所有二级指标的综合权重之和）
+  const levelWeights = {}
+  combinedWeights.forEach(w => {
+    if (!levelWeights[w.levelName]) {
+      levelWeights[w.levelName] = 0
+    }
+    levelWeights[w.levelName] += w.combinedWeight || 0
+  })
+  
+  return Object.values(levelMap).map(item => ({
+    ...item,
+    primaryCount: item.primaryCount.size,
+    levelWeight: levelWeights[item.levelName] || 0
+  }))
+})
+
+// 获取指定层级的所有一级维度
+const getPrimaryListForLevel = (levelName) => {
+  const combinedWeights = aggregationResult.value?.combinedWeights || []
+  const primaries = [...new Set(
+    combinedWeights
+      .filter(w => w.levelName === levelName)
+      .map(w => w.primaryName)
+  )]
+  return primaries.sort()
+}
+
+// 获取指定层级的一级维度权重数据
+const getPrimaryWeightsForLevel = (levelName) => {
+  const combinedWeights = aggregationResult.value?.combinedWeights || []
+  
+  const levelItems = combinedWeights.filter(w => w.levelName === levelName)
+  if (levelItems.length === 0) return []
+  
+  // 计算该层级的总权重
+  const levelTotalWeight = levelItems.reduce((sum, w) => sum + (w.combinedWeight || 0), 0)
+  
+  // 按一级维度分组
+  const primaryMap = {}
+  levelItems.forEach(w => {
+    if (!primaryMap[w.primaryName]) {
+      primaryMap[w.primaryName] = {
+        primaryName: w.primaryName,
+        primaryWeight: 0,
+        levelPortion: 0,
+        secondaryCount: 0
+      }
+    }
+    primaryMap[w.primaryName].primaryWeight += w.primaryWeight || 0
+    primaryMap[w.primaryName].levelPortion += w.combinedWeight || 0
+    primaryMap[w.primaryName].secondaryCount++
+  })
+  
+  return Object.values(primaryMap).map((item, index) => ({
+    ...item,
+    index
+  }))
+}
+
+// 获取指定一级维度下的二级指标权重数据
+const getSecondaryWeightsForPrimary = (levelName, primaryName) => {
+  const combinedWeights = aggregationResult.value?.combinedWeights || []
+  
+  const items = combinedWeights
+    .filter(w => w.levelName === levelName && w.primaryName === primaryName)
+    .map((item, index) => ({ ...item, index }))
+  
+  return items.sort((a, b) => (a.combinedWeight || 0) - (b.combinedWeight || 0))
+}
+
+// 颜色辅助方法
+const getLevelColor = (levelName) => {
+  const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#009688']
+  const index = levels.value.indexOf(levelName) % colors.length
+  return colors[index]
+}
+
+const getPrimaryColor = (index) => {
+  const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#009688', '#8015F5', '#15F5B0']
+  return colors[index % colors.length]
+}
+
+const getSecondaryColor = (primaryIndex, secondaryIndex) => {
+  const baseColors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C']
+  return baseColors[primaryIndex % baseColors.length]
+}
+
 // 层级权重表格数据
 const levelWeightsTable = computed(() => {
   const levelWeights = aggregationResult.value?.levelWeights || {}
@@ -535,31 +740,6 @@ const levelWeightsTable = computed(() => {
     name,
     weight
   }))
-})
-
-// 一级维度权重表格数据
-const primaryWeightsTable = computed(() => {
-  const combinedWeights = aggregationResult.value?.combinedWeights || []
-  const result = []
-
-  // 按一级维度分组
-  const byPrimary = {}
-  for (const item of combinedWeights) {
-    const key = `${item.levelName}|${item.primaryName}`
-    if (!byPrimary[key]) {
-      byPrimary[key] = {
-        levelName: item.levelName,
-        primaryName: item.primaryName,
-        weight: 0
-      }
-    }
-    byPrimary[key].weight += (item.combinedWeight || 0)
-  }
-
-  return Object.values(byPrimary).sort((a, b) => {
-    if (a.levelName !== b.levelName) return a.levelName.localeCompare(b.levelName)
-    return b.weight - a.weight
-  })
 })
 
 // ==================== 方法 ====================
@@ -606,6 +786,7 @@ const previewAggregation = async () => {
     }
     aggregationResult.value = await previewDynamicAhpAggregation(data)
     activeLevel.value = 'LEVEL_BETWEEN'
+    activeWeightPrimaryTab.value = 'summary'
 
     if (levels.value.length > 0) {
       activeLevel.value = levels.value[0]
@@ -641,6 +822,7 @@ const executeAggregation = async () => {
     }
     aggregationResult.value = await executeDynamicAhpAggregation(data)
     activeLevel.value = 'LEVEL_BETWEEN'
+    activeWeightPrimaryTab.value = 'summary'
 
     if (levels.value.length > 0) {
       activeLevel.value = levels.value[0]
@@ -662,14 +844,6 @@ const executeAggregation = async () => {
   } finally {
     executeLoading.value = false
   }
-}
-
-const getWeightColor = (weight) => {
-  const pct = weight * 100
-  if (pct >= 15) return '#67C23A'
-  if (pct >= 8) return '#409EFF'
-  if (pct >= 4) return '#E6A23C'
-  return '#909399'
 }
 
 // 旭日图
@@ -1085,6 +1259,18 @@ watch(activeLevel, (newLevel) => {
       margin-bottom: 2px;
     }
   }
+}
+
+.weight-level-tabs {
+  margin-bottom: 16px;
+}
+
+.weight-primary-tabs {
+  margin-top: 12px;
+}
+
+.weight-cell {
+  padding: 4px 0;
 }
 
 .sunburst-section {
