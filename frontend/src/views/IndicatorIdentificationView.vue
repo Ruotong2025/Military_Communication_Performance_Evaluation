@@ -398,6 +398,21 @@ const handleReset = () => {
   flex-wrap: wrap;
 }
 
+.result-stats .el-tag .el-tag__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.result-stats .el-tag .el-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.result-stats .el-tag .el-icon svg {
+  vertical-align: middle;
+}
+
 .textarea-tip {
   color: #909399;
   font-size: 12px;
@@ -431,6 +446,21 @@ const handleReset = () => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.indicator-title .el-tag .el-tag__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.indicator-title .el-tag .el-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.indicator-title .el-tag .el-icon svg {
+  vertical-align: middle;
 }
 
 .indicator-name {
