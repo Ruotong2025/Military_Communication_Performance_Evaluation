@@ -1875,3 +1875,288 @@ export function getDynamicComprehensiveIndicatorTree(templateId) {
     params: { templateId },
   });
 }
+
+// =====================================================
+// 动态成本效益分析 API
+// =====================================================
+
+/**
+ * 获取可关联的动态指标模板列表
+ */
+export function getAvailableTemplates() {
+  return request({
+    url: "/dynamic-cost-effectiveness/templates/available",
+    method: "get",
+  });
+}
+
+/**
+ * 获取指定模板的批次列表
+ */
+export function getCostEffectivenessBatches(templateId) {
+  return request({
+    url: "/dynamic-cost-effectiveness/batches",
+    method: "get",
+    params: { templateId },
+  });
+}
+
+/**
+ * 获取指定批次的效能得分
+ */
+export function getEffectivenessScore(templateId, batchId) {
+  return request({
+    url: "/dynamic-cost-effectiveness/effectiveness-score",
+    method: "get",
+    params: { templateId, batchId },
+  });
+}
+
+/**
+ * 创建成本效益配置
+ */
+export function createCostEffectivenessConfig(data) {
+  return request({
+    url: "/dynamic-cost-effectiveness/config",
+    method: "post",
+    data,
+  });
+}
+
+/**
+ * 更新成本效益配置
+ */
+export function updateCostEffectivenessConfig(id, data) {
+  return request({
+    url: `/dynamic-cost-effectiveness/config/${id}`,
+    method: "put",
+    data,
+  });
+}
+
+/**
+ * 获取配置详情
+ */
+export function getCostEffectivenessConfig(id) {
+  return request({
+    url: `/dynamic-cost-effectiveness/config/${id}`,
+    method: "get",
+  });
+}
+
+/**
+ * 获取配置列表
+ */
+export function getCostEffectivenessConfigs() {
+  return request({
+    url: "/dynamic-cost-effectiveness/configs",
+    method: "get",
+  });
+}
+
+/**
+ * 删除配置
+ */
+export function deleteCostEffectivenessConfig(id) {
+  return request({
+    url: `/dynamic-cost-effectiveness/config/${id}`,
+    method: "delete",
+  });
+}
+
+/**
+ * 保存成本指标配置
+ */
+export function saveCostIndicators(configId, indicators) {
+  return request({
+    url: "/dynamic-cost-effectiveness/indicators/save",
+    method: "post",
+    params: { configId },
+    data: indicators,
+  });
+}
+
+/**
+ * 获取成本效益指标列表
+ */
+export function getCostEffectivenessIndicators(configId) {
+  return request({
+    url: `/dynamic-cost-effectiveness/indicators/${configId}`,
+    method: "get",
+  });
+}
+
+/**
+ * 解析成本指标（JSON格式）
+ */
+export function parseCostIndicators(indicators) {
+  return request({
+    url: "/dynamic-cost-effectiveness/indicators/parse",
+    method: "post",
+    data: { indicators },
+  });
+}
+
+/**
+ * 获取Excel模板信息（返回模板结构说明）
+ */
+export function getCostTemplateInfo() {
+  return request({
+    url: "/dynamic-cost-effectiveness/template/info",
+    method: "get",
+  });
+}
+
+/**
+ * 执行蒙特卡洛模拟
+ */
+export function monteCarloSimulation(data) {
+  return request({
+    url: "/dynamic-cost-effectiveness/simulate/monte-carlo",
+    method: "post",
+    data,
+  });
+}
+
+/**
+ * 获取模拟历史
+ */
+export function getSimulationHistory(configId) {
+  return request({
+    url: `/dynamic-cost-effectiveness/simulation/history/${configId}`,
+    method: "get",
+  });
+}
+
+/**
+ * 导出模拟结果
+ */
+export function exportSimulationResults(simulationId) {
+  return request({
+    url: `/dynamic-cost-effectiveness/export/${simulationId}`,
+    method: "get",
+    responseType: "blob",
+  });
+}
+
+/**
+ * 下载效能指标模板
+ */
+export function downloadEffectivenessTemplate() {
+  return request({
+    url: "/dynamic-cost-effectiveness/template/effectiveness/download",
+    method: "get",
+    responseType: "blob",
+  }).then((res) => {
+    const blob = new Blob([res], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `效能指标模板_${new Date().toLocaleDateString()}.xlsx`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    return res;
+  });
+}
+
+/**
+ * 下载成本效益模板（包含效能得分+成本指标+权重）
+ */
+export function downloadCostEffectivenessTemplate(params) {
+  return request({
+    url: "/dynamic-cost-effectiveness/template/cost/download",
+    method: "post",
+    data: params,
+    responseType: "blob",
+  }).then((res) => {
+    const blob = new Blob([res], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `成本效益模板_${new Date().toLocaleDateString()}.xlsx`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    return res;
+  });
+}
+
+/**
+ * 上传效能指标
+ */
+export function uploadEffectivenessIndicators(formData) {
+  return request({
+    url: "/dynamic-cost-effectiveness/effectiveness/upload",
+    method: "post",
+    data: formData,
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}
+
+/**
+ * 上传成本指标
+ */
+export function uploadCostIndicators(formData) {
+  return request({
+    url: "/dynamic-cost-effectiveness/cost/upload",
+    method: "post",
+    data: formData,
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+}
+
+// ============================================
+// 指标智能识别 API
+// ============================================
+
+/**
+ * 批量识别指标
+ * @param {string[]} indicators - 指标名称数组
+ * @param {object} options - 配置选项
+ */
+export function batchParseIndicators(indicators, options = {}) {
+  return request({
+    url: "/indicator/batch-parse",
+    method: "post",
+    data: {
+      indicators,
+      category: options.category || '',
+      domain: options.domain || '',
+      forceReIdentify: options.forceReIdentify || false,
+    },
+    timeout: 180000,
+  });
+}
+
+/**
+ * 获取指标列表
+ */
+export function getIndicatorList(category = null, type = null) {
+  const params = {};
+  if (category) params.category = category;
+  if (type) params.type = type;
+  return request({
+    url: "/indicator/list",
+    method: "get",
+    params,
+  });
+}
+
+/**
+ * 获取指标详情
+ */
+export function getIndicatorById(id) {
+  return request({
+    url: `/indicator/${id}`,
+    method: "get",
+  });
+}
+
+/**
+ * 删除指标
+ */
+export function deleteIndicator(id) {
+  return request({
+    url: `/indicator/${id}`,
+    method: "delete",
+  });
+}

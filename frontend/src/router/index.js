@@ -15,6 +15,8 @@ import DynamicQualitativeView from '../views/DynamicQualitativeView.vue'
 import DynamicAhpView from '../views/DynamicAhpView.vue'
 import DynamicAhpAggregation from '../views/DynamicAhpAggregation.vue'
 import DynamicComprehensiveScoring from '../views/DynamicComprehensiveScoring.vue'
+import DynamicCostEffectivenessView from '../views/DynamicCostEffectivenessView.vue'
+import IndicatorIdentificationView from '../views/IndicatorIdentificationView.vue'
 
 const routes = [
   {
@@ -130,6 +132,16 @@ const routes = [
         path: 'results/dynamic-comprehensive-scoring',
         name: 'ResultsDynamicComprehensiveScoring',
         component: DynamicComprehensiveScoring
+      },
+      {
+        path: 'results/dynamic-cost-effectiveness',
+        name: 'ResultsDynamicCostEffectiveness',
+        component: DynamicCostEffectivenessView
+      },
+      {
+        path: 'indicator-identification',
+        name: 'IndicatorIdentification',
+        component: IndicatorIdentificationView
       }
     ]
   }

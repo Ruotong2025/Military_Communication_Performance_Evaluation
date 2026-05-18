@@ -121,13 +121,13 @@
           <el-statistic title="作战数量" :value="scoreResults.length" suffix="个" />
         </el-col>
         <el-col :span="6">
-          <el-statistic title="平均综合得分" :value="averageTotalScore" suffix="分" :precision="2" />
+          <el-statistic title="平均综合得分" :value="averageTotalScore" suffix="分" :precision="3" />
         </el-col>
         <el-col :span="6">
-          <el-statistic title="平均定性得分" :value="averageQualScore" suffix="分" :precision="2" />
+          <el-statistic title="平均定性得分" :value="averageQualScore" suffix="分" :precision="3" />
         </el-col>
         <el-col :span="6">
-          <el-statistic title="平均定量得分" :value="averageQtScore" suffix="分" :precision="2" />
+          <el-statistic title="平均定量得分" :value="averageQtScore" suffix="分" :precision="3" />
         </el-col>
       </el-row>
 
@@ -226,9 +226,9 @@
             </el-table-column>
             <el-table-column label="综合得分" width="120" align="center" fixed="right">
               <template #default="{ row }">
-                <el-tag :type="getScoreTagType(row.totalScore)" size="small" effect="dark">
+                <span class="total-score-value">
                   {{ formatScore(row.totalScore) }}
-                </el-tag>
+                </span>
               </template>
             </el-table-column>
           </el-table>
@@ -243,13 +243,13 @@
         >
           <el-row :gutter="20" class="stat-row">
             <el-col :span="6">
-              <el-statistic title="平均定性得分" :value="getLevelAvgQualScore(level.levelName)" suffix="分" :precision="2" />
+              <el-statistic title="平均定性得分" :value="getLevelAvgQualScore(level.levelName)" suffix="分" :precision="3" />
             </el-col>
             <el-col :span="6">
-              <el-statistic title="平均定量得分" :value="getLevelAvgQtScore(level.levelName)" suffix="分" :precision="2" />
+              <el-statistic title="平均定量得分" :value="getLevelAvgQtScore(level.levelName)" suffix="分" :precision="3" />
             </el-col>
             <el-col :span="6">
-              <el-statistic title="平均综合得分" :value="getLevelAvgScore(level.levelName)" suffix="分" :precision="2" />
+              <el-statistic title="平均综合得分" :value="getLevelAvgScore(level.levelName)" suffix="分" :precision="3" />
             </el-col>
             <el-col :span="6">
               <el-statistic title="层级权重" :value="level.weight * 100" suffix="%" :precision="1" />
@@ -259,7 +259,7 @@
           <el-row :gutter="20" class="chart-row">
             <el-col :span="12">
               <div class="chart-container">
-                <h4>{{ level.levelName }} - 各作战得分对比</h4>
+                <h4>{{ level.levelName }} - 层级得分对比</h4>
                 <div :ref="el => setChartRef(el, level.levelName)" style="width: 100%; height: 250px"></div>
               </div>
             </el-col>
@@ -291,19 +291,11 @@
                 <br />
                 <el-tag size="small" type="success">{{ formatWeight(primary.weight) }}</el-tag>
               </template>
-              <el-table-column label="定性" width="70" align="center">
+              <el-table-column label="得分" width="100" align="center">
                 <template #default="{ row }">
-                  {{ formatScore(getPrimaryQualScore(row, level.levelName, primary.dimensionCode)) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="定量" width="70" align="center">
-                <template #default="{ row }">
-                  {{ formatScore(getPrimaryQtScore(row, level.levelName, primary.dimensionCode)) }}
-                </template>
-              </el-table-column>
-              <el-table-column label="综合" width="70" align="center">
-                <template #default="{ row }">
-                  {{ formatScore(getPrimaryScore(row, level.levelName, primary.dimensionCode)) }}
+                  <el-tag :type="getScoreTagType(getPrimaryScore(row, level.levelName, primary.dimensionCode))" size="small">
+                    {{ formatScore(getPrimaryScore(row, level.levelName, primary.dimensionCode)) }}
+                  </el-tag>
                 </template>
               </el-table-column>
             </el-table-column>
@@ -414,7 +406,7 @@ const averageQtScore = computed(() => {
 // 工具方法
 const formatScore = (score) => {
   if (score === null || score === undefined) return '-'
-  return Number(score).toFixed(1)
+  return Number(score).toFixed(3)
 }
 
 const formatWeight = (weight) => {
@@ -530,24 +522,6 @@ const getLevelScore = (row, levelName) => {
   return level ? level.comprehensiveScore : null
 }
 
-// 获取某作战在某个一级维度的定性得分
-const getPrimaryQualScore = (row, levelName, dimCode) => {
-  if (!row.levelScores) return null
-  const level = row.levelScores.find(l => l.levelName === levelName)
-  if (!level) return null
-  const primary = level.primaryDimensions.find(p => p.dimensionCode === dimCode)
-  return primary ? primary.qualitativeScore : null
-}
-
-// 获取某作战在某个一级维度的定量得分
-const getPrimaryQtScore = (row, levelName, dimCode) => {
-  if (!row.levelScores) return null
-  const level = row.levelScores.find(l => l.levelName === levelName)
-  if (!level) return null
-  const primary = level.primaryDimensions.find(p => p.dimensionCode === dimCode)
-  return primary ? primary.quantitativeScore : null
-}
-
 // 获取某作战在某个一级维度的综合得分
 const getPrimaryScore = (row, levelName, dimCode) => {
   if (!row.levelScores) return null
@@ -563,7 +537,7 @@ const getLevelAvgScore = (levelName) => {
     .map(r => getLevelScore(r, levelName))
     .filter(s => s != null)
   if (scores.length === 0) return 0
-  return (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
+  return (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(3)
 }
 
 const getLevelAvgQualScore = (levelName) => {
@@ -576,7 +550,7 @@ const getLevelAvgQualScore = (levelName) => {
     })
     .filter(s => s != null)
   if (scores.length === 0) return 0
-  return (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
+  return (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(3)
 }
 
 const getLevelAvgQtScore = (levelName) => {
@@ -587,7 +561,7 @@ const getLevelAvgQtScore = (levelName) => {
     })
     .filter(s => s != null)
   if (scores.length === 0) return 0
-  return (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
+  return (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(3)
 }
 
 // 加载模板列表
@@ -708,7 +682,7 @@ const renderBarChart = () => {
   const chart = echarts.init(barChartRef.value)
   const option = {
     tooltip: { trigger: 'axis' },
-    legend: { data: ['综合得分', '定性得分', '定量得分'], bottom: 0 },
+    legend: { data: ['综合得分'], bottom: 0 },
     xAxis: {
       type: 'category',
       data: scoreResults.value.map(r => r.operationId)
@@ -718,20 +692,8 @@ const renderBarChart = () => {
       {
         name: '综合得分',
         type: 'bar',
-        data: scoreResults.value.map(r => r.totalScore?.toFixed(1)),
+        data: scoreResults.value.map(r => r.totalScore?.toFixed(3)),
         itemStyle: { color: '#409EFF' }
-      },
-      {
-        name: '定性得分',
-        type: 'bar',
-        data: scoreResults.value.map(r => r.qualitativeWeightedScore?.toFixed(1)),
-        itemStyle: { color: '#67C23A' }
-      },
-      {
-        name: '定量得分',
-        type: 'bar',
-        data: scoreResults.value.map(r => r.quantitativeWeightedScore?.toFixed(1)),
-        itemStyle: { color: '#E6A23C' }
       }
     ]
   }
@@ -744,39 +706,22 @@ const renderStackedChart = () => {
   const chart = echarts.init(stackedChartRef.value)
   const option = {
     tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      formatter: (params) => {
-        let res = params[0].name + '<br/>'
-        let total = 0
-        params.forEach(p => {
-          total += p.value
-          res += p.marker + p.seriesName + ': ' + Number(p.value).toFixed(1) + '<br/>'
-        })
-        res += '合计: ' + total.toFixed(1)
-        return res
-      }
+      trigger: 'item',
+      formatter: (p) => `${p.name}<br/>权重: ${(p.value * 100).toFixed(1)}%`
     },
-    legend: { data: ['定性得分', '定量得分'], bottom: 0 },
-    xAxis: {
-      type: 'category',
-      data: scoreResults.value.map(r => r.operationId)
-    },
-    yAxis: { type: 'value', max: 100, name: '得分', axisLabel: { formatter: '{value}' } },
+    legend: { orient: 'vertical', right: 10, top: 'center' },
     series: [
       {
-        name: '定性得分',
-        type: 'bar',
-        stack: 'total',
-        data: scoreResults.value.map(r => r.qualitativeWeightedScore?.toFixed(1)),
-        itemStyle: { color: '#67C23A' }
-      },
-      {
-        name: '定量得分',
-        type: 'bar',
-        stack: 'total',
-        data: scoreResults.value.map(r => r.quantitativeWeightedScore?.toFixed(1)),
-        itemStyle: { color: '#E6A23C' }
+        name: '层级权重',
+        type: 'pie',
+        radius: ['35%', '65%'],
+        center: ['35%', '50%'],
+        avoidLabelOverlap: false,
+        label: { show: true, formatter: '{b}: {d}%' },
+        data: levelScores.value.map(l => ({
+          name: l.levelName,
+          value: (l.weight * 100).toFixed(1)
+        }))
       }
     ]
   }
@@ -790,68 +735,45 @@ const renderLevelChart = (levelName) => {
     const chart = echarts.init(chartEl)
     const option = {
       tooltip: { trigger: 'axis' },
-      legend: { data: ['定性', '定量', '综合'], bottom: 0 },
+      legend: { data: ['综合得分'], bottom: 0 },
       xAxis: { type: 'category', data: scoreResults.value.map(r => r.operationId) },
       yAxis: { type: 'value', min: 0, max: 100 },
       series: [
         {
-          name: '定性',
+          name: '综合得分',
           type: 'bar',
-          data: scoreResults.value.map(r => {
-            const ls = r.levelScores?.find(l => l.levelName === levelName)
-            return ls ? ls.qualitativeScore?.toFixed(1) : 0
-          }),
-          itemStyle: { color: '#67C23A' }
-        },
-        {
-          name: '定量',
-          type: 'bar',
-          data: scoreResults.value.map(r => {
-            const ls = r.levelScores?.find(l => l.levelName === levelName)
-            return ls ? ls.quantitativeScore?.toFixed(1) : 0
-          }),
-          itemStyle: { color: '#E6A23C' }
-        },
-        {
-          name: '综合',
-          type: 'line',
-          data: scoreResults.value.map(r => getLevelScore(r, levelName)?.toFixed(1) || 0),
-          itemStyle: { color: '#F56C6C' }
+          data: scoreResults.value.map(r => getLevelScore(r, levelName)?.toFixed(3) || 0),
+          itemStyle: { color: '#409EFF' }
         }
       ]
     }
     chart.setOption(option)
   }
 
-  // 堆叠图
+  // 得分构成饼图
   const stackedEl = stackedChartRefs.value[levelName]
   if (stackedEl) {
     const chart = echarts.init(stackedEl)
+    const level = levelScores.value.find(l => l.levelName === levelName)
+    if (!level) return
     const option = {
-      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-      legend: { data: ['定性', '定量'], bottom: 0 },
-      xAxis: { type: 'category', data: scoreResults.value.map(r => r.operationId) },
-      yAxis: { type: 'value', max: 100 },
+      tooltip: {
+        trigger: 'item',
+        formatter: (p) => `${p.name}<br/>综合权重: ${(p.value * 100 / (scoreResults.value.reduce((sum, r) => sum + (getLevelScore(r, levelName) || 0), 0) || 1)).toFixed(1)}%`
+      },
+      legend: { orient: 'vertical', right: 10, top: 'center' },
       series: [
         {
-          name: '定性',
-          type: 'bar',
-          stack: 'total',
-          data: scoreResults.value.map(r => {
-            const ls = r.levelScores?.find(l => l.levelName === levelName)
-            return ls ? ls.qualitativeScore?.toFixed(1) : 0
-          }),
-          itemStyle: { color: '#67C23A' }
-        },
-        {
-          name: '定量',
-          type: 'bar',
-          stack: 'total',
-          data: scoreResults.value.map(r => {
-            const ls = r.levelScores?.find(l => l.levelName === levelName)
-            return ls ? ls.quantitativeScore?.toFixed(1) : 0
-          }),
-          itemStyle: { color: '#E6A23C' }
+          name: '一级维度',
+          type: 'pie',
+          radius: ['35%', '65%'],
+          center: ['35%', '50%'],
+          avoidLabelOverlap: false,
+          label: { show: true, formatter: '{b}: {d}%' },
+          data: level.primaryDimensions.map(p => ({
+            name: p.dimensionName,
+            value: (p.weight * 100).toFixed(1)
+          }))
         }
       ]
     }

@@ -4,6 +4,7 @@ import com.ccnu.military.dto.DynamicAhpCombinedWeightDTO;
 import com.ccnu.military.dto.DynamicComprehensiveResultDTO;
 import com.ccnu.military.dto.RawDataAggregationDTO;
 import com.ccnu.military.entity.DynamicAhpAggregationResult;
+import com.ccnu.military.entity.DynamicComprehensiveResult;
 import com.ccnu.military.entity.DynamicDimension;
 import com.ccnu.military.entity.DynamicQlAggregation;
 import com.ccnu.military.entity.DynamicTemplate;
@@ -44,6 +45,7 @@ public class DynamicComprehensiveService {
     private final DynamicQlAggregationRepository qlRepository;
     private final DynamicDimensionRepository dimensionRepository;
     private final DynamicTemplateRepository templateRepository;
+    private final DynamicComprehensiveResultRepository comprehensiveResultRepository;
     private final ObjectMapper objectMapper;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -201,9 +203,83 @@ public class DynamicComprehensiveService {
     }
 
     /**
-     * 获取综合评分结果
+     * 获取综合评分结果（优先从数据库查询，无则重新计算并保存）
      */
     public List<DynamicComprehensiveResultDTO> getComprehensiveScores(String batchId) {
+        log.info("【综合评分Service】getComprehensiveScores 开始, batchId={}", batchId);
+        // 1. 优先从数据库查询
+        List<DynamicComprehensiveResultDTO> savedResults = getSavedComprehensiveScores(batchId);
+        if (!savedResults.isEmpty()) {
+            log.info("【综合评分Service】从数据库加载综合评分结果成功, batchId={}, count={}", batchId, savedResults.size());
+            return savedResults;
+        }
+
+        // 2. 数据库无记录，重新计算并保存
+        log.info("【综合评分Service】数据库无综合评分结果，重新计算, batchId={}", batchId);
+        List<DynamicComprehensiveResultDTO> results = calculateAndSaveComprehensiveScores(batchId);
+        log.info("【综合评分Service】重新计算完成, batchId={}, count={}", batchId, results.size());
+        return results;
+    }
+
+    /**
+     * 从数据库获取已保存的综合评分结果
+     */
+    public List<DynamicComprehensiveResultDTO> getSavedComprehensiveScores(String batchId) {
+        log.info("【综合评分Service】getSavedComprehensiveScores 开始查询, batchId={}", batchId);
+        List<DynamicComprehensiveResultDTO> results = new ArrayList<>();
+
+        try {
+            List<DynamicComprehensiveResult> entities = comprehensiveResultRepository.findByBatchIdOrderByOperationId(batchId);
+            log.info("【综合评分Service】数据库查询完成, 找到 {} 条记录", entities.size());
+
+            for (DynamicComprehensiveResult entity : entities) {
+                try {
+                    DynamicComprehensiveResultDTO dto = DynamicComprehensiveResultDTO.builder()
+                            .batchId(entity.getBatchId())
+                            .operationId(entity.getOperationId())
+                            .templateId(entity.getTemplateId())
+                            .templateName(entity.getTemplateName())
+                            .totalScore(entity.getTotalScore() != null ? entity.getTotalScore().doubleValue() : null)
+                            .qualitativeWeightedScore(entity.getQualitativeWeightedScore() != null ? entity.getQualitativeWeightedScore().doubleValue() : null)
+                            .quantitativeWeightedScore(entity.getQuantitativeWeightedScore() != null ? entity.getQuantitativeWeightedScore().doubleValue() : null)
+                            .calculatedAt(entity.getCalculatedAt() != null ? entity.getCalculatedAt().toString() : null)
+                            .build();
+
+                    // 解析JSON字段
+                    if (entity.getLevelScoresJson() != null && !entity.getLevelScoresJson().isEmpty()) {
+                        try {
+                            dto.setLevelScores(objectMapper.readValue(entity.getLevelScoresJson(),
+                                    objectMapper.getTypeFactory().constructCollectionType(List.class, DynamicComprehensiveResultDTO.LevelScore.class)));
+                        } catch (Exception e) {
+                            log.warn("解析levelScoresJson失败: {}", e.getMessage());
+                        }
+                    }
+                    if (entity.getWeightsConfigJson() != null && !entity.getWeightsConfigJson().isEmpty()) {
+                        try {
+                            dto.setCombinedWeights(objectMapper.readValue(entity.getWeightsConfigJson(),
+                                    objectMapper.getTypeFactory().constructCollectionType(List.class, DynamicAhpCombinedWeightDTO.class)));
+                        } catch (Exception e) {
+                            log.warn("解析weightsConfigJson失败: {}", e.getMessage());
+                        }
+                    }
+
+                    results.add(dto);
+                } catch (Exception e) {
+                    log.error("【综合评分Service】转换实体失败, operationId={}, error={}", entity.getOperationId(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("【综合评分Service】从数据库获取综合评分结果失败: {}", e.getMessage(), e);
+        }
+
+        log.info("【综合评分Service】getSavedComprehensiveScores 完成, 返回 {} 条记录", results.size());
+        return results;
+    }
+
+    /**
+     * 计算综合评分并保存到数据库
+     */
+    public List<DynamicComprehensiveResultDTO> calculateAndSaveComprehensiveScores(String batchId) {
         List<DynamicComprehensiveResultDTO> results = new ArrayList<>();
 
         String batchInfoSql = "SELECT DISTINCT template_id, template_name FROM dynamic_qt_record WHERE batch_id = ? LIMIT 1";
@@ -231,7 +307,7 @@ public class DynamicComprehensiveService {
         // 获取指标结构
         Map<String, String> indicatorNameToCode = getIndicatorNameToCodeMap(templateId);
 
-        // 计算每个作战的综合得分
+        // 计算每个作战的综合得分并保存
         for (String opId : operationIds) {
             DynamicComprehensiveResultDTO dto = calculateOperationScore(
                     batchId, opId, templateId, templateName,
@@ -240,9 +316,55 @@ public class DynamicComprehensiveService {
                     qtScores.get(opId),
                     indicatorNameToCode);
             results.add(dto);
+
+            // 保存到数据库
+            saveComprehensiveResult(dto, combinedWeights);
         }
 
+        log.info("综合评分计算并保存完成: batchId={}, count={}", batchId, results.size());
         return results;
+    }
+
+    /**
+     * 保存单个综合评分结果到数据库
+     */
+    private void saveComprehensiveResult(DynamicComprehensiveResultDTO dto, List<DynamicAhpCombinedWeightDTO> combinedWeights) {
+        try {
+            // 序列化JSON字段
+            String levelScoresJson = dto.getLevelScores() != null ?
+                    objectMapper.writeValueAsString(dto.getLevelScores()) : null;
+            String weightsConfigJson = combinedWeights != null ?
+                    objectMapper.writeValueAsString(combinedWeights) : null;
+
+            DynamicComprehensiveResult entity = DynamicComprehensiveResult.builder()
+                    .batchId(dto.getBatchId())
+                    .operationId(dto.getOperationId())
+                    .templateId(dto.getTemplateId())
+                    .templateName(dto.getTemplateName())
+                    .totalScore(dto.getTotalScore() != null ? BigDecimal.valueOf(dto.getTotalScore()) : null)
+                    .qualitativeWeightedScore(dto.getQualitativeWeightedScore() != null ? BigDecimal.valueOf(dto.getQualitativeWeightedScore()) : null)
+                    .quantitativeWeightedScore(dto.getQuantitativeWeightedScore() != null ? BigDecimal.valueOf(dto.getQuantitativeWeightedScore()) : null)
+                    .calculatedAt(LocalDateTime.now())
+                    .levelScoresJson(levelScoresJson)
+                    .weightsConfigJson(weightsConfigJson)
+                    .build();
+
+            // 使用 upsert 逻辑：存在则更新，不存在则插入
+            DynamicComprehensiveResult existing = comprehensiveResultRepository
+                    .findByBatchIdAndOperationId(dto.getBatchId(), dto.getOperationId())
+                    .orElse(null);
+
+            if (existing != null) {
+                entity.setId(existing.getId());
+            }
+            comprehensiveResultRepository.save(entity);
+
+            log.debug("保存综合评分结果: batchId={}, operationId={}, totalScore={}",
+                    dto.getBatchId(), dto.getOperationId(), dto.getTotalScore());
+        } catch (Exception e) {
+            log.error("保存综合评分结果失败: batchId={}, operationId={}, error={}",
+                    dto.getBatchId(), dto.getOperationId(), e.getMessage());
+        }
     }
 
     /**
@@ -312,18 +434,18 @@ public class DynamicComprehensiveService {
                         .dimensionCode(dimCode)
                         .dimensionName(primaryName)
                         .weight(round(primaryWeightSum, 4))
-                        .qualitativeScore(round(primaryQual, 2))
-                        .quantitativeScore(round(primaryQt, 2))
-                        .comprehensiveScore(round(primaryQual + primaryQt, 2))
+                        .qualitativeScore(round(primaryQual, 3))
+                        .quantitativeScore(round(primaryQt, 3))
+                        .comprehensiveScore(round(primaryQual + primaryQt, 3))
                         .build());
             }
 
             levelScores.add(DynamicComprehensiveResultDTO.LevelScore.builder()
                     .levelName(levelName)
                     .weight(round(levelWeight, 4))
-                    .qualitativeScore(round(levelQual, 2))
-                    .quantitativeScore(round(levelQt, 2))
-                    .comprehensiveScore(round(levelQual + levelQt, 2))
+                    .qualitativeScore(round(levelQual, 3))
+                    .quantitativeScore(round(levelQt, 3))
+                    .comprehensiveScore(round(levelQual + levelQt, 3))
                     .primaryDimensions(primaryScores)
                     .build());
         }
@@ -335,9 +457,9 @@ public class DynamicComprehensiveService {
                 .operationId(operationId)
                 .templateId(templateId)
                 .templateName(templateName)
-                .totalScore(round(totalScore, 2))
-                .qualitativeWeightedScore(round(totalQualWeighted, 2))
-                .quantitativeWeightedScore(round(totalQtWeighted, 2))
+                .totalScore(round(totalScore, 3))
+                .qualitativeWeightedScore(round(totalQualWeighted, 3))
+                .quantitativeWeightedScore(round(totalQtWeighted, 3))
                 .levelScores(levelScores)
                 .combinedWeights(combinedWeights)
                 .calculatedAt(LocalDateTime.now().format(DATE_FORMATTER))

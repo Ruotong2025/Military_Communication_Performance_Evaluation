@@ -92,3 +92,10 @@ python:
   timeout: 300
   combat-data-script: military_operational_effectiveness_evaluation/generate/generate_all_data.py
   combat-timeout: 600
+
+# DeepSeek API 配置
+deepseek:
+  api:
+    url: https://api.deepseek.com
+    key: ${DEEPSEEK_API_KEY:sk-4e7e05bdac2143f59288e0d29ea3457b}
+    timeout: 120

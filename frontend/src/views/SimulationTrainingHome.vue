@@ -93,7 +93,7 @@
       <div class="phase-title-bar" style="--phase-color: #001f3f;">
         <el-icon><Document /></el-icon>
         <span>阶段一：数据准备</span>
-        <el-tag style="background: #1c4a9a; border-color: #1c4a9a;" size="small" effect="dark">6个模块</el-tag>
+        <el-tag style="background: #1c4a9a; border-color: #1c4a9a;" size="small" effect="dark">7个模块</el-tag>
       </div>
       <div class="cards-grid">
         <div v-for="card in phase1Cards" :key="card.path" class="module-card" @click="go(card.path)">
@@ -249,7 +249,9 @@ import {
   FolderOpened,
   QuestionFilled,
   Connection,
-  Cpu
+  Cpu,
+  Money,
+  Key
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -387,6 +389,17 @@ const phase1Cards = [
     accentColor: '#7c3aed',
     iconBg: 'rgba(124, 58, 237, 0.1)',
     whenToUse: '定量评估完成后，进行定性指标评估'
+  },
+  {
+    path: '/simulation-training/indicator-identification',
+    title: '指标识别',
+    desc: '通过AI智能识别和提取装备性能指标',
+    icon: Key,
+    required: false,
+    phase: '阶段一',
+    accentColor: '#dc2626',
+    iconBg: 'rgba(220, 38, 38, 0.1)',
+    whenToUse: '数据准备阶段，智能识别关键指标'
   }
 ]
 
@@ -472,6 +485,17 @@ const phase3Cards = [
     accentColor: '#10b981',
     iconBg: 'rgba(16, 185, 129, 0.1)',
     whenToUse: '动态指标AHP集结后，计算动态综合得分'
+  },
+  {
+    path: '/simulation-training/results/dynamic-cost-effectiveness',
+    title: '动态成本效益',
+    desc: '基于蒙特卡洛模拟的成本效益分析',
+    icon: Money,
+    required: false,
+    phase: '阶段三',
+    accentColor: '#f59e0b',
+    iconBg: 'rgba(245, 158, 11, 0.1)',
+    whenToUse: '动态综合得分完成后，进行成本效益分析'
   },
   {
     path: '/simulation-training/results/penalty-factor',
