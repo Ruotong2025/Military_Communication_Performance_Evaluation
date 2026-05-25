@@ -99,3 +99,42 @@ deepseek:
     url: https://api.deepseek.com
     key: ${DEEPSEEK_API_KEY:sk-4e7e05bdac2143f59288e0d29ea3457b}
     timeout: 120
+
+# 语义相似度服务配置（使用 paraphrase-multilingual 模型）
+semantic:
+  similarity:
+    python:
+      path: python
+    script:
+      path: scripts/similarity_calculator.py
+    timeout: 60
+    warmup: false
+    pool:
+      size: 3
+
+# Chroma 向量存储配置（替代 FAISS）
+chroma:
+  # Python 解释器路径
+  python-path: python
+  # Chroma 管理脚本路径
+  script-path: scripts/chroma_manager.py
+  # Chroma 持久化存储目录
+  persist-path: chroma_storage
+  # 命令执行超时时间（秒）
+  timeout: 60
+  # 向量维度（与模型输出一致）
+  dimension: 384
+  # 进程池大小（持久化模式）
+  pool-size: 3
+
+# FAISS 向量索引配置（已弃用，请使用 Chroma）
+# faiss:
+#   index-base-path: faiss_indexes
+#   dimension: 384
+#   default-top-k: 5
+#   python-path: python
+#   manager-script-path: scripts/faiss_index_manager.py
+#   build-timeout-seconds: 300
+#   search-timeout-seconds: 30
+#   auto-load-on-startup: true
+#   auto-save-on-shutdown: true

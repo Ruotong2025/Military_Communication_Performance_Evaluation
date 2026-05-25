@@ -79,10 +79,12 @@ public class DeepSeekApiClient {
             }
 
             // 检查是否是results数组格式
-            List<Map<String, Object>> resultList =
-                    (List<Map<String, Object>>) responseMap.get("results");
-            if (resultList != null && !resultList.isEmpty()) {
-                return parseSingleResult(resultList.get(0));
+            Object resultListRaw = responseMap.get("results");
+            if (resultListRaw instanceof List && !((List<?>) resultListRaw).isEmpty()) {
+                Object firstItem = ((List<?>) resultListRaw).get(0);
+                if (firstItem instanceof Map) {
+                    return parseSingleResult((Map<String, Object>) firstItem);
+                }
             }
 
             throw new RuntimeException("AI响应格式错误：未找到指标数据");
@@ -189,11 +191,29 @@ public class DeepSeekApiClient {
         sb.append("  \"confidence\": 0.95,\n");
         sb.append("  \"description\": \"简要说明\",\n");
         sb.append("  \"unit\": \"单位\",\n");
-        sb.append("  \"formula\": \"计算公式\",\n");
-        sb.append("  \"formulaDescription\": \"公式说明\",\n");
+        sb.append("  \"formula\": \"计算公式（如：SINR = Ps / (Pn + Pi)）\",\n");
+        sb.append("  \"formulaDescription\": \"公式说明（如：信干噪比 = 信号功率 / (噪声功率 + 干扰功率)）\",\n");
         sb.append("  \"calculationMethod\": \"计算方法\",\n");
-        sb.append("  \"sourceDataList\": []\n");
-        sb.append("}\n");
+        sb.append("  \"sourceDataList\": [\n");
+        sb.append("    {\n");
+        sb.append("      \"dataName\": \"基础数据名称\",\n");
+        sb.append("      \"formulaSymbol\": \"公式符号（如Ps, Pn）\",\n");
+        sb.append("      \"measurementMethod\": \"测量方法\",\n");
+        sb.append("      \"dataType\": \"NUMERIC或PERCENTAGE\",\n");
+        sb.append("      \"unit\": \"单位（如dBm, %, s）\",\n");
+        sb.append("      \"isFormulaRelated\": true,\n");
+        sb.append("      \"isEssential\": true,\n");
+        sb.append("      \"priority\": 1,\n");
+        sb.append("      \"confidence\": 0.9\n");
+        sb.append("    }\n");
+        sb.append("  ]\n");
+        sb.append("}\n\n");
+        sb.append("【注意】：\n");
+        sb.append("1. sourceDataList 必须包含公式中所有必需的基础数据\n");
+        sb.append("2. dataName 和 formulaSymbol 必须对应\n");
+        sb.append("3. dataType 必须为 NUMERIC 或 PERCENTAGE\n");
+        sb.append("4. unit 必须填写对应的单位（如dBm, %, s）\n");
+        sb.append("5. 如果是定性指标，formula 可省略，sourceDataList 设为 []\n");
         return sb.toString();
     }
 
@@ -211,15 +231,21 @@ public class DeepSeekApiClient {
             String jsonStr = extractJsonFromResponse(response);
             Map<String, Object> responseMap = objectMapper.readValue(jsonStr, Map.class);
 
-            List<Map<String, Object>> resultList =
-                    (List<Map<String, Object>>) responseMap.get("results");
+            Object resultListRaw = responseMap.get("results");
+            List<Map<String, Object>> resultList = new ArrayList<>();
 
-            if (resultList != null) {
-                for (Map<String, Object> item : resultList) {
-                    String name = (String) item.get("indicatorName");
-                    IndicatorAnalysisResult analysis = parseSingleResult(item);
-                    results.put(name, analysis);
+            if (resultListRaw instanceof List) {
+                for (Object item : (List<?>) resultListRaw) {
+                    if (item instanceof Map) {
+                        resultList.add((Map<String, Object>) item);
+                    }
                 }
+            }
+
+            for (Map<String, Object> item : resultList) {
+                String name = (String) item.get("indicatorName");
+                IndicatorAnalysisResult analysis = parseSingleResult(item);
+                results.put(name, analysis);
             }
 
             if (results.size() < indicators.size()) {
@@ -253,26 +279,48 @@ public class DeepSeekApiClient {
         result.setCalculationMethod((String) item.get("calculationMethod"));
         result.setSourceDataHint((String) item.get("sourceDataHint"));
 
-        List<Map<String, Object>> sourceDataRaw = (List<Map<String, Object>>) item.get("sourceDataList");
+        Object sourceDataRaw = item.get("sourceDataList");
         if (sourceDataRaw != null) {
             List<IndicatorAnalysisResult.SourceData> sourceDataList = new ArrayList<>();
-            for (Map<String, Object> sd : sourceDataRaw) {
-                IndicatorAnalysisResult.SourceData sourceData = new IndicatorAnalysisResult.SourceData();
-                sourceData.setDataName((String) sd.get("dataName"));
-                sourceData.setFormulaSymbol((String) sd.get("formulaSymbol"));
-                sourceData.setMeasurementMethod((String) sd.get("measurementMethod"));
-                sourceData.setDataType((String) sd.get("dataType"));
-                sourceData.setUnit((String) sd.get("unit"));
-                sourceData.setPriority(getIntValue(sd.get("priority")));
-                sourceData.setConfidence(getDoubleValue(sd.get("confidence")));
-                sourceData.setIsFormulaRelated(getBooleanValue(sd.get("isFormulaRelated")));
-                sourceData.setIsEssential(getBooleanValue(sd.get("isEssential")));
-                sourceDataList.add(sourceData);
+            try {
+                // 如果是字符串，尝试解析为 JSON 数组
+                if (sourceDataRaw instanceof String) {
+                    String str = (String) sourceDataRaw;
+                    if (!str.isEmpty() && str.startsWith("[")) {
+                        List<Map<String, Object>> parsed = objectMapper.readValue(str, List.class);
+                        for (Map<String, Object> sd : parsed) {
+                            sourceDataList.add(parseSourceData(sd));
+                        }
+                    }
+                } else if (sourceDataRaw instanceof List) {
+                    // 已经是 List，直接解析
+                    for (Object sd : (List<?>) sourceDataRaw) {
+                        if (sd instanceof Map) {
+                            sourceDataList.add(parseSourceData((Map<String, Object>) sd));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("解析 sourceDataList 失败: {}", e.getMessage());
             }
             result.setSourceDataList(sourceDataList);
         }
 
         return result;
+    }
+
+    private IndicatorAnalysisResult.SourceData parseSourceData(Map<String, Object> sd) {
+        IndicatorAnalysisResult.SourceData sourceData = new IndicatorAnalysisResult.SourceData();
+        sourceData.setDataName((String) sd.get("dataName"));
+        sourceData.setFormulaSymbol((String) sd.get("formulaSymbol"));
+        sourceData.setMeasurementMethod((String) sd.get("measurementMethod"));
+        sourceData.setDataType((String) sd.get("dataType"));
+        sourceData.setUnit((String) sd.get("unit"));
+        sourceData.setPriority(getIntValue(sd.get("priority")));
+        sourceData.setConfidence(getDoubleValue(sd.get("confidence")));
+        sourceData.setIsFormulaRelated(getBooleanValue(sd.get("isFormulaRelated")));
+        sourceData.setIsEssential(getBooleanValue(sd.get("isEssential")));
+        return sourceData;
     }
 
     private Double getDoubleValue(Object value) {

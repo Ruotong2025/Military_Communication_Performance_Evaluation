@@ -1,8 +1,6 @@
 package com.ccnu.military.controller;
 
-import com.ccnu.military.dto.ApiResponse;
-import com.ccnu.military.dto.IndicatorBatchParseRequestDTO;
-import com.ccnu.military.dto.IndicatorBatchParseResultDTO;
+import com.ccnu.military.dto.*;
 import com.ccnu.military.entity.IndicatorDefinition;
 import com.ccnu.military.service.IndicatorIdentificationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,6 +23,100 @@ public class IndicatorIdentificationController {
 
     private final IndicatorIdentificationService indicatorService;
 
+    // ============================================
+    // 新增接口：查询指标（情况一 + 情况三）
+    // ============================================
+
+    /**
+     * 智能查询指标（新接口）
+     * 返回 Top3 相似度候选 + 全量指标下拉列表
+     */
+    @Operation(summary = "智能查询指标", description = "返回Top3相似度候选和全部指标下拉列表")
+    @PostMapping("/intelligent-query")
+    public ApiResponse<IntelligentQueryResult> intelligentQuery(
+            @RequestBody IndicatorQueryRequest request) {
+        try {
+            if (request.getIndicatorName() == null || request.getIndicatorName().trim().isEmpty()) {
+                return ApiResponse.error(400, "指标名称不能为空");
+            }
+
+            IntelligentQueryResult result = indicatorService.intelligentQuery(request);
+            return ApiResponse.success(result);
+
+        } catch (Exception e) {
+            log.error("智能查询失败", e);
+            return ApiResponse.error("查询失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 查询指标
+     * 返回数据库语义匹配结果和全部指标列表
+     */
+    @Operation(summary = "查询指标", description = "查询指标，返回语义匹配结果和全部指标下拉列表")
+    @PostMapping("/query")
+    public ApiResponse<IndicatorQueryResultDTO> queryIndicator(
+            @RequestBody IndicatorQueryRequest request) {
+        try {
+            if (request.getIndicatorName() == null || request.getIndicatorName().trim().isEmpty()) {
+                return ApiResponse.error(400, "指标名称不能为空");
+            }
+
+            IndicatorQueryResultDTO result = indicatorService.queryIndicator(request);
+            return ApiResponse.success(result);
+
+        } catch (Exception e) {
+            log.error("查询指标失败", e);
+            return ApiResponse.error("查询失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * API分析单个指标（情况二）
+     */
+    @Operation(summary = "API分析单个指标", description = "调用DeepSeek API分析单个指标")
+    @PostMapping("/analyze-single")
+    public ApiResponse<IndicatorAnalysisResult> analyzeSingleIndicator(
+            @RequestBody IndicatorQueryRequest request) {
+        try {
+            if (request.getIndicatorName() == null || request.getIndicatorName().trim().isEmpty()) {
+                return ApiResponse.error(400, "指标名称不能为空");
+            }
+
+            IndicatorAnalysisResult result = indicatorService.analyzeSingleIndicatorApi(request);
+            return ApiResponse.success(result);
+
+        } catch (Exception e) {
+            log.error("API分析失败", e);
+            return ApiResponse.error("API分析失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 保存用户选择
+     */
+    @Operation(summary = "保存用户选择", description = "保存用户选择的指标结果")
+    @PostMapping("/save-selection")
+    public ApiResponse<IndicatorDefinition> saveSelection(
+            @RequestBody IndicatorSelectionRequest request) {
+        try {
+            if (request.getOriginalName() == null || request.getOriginalName().trim().isEmpty()) {
+                return ApiResponse.error(400, "指标名称不能为空");
+            }
+
+            IndicatorDefinition result = indicatorService.saveSelection(request);
+            return ApiResponse.success("保存成功", result);
+
+        } catch (Exception e) {
+            log.error("保存失败", e);
+            return ApiResponse.error("保存失败: " + e.getMessage());
+        }
+    }
+
+    // ============================================
+    // 原有接口
+    // ============================================
+
     /**
      * 批量识别指标
      */
@@ -32,25 +124,16 @@ public class IndicatorIdentificationController {
     @PostMapping("/batch-parse")
     public ApiResponse<IndicatorBatchParseResultDTO> batchParseIndicators(
             @RequestBody IndicatorBatchParseRequestDTO request) {
-
         try {
             if (request.getIndicators() == null || request.getIndicators().isEmpty()) {
                 return ApiResponse.error(400, "指标列表不能为空");
             }
-
             if (request.getIndicators().size() > 100) {
                 return ApiResponse.error(400, "单次最多支持100个指标");
             }
 
-            log.info("开始批量识别 {} 个指标", request.getIndicators().size());
-
             IndicatorBatchParseResultDTO result = indicatorService.batchParseAndIdentify(request);
-
-            log.info("批量识别完成，共 {} 个，MySQL命中 {} 个，API新识别 {} 个",
-                    result.getTotalCount(), result.getSkippedCount(), result.getSuccessCount());
-
             return ApiResponse.success(result);
-
         } catch (Exception e) {
             log.error("指标批量识别失败", e);
             return ApiResponse.error("识别失败: " + e.getMessage());

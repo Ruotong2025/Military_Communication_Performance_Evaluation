@@ -11,7 +11,8 @@ import java.util.List;
  */
 @Data
 @Entity
-@Table(name = "indicator_definition")
+@Table(name = "indicator_definition",
+       uniqueConstraints = @UniqueConstraint(columnNames = "indicator_name"))
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

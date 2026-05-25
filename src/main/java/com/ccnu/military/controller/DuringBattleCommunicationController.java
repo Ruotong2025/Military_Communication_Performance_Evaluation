@@ -78,18 +78,18 @@ public class DuringBattleCommunicationController {
             @Parameter(description = "测试批次ID", example = "TEST-2026-001")
             @PathVariable String testId) {
         log.info("API调用: 获取测试批次 {} 的统计信息", testId);
-        
+
         Long total = service.countByTestId(testId);
         Long successful = service.countSuccessfulByTestId(testId);
         Double successRate = service.calculateSuccessRate(testId);
-        
+
         Map<String, Object> statistics = new HashMap<>();
         statistics.put("testId", testId);
         statistics.put("totalCommunications", total);
         statistics.put("successfulCommunications", successful);
         statistics.put("failedCommunications", total - successful);
         statistics.put("successRate", String.format("%.2f%%", successRate));
-        
+
         return ApiResponse.success("查询成功", statistics);
     }
 

@@ -2160,3 +2160,54 @@ export function deleteIndicator(id) {
     method: "delete",
   });
 }
+
+// ============================================
+// 指标智能识别 - 新版 API（三种情况）
+// ============================================
+
+/**
+ * 智能查询指标（新接口）
+ * 返回Top3相似度候选和全部指标下拉列表
+ */
+export function intelligentQuery(data) {
+  return request({
+    url: "/indicator/intelligent-query",
+    method: "post",
+    data: data,
+  });
+}
+
+/**
+ * 查询指标（情况一 + 情况三）
+ * 返回数据库语义匹配结果和全部指标下拉列表
+ */
+export function queryIndicator(data) {
+  return request({
+    url: "/indicator/query",
+    method: "post",
+    data: data,
+  });
+}
+
+/**
+ * API分析单个指标（情况二）
+ * 调用DeepSeek API分析单个指标
+ */
+export function analyzeSingleIndicator(data) {
+  return request({
+    url: "/indicator/analyze-single",
+    method: "post",
+    data: data,
+  });
+}
+
+/**
+ * 保存用户选择
+ */
+export function saveIndicatorSelection(data) {
+  return request({
+    url: "/indicator/save-selection",
+    method: "post",
+    data: data,
+  });
+}

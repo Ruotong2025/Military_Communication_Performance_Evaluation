@@ -20,6 +20,8 @@ public interface IndicatorDefinitionRepository extends JpaRepository<IndicatorDe
 
     boolean existsByIndicatorNameAndCategory(String indicatorName, String category);
 
+    boolean existsByIndicatorName(String indicatorName);
+
     List<IndicatorDefinition> findByIndicatorType(IndicatorDefinition.IndicatorType indicatorType);
 
     List<IndicatorDefinition> findByIsActiveTrue();

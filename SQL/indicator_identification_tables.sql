@@ -1,7 +1,22 @@
 -- ============================================
 -- 指标智能识别模块 - 数据库脚本
 -- 创建时间: 2026-05-15
+-- 更新: 2026-05-24 (添加 FAISS 向量索引支持，为 indicator_source_data 添加 embedding_vector 字段)
 -- ============================================
+
+-- ============================================
+-- 更新现有数据库表结构
+-- ============================================
+-- 1. 删除旧的唯一约束（indicator_name + category）
+-- 2. 添加新的全局唯一约束（indicator_name）
+-- 3. 添加 embedding_vector 字段
+
+ALTER TABLE `indicator_definition` DROP INDEX IF EXISTS `uk_indicator_name`;
+ALTER TABLE `indicator_definition` ADD CONSTRAINT `uk_indicator_name` UNIQUE (`indicator_name`);
+ALTER TABLE `indicator_definition` ADD COLUMN IF NOT EXISTS `embedding_vector` TEXT DEFAULT NULL COMMENT '向量嵌入(JSON格式)';
+
+-- 为 indicator_source_data 添加向量字段
+ALTER TABLE `indicator_source_data` ADD COLUMN IF NOT EXISTS `embedding_vector` TEXT DEFAULT NULL COMMENT '向量嵌入(JSON格式)';
 
 -- ============================================
 -- 指标定义表
@@ -22,13 +37,16 @@ CREATE TABLE IF NOT EXISTS `indicator_definition` (
 
     `source_data_hint` TEXT DEFAULT NULL COMMENT '可测得的基础数据提示',
 
+    -- 向量嵌入（用于语义相似度计算）
+    `embedding_vector` TEXT DEFAULT NULL COMMENT '向量嵌入(JSON格式)',
+
     `is_active` BOOLEAN DEFAULT TRUE COMMENT '是否启用',
     `is_from_ai` BOOLEAN DEFAULT FALSE COMMENT '是否由AI自动识别生成',
     `ai_confidence` DECIMAL(5,2) DEFAULT NULL COMMENT 'AI识别置信度',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
 
-    UNIQUE KEY `uk_indicator_name` (`indicator_name`, `category`),
+    UNIQUE KEY `uk_indicator_name` (`indicator_name`),
     INDEX `idx_category` (`category`),
     INDEX `idx_indicator_type` (`indicator_type`),
     INDEX `idx_is_active` (`is_active`)
