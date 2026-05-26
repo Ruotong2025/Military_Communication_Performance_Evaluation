@@ -1,6 +1,7 @@
 package com.ccnu.military.service;
 
 import com.ccnu.military.dto.IndicatorAnalysisResult;
+import com.ccnu.military.dto.SourceDataDTO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -136,7 +137,7 @@ public class DeepSeekApiClient {
         sb.append("        {\n");
         sb.append("          \"dataName\": \"基础数据名称（必须与公式中的变量对应）\",\n");
         sb.append("          \"formulaSymbol\": \"公式中的符号（如：Ps, Pn）\",\n");
-        sb.append("          \"measurementMethod\": \"测量方法\",\n");
+        sb.append("          \"measurementMethod\": \"数据来源表名（如：通信记录、作战基础信息、链路维护事件、安全事件、攻击作战、防御作战）\",\n");
         sb.append("          \"dataType\": \"NUMERIC或PERCENTAGE\",\n");
         sb.append("          \"unit\": \"单位\",\n");
         sb.append("          \"isFormulaRelated\": true,\n");
@@ -148,6 +149,14 @@ public class DeepSeekApiClient {
         sb.append("    }\n");
         sb.append("  ]\n");
         sb.append("}\n\n");
+        sb.append("【数据来源表名说明】：\n");
+        sb.append("请根据基础数据判断其最可能来自哪个数据表：\n");
+        sb.append("- 通信记录：通信过程中的性能数据，如信号功率、噪声功率、传输延迟、吞吐量、信噪比等\n");
+        sb.append("- 作战基础信息：作战相关的统计数据，如人员数量、装备数量、功耗等\n");
+        sb.append("- 链路维护事件：链路中断、恢复、维护相关的事件数据\n");
+        sb.append("- 安全事件：密钥、安全相关的攻击检测、加密认证数据\n");
+        sb.append("- 攻击作战：通信对抗中的攻击作战数据\n");
+        sb.append("- 防御作战：通信对抗中的防御作战数据\n");
         sb.append("【公式编写规范】：\n");
         sb.append("1. 使用标准工程符号（如：Ps=信号功率，Pn=噪声功率，Pi=干扰功率）\n");
         sb.append("2. 公式应简洁明了，能清晰表达计算关系\n");
@@ -198,7 +207,7 @@ public class DeepSeekApiClient {
         sb.append("    {\n");
         sb.append("      \"dataName\": \"基础数据名称\",\n");
         sb.append("      \"formulaSymbol\": \"公式符号（如Ps, Pn）\",\n");
-        sb.append("      \"measurementMethod\": \"测量方法\",\n");
+        sb.append("      \"measurementMethod\": \"数据来源表名（如：通信记录、作战基础信息、链路维护事件、安全事件、攻击作战、防御作战）\",\n");
         sb.append("      \"dataType\": \"NUMERIC或PERCENTAGE\",\n");
         sb.append("      \"unit\": \"单位（如dBm, %, s）\",\n");
         sb.append("      \"isFormulaRelated\": true,\n");
@@ -208,6 +217,13 @@ public class DeepSeekApiClient {
         sb.append("    }\n");
         sb.append("  ]\n");
         sb.append("}\n\n");
+        sb.append("【数据来源表名说明】：\n");
+        sb.append("- 通信记录：信号功率、噪声功率、传输延迟、吞吐量、信噪比等\n");
+        sb.append("- 作战基础信息：人员数量、装备数量、功耗等\n");
+        sb.append("- 链路维护事件：链路中断、恢复、维护事件\n");
+        sb.append("- 安全事件：密钥、安全攻击检测数据\n");
+        sb.append("- 攻击作战：通信对抗攻击数据\n");
+        sb.append("- 防御作战：通信对抗防御数据\n\n");
         sb.append("【注意】：\n");
         sb.append("1. sourceDataList 必须包含公式中所有必需的基础数据\n");
         sb.append("2. dataName 和 formulaSymbol 必须对应\n");
@@ -279,48 +295,76 @@ public class DeepSeekApiClient {
         result.setCalculationMethod((String) item.get("calculationMethod"));
         result.setSourceDataHint((String) item.get("sourceDataHint"));
 
+        log.info("[调试] parseSingleResult 解析指标: indicatorName={}", item.get("indicatorName"));
+
         Object sourceDataRaw = item.get("sourceDataList");
+        log.info("[调试] parseSingleResult - sourceDataRaw 类型: {}, 值: {}",
+            sourceDataRaw != null ? sourceDataRaw.getClass().getSimpleName() : "null",
+            sourceDataRaw);
+
         if (sourceDataRaw != null) {
-            List<IndicatorAnalysisResult.SourceData> sourceDataList = new ArrayList<>();
+            List<SourceDataDTO> sourceDataList = new ArrayList<>();
             try {
                 // 如果是字符串，尝试解析为 JSON 数组
                 if (sourceDataRaw instanceof String) {
                     String str = (String) sourceDataRaw;
+                    log.info("[调试] sourceDataRaw 是字符串，长度: {}", str.length());
                     if (!str.isEmpty() && str.startsWith("[")) {
                         List<Map<String, Object>> parsed = objectMapper.readValue(str, List.class);
+                        log.info("[调试] 字符串解析为 List，大小: {}", parsed.size());
                         for (Map<String, Object> sd : parsed) {
                             sourceDataList.add(parseSourceData(sd));
                         }
+                    } else {
+                        log.warn("[调试] sourceDataRaw 字符串不是以 [ 开头，跳过解析");
                     }
                 } else if (sourceDataRaw instanceof List) {
                     // 已经是 List，直接解析
-                    for (Object sd : (List<?>) sourceDataRaw) {
+                    List<?> rawList = (List<?>) sourceDataRaw;
+                    log.info("[调试] sourceDataRaw 已是 List，大小: {}", rawList.size());
+                    for (Object sd : rawList) {
                         if (sd instanceof Map) {
                             sourceDataList.add(parseSourceData((Map<String, Object>) sd));
+                        } else {
+                            log.warn("[调试] sourceDataList 中的元素不是 Map: {}", sd.getClass().getSimpleName());
                         }
                     }
+                } else {
+                    log.warn("[调试] sourceDataRaw 类型不支持: {}", sourceDataRaw.getClass().getSimpleName());
                 }
             } catch (Exception e) {
-                log.warn("解析 sourceDataList 失败: {}", e.getMessage());
+                log.error("[调试] 解析 sourceDataList 失败: {}", e.getMessage(), e);
             }
+            log.info("[调试] parseSingleResult - 最终 sourceDataList 大小: {}", sourceDataList.size());
             result.setSourceDataList(sourceDataList);
+        } else {
+            log.info("[调试] parseSingleResult - sourceDataRaw 为 null，跳过解析");
         }
 
         return result;
     }
 
-    private IndicatorAnalysisResult.SourceData parseSourceData(Map<String, Object> sd) {
-        IndicatorAnalysisResult.SourceData sourceData = new IndicatorAnalysisResult.SourceData();
-        sourceData.setDataName((String) sd.get("dataName"));
-        sourceData.setFormulaSymbol((String) sd.get("formulaSymbol"));
-        sourceData.setMeasurementMethod((String) sd.get("measurementMethod"));
-        sourceData.setDataType((String) sd.get("dataType"));
-        sourceData.setUnit((String) sd.get("unit"));
-        sourceData.setPriority(getIntValue(sd.get("priority")));
-        sourceData.setConfidence(getDoubleValue(sd.get("confidence")));
-        sourceData.setIsFormulaRelated(getBooleanValue(sd.get("isFormulaRelated")));
-        sourceData.setIsEssential(getBooleanValue(sd.get("isEssential")));
-        return sourceData;
+    private SourceDataDTO parseSourceData(Map<String, Object> sd) {
+        String dataName = (String) sd.get("dataName");
+        String formulaSymbol = (String) sd.get("formulaSymbol");
+        String measurementMethod = (String) sd.get("measurementMethod");
+        String dataType = (String) sd.get("dataType");
+        String unit = (String) sd.get("unit");
+
+        log.info("[调试] parseSourceData 解析到: dataName={}, formulaSymbol={}, measurementMethod={}, dataType={}, unit={}",
+            dataName, formulaSymbol, measurementMethod, dataType, unit);
+
+        return SourceDataDTO.builder()
+                .sourceDataName(dataName)
+                .formulaSymbol(formulaSymbol)
+                .measurementMethod(measurementMethod)
+                .dataType(dataType)
+                .unit(unit)
+                .priority(getIntValue(sd.get("priority")))
+                .confidence(getDoubleValue(sd.get("confidence")))
+                .isFormulaRelated(getBooleanValue(sd.get("isFormulaRelated")))
+                .isEssential(getBooleanValue(sd.get("isEssential")))
+                .build();
     }
 
     private Double getDoubleValue(Object value) {

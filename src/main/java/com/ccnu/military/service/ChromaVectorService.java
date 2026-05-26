@@ -16,6 +16,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Chroma 向量服务（优化版）
@@ -38,10 +39,11 @@ public class ChromaVectorService {
     private final AtomicInteger poolIndex = new AtomicInteger(0);
 
     // 进程池配置参数
-    private static final int DEFAULT_POOL_SIZE = 3;
+    private static final int DEFAULT_POOL_SIZE = 5;  // 从3改为5，提高并发能力
     private static final int PROCESS_TIMEOUT_SECONDS = 30;
     private static final int MAX_RETRIES = 3;
     private static final int PROCESS_STARTUP_TIMEOUT_MS = 15000;  // 进程启动超时 15秒
+    private static final int READ_TIMEOUT_MS = 10000;  // 读取响应超时 10秒
 
     public ChromaVectorService(ChromaConfig config, ObjectMapper objectMapper) {
         this.config = config;
@@ -326,48 +328,60 @@ public class ChromaVectorService {
 
         PersistentProcess process = null;
         int retries = 0;
+        String result = null;
 
-        while (retries < MAX_RETRIES) {
-            try {
-                // 从池中获取可用进程
-                process = availableProcesses.take();
+        try {
+            while (retries < MAX_RETRIES) {
+                try {
+                    // 从池中获取可用进程
+                    process = availableProcesses.take();
 
-                // 发送命令
-                String request = objectMapper.writeValueAsString(Map.of(
-                        "command", command,
-                        "payload", data
-                ));
-                process.write(request);
+                    // 发送命令
+                    String request = objectMapper.writeValueAsString(Map.of(
+                            "command", command,
+                            "payload", data
+                    ));
+                    process.write(request);
 
-                // 读取响应
-                String response = process.read();
-                Map<String, Object> parsed = parseResult(response);
+                    // 读取响应
+                    String response = process.read();
+                    Map<String, Object> parsed = parseResult(response);
 
-                // 检查是否成功
-                if (Boolean.TRUE.equals(parsed.get("success"))) {
-                    return response;
-                }
+                    // 检查是否成功
+                    if (Boolean.TRUE.equals(parsed.get("success"))) {
+                        result = response;
+                        return result;
+                    }
 
-                // 如果是连接错误，重试
-                String error = (String) parsed.get("error");
-                if (error != null && (error.contains("Connection") || error.contains("Broken pipe"))) {
-                    log.warn("进程 {} 连接异常，尝试重启", process.index);
-                    restartProcess(process);
+                    // 如果是连接错误，重试
+                    String error = (String) parsed.get("error");
+                    if (error != null && (error.contains("Connection") || error.contains("Broken pipe"))) {
+                        log.warn("进程 {} 连接异常，尝试重启", process.index);
+                        restartProcess(process);
+                        process = null; // 已重启，不再归还
+                        retries++;
+                        continue;
+                    }
+
+                    result = response;
+                    return result;
+
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("等待进程池时被中断", e);
+                } catch (Exception e) {
+                    log.error("执行命令失败", e);
+                    if (process != null) {
+                        restartProcess(process);
+                        process = null; // 已重启，不再归还
+                    }
                     retries++;
-                    continue;
                 }
-
-                return response;
-
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException("等待进程池时被中断", e);
-            } catch (Exception e) {
-                log.error("执行命令失败", e);
-                if (process != null) {
-                    restartProcess(process);
-                }
-                retries++;
+            }
+        } finally {
+            // 关键修复：归还进程回池
+            if (process != null) {
+                availableProcesses.offer(process);
             }
         }
 
@@ -495,22 +509,60 @@ public class ChromaVectorService {
         final BufferedReader reader;
         final BufferedWriter writer;
         final int index;
+        volatile long lastUsed = 0;
 
         PersistentProcess(Process process, BufferedReader reader, BufferedWriter writer, int index) {
             this.process = process;
             this.reader = reader;
             this.writer = writer;
             this.index = index;
+            this.lastUsed = System.currentTimeMillis();
         }
 
         synchronized void write(String data) throws IOException {
             writer.write(data);
             writer.newLine();
             writer.flush();
+            lastUsed = System.currentTimeMillis();
         }
 
         synchronized String read() throws IOException {
             return reader.readLine();
+        }
+
+        /**
+         * 带超时的读取方法
+         * @param timeoutMs 超时时间（毫秒）
+         * @return 读取的行内容
+         * @throws TimeoutException 超时异常
+         */
+        synchronized String readWithTimeout(long timeoutMs) throws IOException, TimeoutException {
+            long startTime = System.currentTimeMillis();
+            long deadline = startTime + timeoutMs;
+
+            while (System.currentTimeMillis() < deadline) {
+                if (reader.ready()) {
+                    String line = reader.readLine();
+                    if (line != null) {
+                        lastUsed = System.currentTimeMillis();
+                        return line;
+                    }
+                }
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("读取被中断", e);
+                }
+            }
+            throw new TimeoutException("读取超时");
+        }
+
+        /**
+         * 检查进程是否还活着
+         */
+        boolean isAlive() {
+            return process.isAlive();
         }
 
         void shutdown() {

@@ -80,26 +80,6 @@ public class IntelligentQueryResult {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    @Schema(description = "数据源DTO")
-    public static class SourceDataDTO {
-
-        @Schema(description = "数据名称")
-        private String sourceDataName;
-
-        @Schema(description = "公式符号")
-        private String formulaSymbol;
-
-        @Schema(description = "单位")
-        private String unit;
-
-        @Schema(description = "是否必需")
-        private Boolean isEssential;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
     @Schema(description = "指标下拉选项")
     public static class IndicatorOption {
 

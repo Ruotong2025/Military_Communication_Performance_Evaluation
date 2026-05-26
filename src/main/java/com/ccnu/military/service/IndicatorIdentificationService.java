@@ -85,7 +85,7 @@ public class IndicatorIdentificationService {
         candidates.sort((a, b) -> Double.compare(b.getSimilarity(), a.getSimilarity()));
 
         // 查询候选的数据源
-        Map<Long, List<IntelligentQueryResult.SourceDataDTO>> sourceDataMap = getSourceDataMap(candidateIds);
+        Map<Long, List<SourceDataDTO>> sourceDataMap = getSourceDataMap(candidateIds);
         for (IntelligentQueryResult.CandidateOption candidate : candidates) {
             candidate.setSourceDataList(sourceDataMap.getOrDefault(candidate.getId(), Collections.emptyList()));
         }
@@ -134,19 +134,24 @@ public class IndicatorIdentificationService {
     /**
      * 获取指标ID到数据源的映射
      */
-    private Map<Long, List<IntelligentQueryResult.SourceDataDTO>> getSourceDataMap(List<Long> indicatorIds) {
+    private Map<Long, List<SourceDataDTO>> getSourceDataMap(List<Long> indicatorIds) {
         if (indicatorIds == null || indicatorIds.isEmpty()) {
             return Collections.emptyMap();
         }
 
         List<IndicatorSourceData> sourceDataList = sourceDataRepository.findByIndicatorIdIn(indicatorIds);
 
-        Map<Long, List<IntelligentQueryResult.SourceDataDTO>> result = new HashMap<>();
+        Map<Long, List<SourceDataDTO>> result = new HashMap<>();
         for (IndicatorSourceData source : sourceDataList) {
-            IntelligentQueryResult.SourceDataDTO dto = IntelligentQueryResult.SourceDataDTO.builder()
+            SourceDataDTO dto = SourceDataDTO.builder()
                     .sourceDataName(source.getSourceDataName())
                     .formulaSymbol(source.getFormulaSymbol())
+                    .measurementMethod(source.getMeasurementMethod())
+                    .dataType(source.getDataType() != null ? source.getDataType().name() : null)
                     .unit(source.getUnit())
+                    .priority(source.getPriority())
+                    .confidence(source.getConfidence() != null ? source.getConfidence().doubleValue() : null)
+                    .isFormulaRelated(source.getIsFormulaRelated())
                     .isEssential(source.getIsEssential())
                     .build();
             result.computeIfAbsent(source.getIndicatorId(), k -> new ArrayList<>()).add(dto);
@@ -740,11 +745,11 @@ public class IndicatorIdentificationService {
         sourceDataRepository.deleteByIndicatorId(indicatorId);
 
         if (analysis.getSourceDataList() != null && !analysis.getSourceDataList().isEmpty()) {
-            for (IndicatorAnalysisResult.SourceData data : analysis.getSourceDataList()) {
+            for (SourceDataDTO data : analysis.getSourceDataList()) {
                 IndicatorSourceData entity = IndicatorSourceData.builder()
                         .indicatorId(indicatorId)
-                        .sourceDataName(data.getDataName())
-                        .sourceDataCode(generateDataCode(data.getDataName()))
+                        .sourceDataName(data.getSourceDataName())
+                        .sourceDataCode(generateDataCode(data.getSourceDataName()))
                         .measurementMethod(data.getMeasurementMethod())
                         .dataType(data.getDataType() != null ?
                                 IndicatorSourceData.DataType.valueOf(data.getDataType()) : null)
@@ -761,7 +766,7 @@ public class IndicatorIdentificationService {
 
                 // 计算向量并同步到 Chroma
                 try {
-                    List<Double> vector = indicatorVectorService.encodeText(data.getDataName());
+                    List<Double> vector = indicatorVectorService.encodeText(data.getSourceDataName());
                     if (!vector.isEmpty()) {
                         chromaVectorService.addSourceData(
                             Collections.singletonList(saved.getId()),

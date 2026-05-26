@@ -22,6 +22,10 @@ import sys
 import json
 import os
 import signal
+import logging
+
+# 禁用 INFO 日志，避免干扰 stdout JSON 协议
+logging.basicConfig(level=logging.WARNING)
 
 # 添加脚本目录到路径
 script_dir = os.path.dirname(os.path.abspath(__file__))

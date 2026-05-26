@@ -2211,3 +2211,34 @@ export function saveIndicatorSelection(data) {
     data: data,
   });
 }
+
+// ============================================
+// 指标数据源字段映射 API
+// ============================================
+
+/**
+ * 搜索相似字段
+ * 根据数据源名称搜索数据库中的相似字段
+ * @param {string} dataName - 数据源名称
+ * @param {number} limit - 返回数量
+ */
+export function searchColumnSuggestions(dataName, limit = 5) {
+  return request({
+    url: "/indicator/source-data/column-suggestions",
+    method: "get",
+    params: { dataName, limit },
+  });
+}
+
+/**
+ * 获取指标数据源字段建议
+ * 结合API分析结果和数据库搜索
+ * @param {object} data - 请求数据 { indicatorName }
+ */
+export function getFieldSuggestions(data) {
+  return request({
+    url: "/indicator/source-data/field-suggestions",
+    method: "post",
+    data: data,
+  });
+}

@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * 用户选择保存请求DTO
  */
@@ -52,4 +54,26 @@ public class IndicatorSelectionRequest {
 
     @Schema(description = "匹配相似度")
     private Double matchSimilarity;
+
+    // 数据源字段映射
+    @Schema(description = "数据源字段映射列表")
+    private List<SourceDataMapping> sourceDataMappings;
+
+    /**
+     * 数据源字段映射（用于前端显示）
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SourceDataMapping {
+        @Schema(description = "数据源名称")
+        private String sourceDataName;
+
+        @Schema(description = "选择类型: api / database")
+        private String selectionType;
+
+        @Schema(description = "选中的字段名")
+        private String selectedField;
+    }
 }

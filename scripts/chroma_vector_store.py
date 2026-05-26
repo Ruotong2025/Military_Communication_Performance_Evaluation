@@ -10,7 +10,8 @@ from chromadb.config import Settings
 from typing import List, Dict, Any, Optional
 import logging
 
-logging.basicConfig(level=logging.INFO)
+# 禁用 INFO 日志，避免干扰 stdout JSON 协议
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
