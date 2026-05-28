@@ -11,11 +11,15 @@ import com.ccnu.military.repository.DynamicDimensionRepository;
 import com.ccnu.military.repository.DynamicTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -396,5 +400,180 @@ public class DynamicIndicatorService {
                 .toLowerCase()
                 .replaceAll("_+", "_")
                 .trim();
+    }
+
+    /**
+     * 生成Excel模板文件
+     */
+    public byte[] generateExcelTemplate() throws IOException {
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            // 创建工作表
+            Sheet sheet = workbook.createSheet("指标体系定义");
+
+            // 创建样式
+            CellStyle headerStyle = workbook.createCellStyle();
+            headerStyle.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+            headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            headerStyle.setBorderBottom(BorderStyle.THIN);
+            headerStyle.setBorderTop(BorderStyle.THIN);
+            headerStyle.setBorderLeft(BorderStyle.THIN);
+            headerStyle.setBorderRight(BorderStyle.THIN);
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerFont.setColor(IndexedColors.WHITE.getIndex());
+            headerStyle.setFont(headerFont);
+
+            CellStyle levelStyle = workbook.createCellStyle();
+            levelStyle.setFillForegroundColor(IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex());
+            levelStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            levelStyle.setAlignment(HorizontalAlignment.CENTER);
+            levelStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            levelStyle.setBorderBottom(BorderStyle.THIN);
+            levelStyle.setBorderTop(BorderStyle.THIN);
+            levelStyle.setBorderLeft(BorderStyle.THIN);
+            levelStyle.setBorderRight(BorderStyle.THIN);
+
+            CellStyle primaryStyle = workbook.createCellStyle();
+            primaryStyle.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
+            primaryStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            primaryStyle.setAlignment(HorizontalAlignment.CENTER);
+            primaryStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            primaryStyle.setBorderBottom(BorderStyle.THIN);
+            primaryStyle.setBorderTop(BorderStyle.THIN);
+            primaryStyle.setBorderLeft(BorderStyle.THIN);
+            primaryStyle.setBorderRight(BorderStyle.THIN);
+
+            CellStyle noteStyle = workbook.createCellStyle();
+            noteStyle.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
+            noteStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            noteStyle.setAlignment(HorizontalAlignment.LEFT);
+            noteStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            noteStyle.setWrapText(true);
+
+            CellStyle dataStyle = workbook.createCellStyle();
+            dataStyle.setAlignment(HorizontalAlignment.CENTER);
+            dataStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            dataStyle.setBorderBottom(BorderStyle.THIN);
+            dataStyle.setBorderTop(BorderStyle.THIN);
+            dataStyle.setBorderLeft(BorderStyle.THIN);
+            dataStyle.setBorderRight(BorderStyle.THIN);
+
+            // 设置列宽
+            sheet.setColumnWidth(0, 5000);   // 层级
+            sheet.setColumnWidth(1, 4000);   // 一级维度
+            sheet.setColumnWidth(2, 5000);   // 二级维度
+            sheet.setColumnWidth(3, 3000);   // 指标类型
+            sheet.setColumnWidth(4, 6000);   // 描述/说明
+            sheet.setColumnWidth(5, 3000);   // 平均数
+
+            int rowNum = 0;
+
+            // ========== 第1行：标题 ==========
+            Row titleRow = sheet.createRow(rowNum++);
+            titleRow.setHeight((short) 600);
+            Cell titleCell = titleRow.createCell(0);
+            titleCell.setCellValue("动态指标体系Excel导入模板");
+            titleCell.setCellStyle(headerStyle);
+            sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 5));
+
+            // ========== 第2行：说明 ==========
+            Row infoRow = sheet.createRow(rowNum++);
+            infoRow.setHeight((short) 400);
+            Cell infoCell = infoRow.createCell(0);
+            infoCell.setCellValue("说明：层级列用于定义评估层级（如'作战效能'），一级维度列用于定义评价维度（如'通信效能'），二级维度列用于定义具体指标项。指标类型填写 QUANTITATIVE 表示定量，QUALITATIVE 表示定性。平均数列用于填写定量指标的参考平均值。");
+            infoCell.setCellStyle(noteStyle);
+            sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, 5));
+
+            // ========== 第3行：表头 ==========
+            rowNum++;
+            Row headerRow = sheet.createRow(rowNum++);
+            String[] headers = {"层级（支持合并单元格）", "一级维度", "二级维度", "指标类型", "描述/说明", "平均数"};
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            // ========== 示例数据 ==========
+            // 示例1：作战效能
+            rowNum = addExampleData(sheet, rowNum, levelStyle, primaryStyle, dataStyle,
+                    "作战效能", "通信效能", "数据成功传输率", "QUANTITATIVE", "成功传输的数据包数/发送的总数据包数", "95.5");
+            addExampleData(sheet, rowNum, levelStyle, primaryStyle, dataStyle,
+                    "", "通信效能", "平均通信时延", "QUANTITATIVE", "通信从发送到接收的平均时间(ms)", "125.3");
+            rowNum++;
+            addExampleData(sheet, rowNum, levelStyle, primaryStyle, dataStyle,
+                    "", "抗干扰能力", "信号干扰比", "QUANTITATIVE", "信号功率与干扰噪声功率的比值(dB)", "15.0");
+            addExampleData(sheet, rowNum + 1, levelStyle, primaryStyle, dataStyle,
+                    "", "抗干扰能力", "丢包率", "QUANTITATIVE", "丢失数据包占总发送包的比例(%)", "2.5");
+            rowNum += 3;
+
+            // 示例2：可靠性（空白，用于用户自行填写）
+            rowNum++;
+            addExampleData(sheet, rowNum, levelStyle, primaryStyle, dataStyle,
+                    "可靠性（请填写）", "设备稳定性（请填写）", "MTBF平均无故障时间", "QUANTITATIVE", "设备平均故障间隔时间(h)", "5000");
+            addExampleData(sheet, rowNum + 1, levelStyle, primaryStyle, dataStyle,
+                    "", "", "系统可用度", "QUANTITATIVE", "系统正常运行时间占总时间的比例(%)", "99.5");
+            addExampleData(sheet, rowNum + 2, levelStyle, primaryStyle, dataStyle,
+                    "", "", "故障恢复时间", "QUANTITATIVE", "从故障发生到恢复正常的平均时间(min)", "30");
+            rowNum += 4;
+
+            // 添加更多空白行供用户填写
+            rowNum++;
+            for (int i = 0; i < 10; i++) {
+                Row dataRow = sheet.createRow(rowNum++);
+                dataRow.setHeight((short) 400);
+                for (int j = 0; j < 6; j++) {
+                    Cell cell = dataRow.createCell(j);
+                    cell.setCellStyle(dataStyle);
+                    if (j == 3) {
+                        cell.setCellValue(j == 0 && i < 3 ? "" : "QUANTITATIVE");
+                    }
+                }
+            }
+
+            // 冻结首行
+            sheet.createFreezePane(0, 4);
+
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private int addExampleData(Sheet sheet, int rowNum, CellStyle levelStyle, CellStyle primaryStyle, CellStyle dataStyle,
+                               String level, String primary, String secondary, String metricType, String description, String averageValue) {
+        Row row = sheet.createRow(rowNum);
+        row.setHeight((short) 400);
+
+        Cell c0 = row.createCell(0);
+        c0.setCellValue(level);
+        c0.setCellStyle(level.isEmpty() ? dataStyle : levelStyle);
+
+        Cell c1 = row.createCell(1);
+        c1.setCellValue(primary);
+        c1.setCellStyle(primary.isEmpty() ? dataStyle : primaryStyle);
+
+        Cell c2 = row.createCell(2);
+        c2.setCellValue(secondary);
+        c2.setCellStyle(dataStyle);
+
+        Cell c3 = row.createCell(3);
+        c3.setCellValue(metricType);
+        c3.setCellStyle(dataStyle);
+
+        Cell c4 = row.createCell(4);
+        c4.setCellValue(description);
+        c4.setCellStyle(dataStyle);
+
+        Cell c5 = row.createCell(5);
+        if (averageValue != null && !averageValue.isEmpty()) {
+            c5.setCellValue(averageValue);
+        }
+        c5.setCellStyle(dataStyle);
+
+        return rowNum;
     }
 }

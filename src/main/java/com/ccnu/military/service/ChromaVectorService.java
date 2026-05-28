@@ -143,7 +143,7 @@ public class ChromaVectorService {
         );
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.directory(scriptFilePath.getParent().toFile());
+        pb.directory(new File(System.getProperty("user.dir")));
         pb.environment().put("CHROMA_PERSIST_DIR", persistPath.toString());
         pb.environment().put("PYTHONIOENCODING", "utf-8");
         pb.environment().put("PYTHONUNBUFFERED", "1");
@@ -406,7 +406,7 @@ public class ChromaVectorService {
             );
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.directory(scriptFilePath.getParent().toFile());
+            pb.directory(new File(System.getProperty("user.dir")));
             pb.environment().putAll(env);
 
             Process process = pb.start();

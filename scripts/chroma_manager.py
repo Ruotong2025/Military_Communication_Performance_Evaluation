@@ -34,8 +34,10 @@ if script_dir not in sys.path:
 
 from chroma_vector_store import ChromaVectorStore, get_store
 
-# 默认存储目录
-DEFAULT_PERSIST_DIR = "./chroma_storage"
+# 默认存储目录 - 相对于项目根目录（scripts 的上级目录）
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)  # scripts 的上级目录
+DEFAULT_PERSIST_DIR = os.path.join(PROJECT_ROOT, "chroma_storage")
 
 
 def cmd_add_indicators(store: ChromaVectorStore, data: dict) -> dict:

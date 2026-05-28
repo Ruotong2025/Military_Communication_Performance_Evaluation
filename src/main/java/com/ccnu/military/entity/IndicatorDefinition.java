@@ -62,6 +62,12 @@ public class IndicatorDefinition {
     @Column(name = "ai_confidence", precision = 5, scale = 2)
     private BigDecimal aiConfidence;
 
+    @Column(name = "related_indicators", columnDefinition = "json")
+    private String relatedIndicators;
+
+    @Column(name = "related_source_data", columnDefinition = "json")
+    private String relatedSourceData;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

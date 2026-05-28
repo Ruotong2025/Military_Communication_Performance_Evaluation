@@ -146,32 +146,33 @@
             :api-suggestion="getApiSuggestion(sourceData)"
             :selection-type="getSourceDataSelectionType(sourceData)"
             :selected-db-field="getSourceDataSelectedField(sourceData)"
+            :related-source-data-id="getRelatedSourceDataId(sourceData)"
             @change="handleSourceDataChange($event, index)"
           />
 
-          <!-- 映射汇总 -->
-          <div class="mapping-summary">
-            <div class="summary-title">
-              <el-icon><InfoFilled /></el-icon>
-              字段映射汇总
-            </div>
-            <div class="summary-content">
-              <div
-                v-for="(mapping, index) in sourceDataMappings"
-                :key="index"
-                class="summary-item"
-              >
-                <span class="summary-source">{{ mapping.sourceDataName }}</span>
-                <span class="summary-arrow">→</span>
-                <span class="summary-target">
-                  {{ mapping.selectedField }}
-                  <el-tag type="info" size="small">
-                    {{ mapping.selectionType === 'api' ? 'API建议' : '数据库' }}
-                  </el-tag>
-                </span>
+            <!-- 映射汇总 -->
+            <div class="mapping-summary">
+              <div class="summary-title">
+                <el-icon><InfoFilled /></el-icon>
+                字段映射汇总
+              </div>
+              <div class="summary-content">
+                <div
+                  v-for="(mapping, index) in sourceDataMappings"
+                  :key="index"
+                  class="summary-item"
+                >
+                  <span class="summary-source">{{ mapping.sourceDataName }}</span>
+                  <span class="summary-arrow">→</span>
+                  <span class="summary-target">
+                    {{ mapping.selectedField }}
+                    <el-tag type="info" size="small">
+                      {{ mapping.selectionType === 'API_RECOMMENDED' ? 'API建议' : '数据库已有' }}
+                    </el-tag>
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
         </div>
 
         <el-empty v-else description="暂无数据源信息" />
@@ -479,21 +480,29 @@ const initSourceDataMappings = () => {
           columnName: matched.columnName,
           columnLabel: matched.columnLabel,
           tableLabel: matched.tableLabel,
-          similarity: 0.95 // API 建议默认 95%
+          similarity: matched.similarity || 0.95,
+          relatedSourceDataId: matched.relatedSourceDataId || null
         } : {
           columnName: apiSourceData.sourceDataName,
           columnLabel: apiSourceData.sourceDataName,
           tableLabel: 'API建议',
-          similarity: 0.8
+          similarity: 0.8,
+          relatedSourceDataId: null
         }
       }
     }
 
+    // 默认选择数据库已有（如果找到匹配）
+    const hasDbMatch = suggestions.length > 0
     const mapping = {
       sourceData: sourceData,
       sourceDataName: sourceData.sourceDataName,
-      selectionType: suggestions.length > 0 ? 'database' : 'api',
-      selectedField: suggestions.length > 0 ? suggestions[0].columnName : '',
+      formulaSymbol: sourceData.formulaSymbol,
+      unit: sourceData.unit,
+      dataType: sourceData.dataType,
+      selectionType: hasDbMatch ? 'EXISTING_DATABASE' : 'API_RECOMMENDED',
+      selectedField: hasDbMatch ? suggestions[0].columnName : (apiSuggestionField?.columnName || ''),
+      relatedSourceDataId: hasDbMatch ? (suggestions[0].relatedSourceDataId || null) : null,
       apiSuggestion: apiSuggestionField,
       dbSuggestions: suggestions
     }
@@ -521,13 +530,20 @@ const getSourceDataSelectedField = (sourceData) => {
   return mapping?.selectedField || ''
 }
 
+// 获取关联的数据源ID
+const getRelatedSourceDataId = (sourceData) => {
+  const mapping = sourceDataMappings.value.find(m => m.sourceDataName === sourceData.sourceDataName)
+  return mapping?.relatedSourceDataId || null
+}
+
 // 处理数据源变化
 const handleSourceDataChange = (event, index) => {
   if (sourceDataMappings.value[index]) {
     sourceDataMappings.value[index] = {
       ...sourceDataMappings.value[index],
       selectionType: event.selectionType,
-      selectedField: event.selectedField
+      selectedField: event.selectedField,
+      relatedSourceDataId: event.relatedSourceDataId
     }
   }
 }
@@ -581,8 +597,12 @@ const handleConfirm = async () => {
       selectedSource: selectedIndicatorId.value === 'api' ? 'API' : 'DATABASE',
       sourceDataMappings: sourceDataMappings.value.map(m => ({
         sourceDataName: m.sourceDataName,
+        formulaSymbol: m.formulaSymbol || null,
+        unit: m.unit || null,
+        dataType: m.dataType || null,
         selectionType: m.selectionType,
-        selectedField: m.selectedField
+        relatedSourceDataId: m.relatedSourceDataId || null,
+        selectedField: m.selectedField || null
       }))
     }
 
@@ -599,6 +619,7 @@ const handleConfirm = async () => {
       request.matchSimilarity = selectedCandidate.value.similarity
     }
 
+    console.log('[调试] 发送保存请求:', request)
     await saveIndicatorSelection(request)
     ElMessage.success('保存成功')
     handleReset()

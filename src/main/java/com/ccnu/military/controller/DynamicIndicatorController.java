@@ -11,6 +11,12 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -133,6 +139,29 @@ public class DynamicIndicatorController {
         } catch (Exception e) {
             log.error("删除模板失败", e);
             return ApiResponse.error(400, e.getMessage());
+        }
+    }
+
+    @GetMapping("/template/download")
+    @Operation(summary = "下载指标模板", description = "下载空白的Excel模板文件")
+    public ResponseEntity<Resource> downloadTemplate() {
+        log.info("API调用: 下载指标模板");
+        try {
+            byte[] templateBytes = dynamicIndicatorService.generateExcelTemplate();
+            ByteArrayResource resource = new ByteArrayResource(templateBytes);
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            ContentDisposition.attachment()
+                                    .filename("指标模板.xlsx", java.nio.charset.StandardCharsets.UTF_8)
+                                    .build()
+                                    .toString())
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .contentLength(templateBytes.length)
+                    .body(resource);
+        } catch (Exception e) {
+            log.error("下载模板失败", e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 }

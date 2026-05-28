@@ -46,6 +46,10 @@
               <el-icon><Upload /></el-icon>
               导入Excel
             </el-button>
+            <el-button type="success" @click="handleDownloadTemplate">
+              <el-icon><Download /></el-icon>
+              下载模板
+            </el-button>
           </div>
         </div>
       </template>
@@ -229,6 +233,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Setting,
   Upload,
+  Download,
   Document,
   DataAnalysis,
   TrendCharts,
@@ -248,6 +253,7 @@ import {
 } from 'echarts/components'
 
 import * as dynamicApi from '@/api/index'
+import { downloadIndicatorTemplate } from '@/api/index'
 
 use([
   CanvasRenderer,
@@ -417,6 +423,17 @@ const handleReset = () => {
 
 const handleContinue = () => {
   showSuccessResult.value = false
+}
+
+// 下载模板
+const handleDownloadTemplate = async () => {
+  try {
+    await downloadIndicatorTemplate()
+    ElMessage.success('模板下载成功')
+  } catch (error) {
+    console.error('下载模板失败:', error)
+    ElMessage.error('下载模板失败')
+  }
 }
 
 // 加载模板列表

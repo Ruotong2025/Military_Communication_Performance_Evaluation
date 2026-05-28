@@ -9,7 +9,8 @@ Excel格式：
 - 第2列: 一级维度
 - 第3列: 二级维度（最小粒度）
 - 第4列: 指标性质（定性/定量）
-- 第5列: 平均数（用于归一化参考）
+- 第5列: 描述/说明
+- 第6列: 平均数（用于归一化参考）
 """
 
 import sys
@@ -153,15 +154,16 @@ class DynamicIndicatorParser:
 
         # 遍历每一行
         for row_idx in range(len(df)):
-            # 获取五列的值
+            # 获取六列的值
             col0_val = self._get_cell_value(df, row_idx, 0)  # 层级
             col1_val = self._get_cell_value(df, row_idx, 1)  # 一级维度
             col2_val = self._get_cell_value(df, row_idx, 2)  # 二级维度
             col3_val = self._get_cell_value(df, row_idx, 3)  # 指标性质（定性/定量）
-            col4_val = self._get_cell_value(df, row_idx, 4)  # 平均数
+            col4_val = self._get_cell_value(df, row_idx, 4)  # 描述/说明
+            col5_val = self._get_cell_value(df, row_idx, 5)  # 平均数
 
             # 跳过空行（全部为空）
-            if not col0_val and not col1_val and not col2_val and not col4_val:
+            if not col0_val and not col1_val and not col2_val and not col5_val:
                 continue
 
             # 跳过标题行（如果第一行是表头的话）
@@ -211,8 +213,8 @@ class DynamicIndicatorParser:
                     if col2_val and col2_val.strip():
                         # 解析指标性质
                         metric_type = self._parse_metric_type(col3_val)
-                        # 解析平均数
-                        average_value = self._parse_average_value(col4_val)
+                        # 解析平均数（现在在第6列）
+                        average_value = self._parse_average_value(col5_val)
                         # 检查二级维度是否已存在
                         existing_sec = None
                         for s in current_primary.secondary_dimensions:
@@ -263,8 +265,8 @@ class DynamicIndicatorParser:
                 if col2_val and col2_val.strip():
                     # 解析指标性质
                     metric_type = self._parse_metric_type(col3_val)
-                    # 解析平均数
-                    average_value = self._parse_average_value(col4_val)
+                    # 解析平均数（现在在第6列）
+                    average_value = self._parse_average_value(col5_val)
                     # 检查二级维度是否已存在
                     existing_sec = None
                     for s in current_primary.secondary_dimensions:
@@ -296,8 +298,8 @@ class DynamicIndicatorParser:
                 secondary_counter += 1
                 # 解析指标性质
                 metric_type = self._parse_metric_type(col3_val)
-                # 解析平均数
-                average_value = self._parse_average_value(col4_val)
+                # 解析平均数（现在在第6列）
+                average_value = self._parse_average_value(col5_val)
                 secondary = SecondaryDimension(
                     name=col2_val,
                     code=self._generate_code(col2_val),

@@ -2048,14 +2048,14 @@ export function downloadEffectivenessTemplate() {
     method: "get",
     responseType: "blob",
   }).then((res) => {
-    const blob = new Blob([res], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const blob = res.data;
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = `效能指标模板_${new Date().toLocaleDateString()}.xlsx`;
     link.click();
     window.URL.revokeObjectURL(url);
-    return res;
+    return blob;
   });
 }
 
@@ -2069,14 +2069,14 @@ export function downloadCostEffectivenessTemplate(params) {
     data: params,
     responseType: "blob",
   }).then((res) => {
-    const blob = new Blob([res], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const blob = res.data;
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = `成本效益模板_${new Date().toLocaleDateString()}.xlsx`;
     link.click();
     window.URL.revokeObjectURL(url);
-    return res;
+    return blob;
   });
 }
 
@@ -2240,5 +2240,30 @@ export function getFieldSuggestions(data) {
     url: "/indicator/source-data/field-suggestions",
     method: "post",
     data: data,
+  });
+}
+
+// ============================================
+// 动态指标 Excel 模板下载
+// ============================================
+
+/**
+ * 下载指标导入Excel模板
+ */
+export function downloadIndicatorTemplate() {
+  return request({
+    url: "/dynamic-indicator/template/download",
+    method: "get",
+    responseType: 'blob',
+  }).then((res) => {
+    // res 现在是完整的 axios 响应对象
+    const blob = res.data;
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `指标模板_${new Date().toLocaleDateString()}.xlsx`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    return blob;
   });
 }

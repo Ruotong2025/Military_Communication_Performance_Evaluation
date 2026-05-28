@@ -14,19 +14,19 @@
       <!-- API 建议选项 -->
       <div
         class="option-item"
-        :class="{ 'is-selected': selectionType === 'api' }"
+        :class="{ 'is-selected': selectionType === 'API_RECOMMENDED' }"
         @click="selectApi"
       >
         <div class="option-radio">
           <el-radio
             v-model="localSelectionType"
-            value="api"
+            value="API_RECOMMENDED"
             @click.stop="selectApi"
           >
             <span class="option-label">采用 API 建议</span>
           </el-radio>
         </div>
-        <div class="option-content" v-if="localSelectionType === 'api'">
+        <div class="option-content" v-if="localSelectionType === 'API_RECOMMENDED'">
           <div v-if="loading" class="loading-hint">
             <el-icon class="is-loading"><Loading /></el-icon>
             正在搜索相似字段...
@@ -36,7 +36,7 @@
               <span class="suggestion-icon">📄</span>
               <span class="suggestion-field">{{ apiSuggestion.columnName }}</span>
               <span class="suggestion-source">
-                来源: {{ apiSuggestion.tableLabel }}/{{ apiSuggestion.columnName }}
+                来源: {{ apiSuggestion.tableLabel || 'API建议' }}/{{ apiSuggestion.columnName }}
               </span>
               <el-tag type="success" size="small" class="similarity-tag">
                 {{ ((apiSuggestion.similarity || 0.95) * 100).toFixed(0) }}%
@@ -44,7 +44,7 @@
             </div>
           </div>
           <div v-else class="empty-hint">
-            API分析中，请稍候...
+            正在搜索数据库字段...
           </div>
         </div>
       </div>
@@ -52,13 +52,13 @@
       <!-- 数据库已有选项 -->
       <div
         class="option-item"
-        :class="{ 'is-selected': selectionType === 'database', 'is-expanded': showDatabaseOptions }"
+        :class="{ 'is-selected': selectionType === 'EXISTING_DATABASE', 'is-expanded': showDatabaseOptions }"
         @click="toggleDatabase"
       >
         <div class="option-radio">
           <el-radio
             v-model="localSelectionType"
-            value="database"
+            value="EXISTING_DATABASE"
             @click.stop="toggleDatabase"
           >
             <span class="option-label">采用已有</span>
@@ -118,19 +118,24 @@ const props = defineProps({
     type: Object,
     default: null
   },
-  // 外部传入的选择类型
+  // 外部传入的选择类型: EXISTING_DATABASE / API_RECOMMENDED
   selectionType: {
     type: String,
-    default: 'api' // 'api' | 'database'
+    default: 'API_RECOMMENDED'
   },
   // 外部传入的数据库选择字段
   selectedDbField: {
     type: String,
     default: ''
+  },
+  // 外部传入的关联已有数据源ID
+  relatedSourceDataId: {
+    type: Number,
+    default: null
   }
 })
 
-const emit = defineEmits(['update:selectionType', 'update:selectedDbField', 'change'])
+const emit = defineEmits(['update:selectionType', 'update:selectedDbField', 'update:relatedSourceDataId', 'change'])
 
 // 本地状态
 const localSelectionType = ref(props.selectionType)
@@ -138,10 +143,16 @@ const showDatabaseOptions = ref(false)
 const dbSuggestions = ref([])
 const loading = ref(false)
 
+// 选中的数据库字段
+const selectedField = ref(props.selectedDbField || '')
+
+// 选中的数据库字段对应的 relatedSourceDataId
+const selectedRelatedSourceDataId = ref(props.relatedSourceDataId)
+
 // 监听外部 selectionType 变化
 watch(() => props.selectionType, (newVal) => {
   localSelectionType.value = newVal
-  if (newVal === 'database') {
+  if (newVal === 'EXISTING_DATABASE') {
     showDatabaseOptions.value = true
     if (dbSuggestions.value.length === 0) {
       loadDbSuggestions()
@@ -152,7 +163,7 @@ watch(() => props.selectionType, (newVal) => {
 // 监听本地选择类型变化
 watch(localSelectionType, (newVal) => {
   emit('update:selectionType', newVal)
-  if (newVal === 'database') {
+  if (newVal === 'EXISTING_DATABASE') {
     showDatabaseOptions.value = true
     if (dbSuggestions.value.length === 0) {
       loadDbSuggestions()
@@ -170,19 +181,16 @@ watch(() => props.selectedDbField, (newVal) => {
   }
 })
 
-// 选中的数据库字段
-const selectedField = ref(props.selectedDbField || '')
-
 // 选择 API 建议
 const selectApi = () => {
-  localSelectionType.value = 'api'
+  localSelectionType.value = 'API_RECOMMENDED'
   showDatabaseOptions.value = false
 }
 
 // 切换到数据库已有
 const toggleDatabase = () => {
-  if (localSelectionType.value !== 'database') {
-    localSelectionType.value = 'database'
+  if (localSelectionType.value !== 'EXISTING_DATABASE') {
+    localSelectionType.value = 'EXISTING_DATABASE'
     showDatabaseOptions.value = true
     loadDbSuggestions()
   }
@@ -191,7 +199,9 @@ const toggleDatabase = () => {
 // 选择数据库字段
 const selectDbField = (item) => {
   selectedField.value = item.columnName
+  selectedRelatedSourceDataId.value = item.relatedSourceDataId || null
   emit('update:selectedDbField', item.columnName)
+  emit('update:relatedSourceDataId', item.relatedSourceDataId || null)
   emitChange()
 }
 
@@ -209,7 +219,9 @@ const loadDbSuggestions = async () => {
       // 如果还没有选中字段，默认选中相似度最高的
       if (!selectedField.value && dbSuggestions.value.length > 0) {
         selectedField.value = dbSuggestions.value[0].columnName
+        selectedRelatedSourceDataId.value = dbSuggestions.value[0].relatedSourceDataId || null
         emit('update:selectedDbField', dbSuggestions.value[0].columnName)
+        emit('update:relatedSourceDataId', dbSuggestions.value[0].relatedSourceDataId || null)
       }
     }
   } catch (error) {
@@ -225,9 +237,12 @@ const emitChange = () => {
   emit('change', {
     sourceData: props.sourceData,
     selectionType: localSelectionType.value,
-    selectedField: localSelectionType.value === 'api'
+    selectedField: localSelectionType.value === 'API_RECOMMENDED'
       ? (props.apiSuggestion?.columnName || '')
       : selectedField.value,
+    relatedSourceDataId: localSelectionType.value === 'API_RECOMMENDED'
+      ? (props.apiSuggestion?.relatedSourceDataId || null)
+      : selectedRelatedSourceDataId.value,
     apiSuggestion: props.apiSuggestion,
     dbSuggestions: dbSuggestions.value
   })
@@ -235,7 +250,7 @@ const emitChange = () => {
 
 // 初始化时加载数据库建议
 onMounted(() => {
-  if (props.selectionType === 'database' || localSelectionType.value === 'database') {
+  if (props.selectionType === 'EXISTING_DATABASE' || localSelectionType.value === 'EXISTING_DATABASE') {
     showDatabaseOptions.value = true
     loadDbSuggestions()
   }

@@ -21,6 +21,10 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   response => {
+    // 文件下载（blob）直接返回原始响应
+    if (response.config.responseType === 'blob') {
+      return response;
+    }
     const res = response.data
     if (res.code !== 200) {
       console.error('API Error:', res.message)
@@ -30,6 +34,17 @@ request.interceptors.response.use(
   },
   error => {
     console.error('Request Error:', error)
+    // blob 响应的错误处理
+    if (error.config?.responseType === 'blob') {
+      return error.response?.data?.text().then(text => {
+        try {
+          const json = JSON.parse(text);
+          return Promise.reject(new Error(json.message || '下载失败'));
+        } catch {
+          return Promise.reject(new Error(text || '下载失败'));
+        }
+      });
+    }
     const d = error.response?.data
     const serverMsg =
       (typeof d === 'string' && d) ||

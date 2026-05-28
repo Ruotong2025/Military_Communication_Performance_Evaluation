@@ -119,8 +119,17 @@ public class SemanticSimilarityService {
         List<Long> ids = results.stream()
                 .map(ChromaVectorService.SearchResult::getId)
                 .collect(Collectors.toList());
+        log.info("[调试] Chroma 返回的指标 IDs: {}", ids);
 
         List<IndicatorDefinition> indicators = indicatorRepository.findAllById(ids);
+        log.info("[调试] MySQL 查询到的指标数量: {}, 指标名称: {}",
+                indicators.size(),
+                indicators.stream().map(IndicatorDefinition::getIndicatorName).collect(Collectors.toList()));
+
+        if (indicators.isEmpty()) {
+            log.error("[调试] 严重问题：Chroma 返回了 {} 个 ID，但 MySQL 查询结果为空！", ids);
+            log.error("[调试] 请检查 indicator_definition 表中是否存在这些 ID: {}", ids);
+        }
 
         // 按 Chroma 返回顺序构建结果（分数已经是降序）
         Map<Long, Double> scoreMap = results.stream()
@@ -138,8 +147,10 @@ public class SemanticSimilarityService {
                 .sorted((a, b) -> Double.compare(b.getSimilarity(), a.getSimilarity()))
                 .limit(3)
                 .collect(Collectors.toList());
+        log.info("[调试] 构建后的 candidates 数量: {}", candidates.size());
 
         if (candidates.isEmpty()) {
+            log.error("[调试] candidates 为空！indicators 数量: {}", indicators.size());
             return null;
         }
 

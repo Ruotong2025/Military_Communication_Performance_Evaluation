@@ -4,18 +4,21 @@ import com.ccnu.military.dto.*;
 import com.ccnu.military.entity.IndicatorDefinition;
 import com.ccnu.military.entity.IndicatorSourceData;
 import com.ccnu.military.entity.MatchResult;
+import com.ccnu.military.enums.SourceDataSelectionType;
 import com.ccnu.military.repository.IndicatorDefinitionRepository;
 import com.ccnu.military.repository.IndicatorSourceDataRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * 指标智能识别服务
@@ -32,6 +35,7 @@ public class IndicatorIdentificationService {
     private final ChromaVectorService chromaVectorService;
     private final IndicatorDefinitionRepository indicatorRepository;
     private final IndicatorSourceDataRepository sourceDataRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // ============================================
     // 新增方法：查询指标（情况一 + 情况三）
@@ -330,118 +334,231 @@ public class IndicatorIdentificationService {
 
     /**
      * 保存用户选择
+     * 场景1: 选择已有指标 → 记录 related_indicators 映射
+     * 场景2: 选择API分析 → 新建指标 + 处理数据源
+     * 场景3: 手动输入 → 新建指标
      */
     @Transactional
     public IndicatorDefinition saveSelection(IndicatorSelectionRequest request) {
         log.info("保存用户选择: {}, 来源: {}", request.getOriginalName(), request.getSelectedSource());
 
-        // 选择 DATABASE 来源时，也需要创建/更新记录（复制匹配指标的信息）
-        Optional<IndicatorDefinition> existing =
-                indicatorRepository.findByIndicatorName(request.getOriginalName());
-
         IndicatorDefinition entity;
-        boolean isNew = existing.isEmpty();
 
-        // 如果是从数据库相似度候选选择，获取匹配指标的详细信息
-        IndicatorDefinition matchedIndicator = null;
-        if ("DATABASE".equals(request.getSelectedSource()) && request.getSelectedDbId() != null) {
-            matchedIndicator = indicatorRepository.findById(request.getSelectedDbId())
-                    .orElseThrow(() -> new RuntimeException("指标不存在: " + request.getSelectedDbId()));
-        }
-
-        if (existing.isPresent()) {
-            entity = existing.get();
-            // 如果有匹配指标，更新详细信息
-            if (matchedIndicator != null) {
-                entity.setIndicatorType(matchedIndicator.getIndicatorType());
-                entity.setFormula(matchedIndicator.getFormula());
-                entity.setFormulaDescription(matchedIndicator.getFormulaDescription());
-                entity.setCalculationMethod(matchedIndicator.getCalculationMethod());
-                entity.setUnit(matchedIndicator.getUnit());
-                entity.setDescription(matchedIndicator.getDescription());
-                entity.setCategory(matchedIndicator.getCategory());
-            } else if (request.getIndicatorType() != null) {
-                entity.setIndicatorType(IndicatorDefinition.IndicatorType.valueOf(request.getIndicatorType()));
-            }
-            entity.setFormula(request.getFormula() != null ? request.getFormula() : entity.getFormula());
-            entity.setFormulaDescription(request.getFormulaDescription() != null ? request.getFormulaDescription() : entity.getFormulaDescription());
-            entity.setCalculationMethod(request.getCalculationMethod() != null ? request.getCalculationMethod() : entity.getCalculationMethod());
-            entity.setUnit(request.getUnit() != null ? request.getUnit() : entity.getUnit());
-            entity.setDescription(request.getDescription() != null ? request.getDescription() : entity.getDescription());
-            entity.setIsFromAi("API".equals(request.getSelectedSource()));
+        if ("DATABASE".equals(request.getSelectedSource())) {
+            // 场景1: 选择已有指标 → 记录关联关系
+            entity = handleDatabaseSelection(request);
+        } else if ("API".equals(request.getSelectedSource())) {
+            // 场景2: API分析 → 新建指标 + 处理数据源
+            entity = handleApiSelection(request);
         } else {
-            // 构建新记录
-            IndicatorDefinition.IndicatorType type = null;
-            if (matchedIndicator != null) {
-                type = matchedIndicator.getIndicatorType();
-            } else if (request.getIndicatorType() != null) {
-                type = IndicatorDefinition.IndicatorType.valueOf(request.getIndicatorType());
-            }
-
-            entity = IndicatorDefinition.builder()
-                    .indicatorName(request.getOriginalName())
-                    .indicatorType(type)
-                    .formula(matchedIndicator != null ? matchedIndicator.getFormula() : request.getFormula())
-                    .formulaDescription(matchedIndicator != null ? matchedIndicator.getFormulaDescription() : request.getFormulaDescription())
-                    .calculationMethod(matchedIndicator != null ? matchedIndicator.getCalculationMethod() : request.getCalculationMethod())
-                    .unit(matchedIndicator != null ? matchedIndicator.getUnit() : request.getUnit())
-                    .description(matchedIndicator != null ? matchedIndicator.getDescription() : request.getDescription())
-                    .category(matchedIndicator != null ? matchedIndicator.getCategory() : request.getCategory())
-                    .isFromAi("API".equals(request.getSelectedSource()))
-                    .isActive(true)
-                    .build();
-        }
-
-        // 保存基本信息
-        entity = indicatorRepository.save(entity);
-        log.info("指标保存成功: {}", entity.getIndicatorName());
-
-        // 如果是从数据库候选选择，复制数据源
-        if (matchedIndicator != null) {
-            copySourceData(matchedIndicator.getId(), entity.getId());
-        }
-
-        // 如果是新指标，计算向量并同步到 Chroma
-        if (isNew) {
-            try {
-                List<Double> vector = indicatorVectorService.encodeText(entity.getIndicatorName());
-                if (!vector.isEmpty()) {
-                    // 添加到 Chroma 向量索引
-                    chromaVectorService.addIndicators(
-                            Collections.singletonList(entity.getId()),
-                            Collections.singletonList(entity.getIndicatorName()),
-                            Collections.singletonList(vector)
-                    );
-                    log.info("指标向量已添加到 Chroma: {}", entity.getIndicatorName());
-                }
-            } catch (Exception e) {
-                log.error("指标向量计算或同步到 Chroma 失败: {}", entity.getIndicatorName(), e);
-            }
+            // 场景3: 手动输入 → 新建指标
+            entity = handleManualInput(request);
         }
 
         return entity;
     }
 
     /**
-     * 复制数据源
+     * 场景1: 选择已有指标 - 仅记录关联关系
      */
-    private void copySourceData(Long sourceIndicatorId, Long targetIndicatorId) {
-        List<IndicatorSourceData> sourceList = sourceDataRepository.findByIndicatorId(sourceIndicatorId);
-        for (IndicatorSourceData source : sourceList) {
-            IndicatorSourceData newSource = IndicatorSourceData.builder()
-                    .indicatorId(targetIndicatorId)
-                    .sourceDataName(source.getSourceDataName())
-                    .sourceDataCode(source.getSourceDataCode())
-                    .measurementMethod(source.getMeasurementMethod())
-                    .formulaSymbol(source.getFormulaSymbol())
-                    .unit(source.getUnit())
-                    .isEssential(source.getIsEssential())
-                    .priority(source.getPriority())
-                    .isFormulaRelated(source.getIsFormulaRelated())
-                    .build();
-            sourceDataRepository.save(newSource);
+    private IndicatorDefinition handleDatabaseSelection(IndicatorSelectionRequest request) {
+        IndicatorDefinition indicator = indicatorRepository.findById(request.getSelectedDbId())
+                .orElseThrow(() -> new RuntimeException("指标不存在: " + request.getSelectedDbId()));
+
+        // 构建关联映射
+        Map<String, Object> association = new LinkedHashMap<>();
+        association.put("originalName", request.getOriginalName());
+        association.put("matchedIndicatorId", indicator.getId());
+        association.put("matchedIndicatorName", indicator.getIndicatorName());
+        association.put("matchedAt", LocalDateTime.now().toString());
+        association.put("similarity", request.getMatchSimilarity() != null ? request.getMatchSimilarity() : 1.0);
+
+        // 读取现有 related_indicators，追加新映射
+        Map<String, Object> relatedIndicators = parseJson(indicator.getRelatedIndicators());
+        List<Map<String, Object>> associations = (List<Map<String, Object>>) relatedIndicators.getOrDefault("associations", new ArrayList<>());
+        associations.add(association);
+        relatedIndicators.put("associations", associations);
+
+        indicator.setRelatedIndicators(toJson(relatedIndicators));
+        IndicatorDefinition saved = indicatorRepository.save(indicator);
+        log.info("已记录指标关联: 输入 '{}' → 已有指标 '{}'", request.getOriginalName(), indicator.getIndicatorName());
+        return saved;
+    }
+
+    /**
+     * 场景2: API分析 - 新建指标 + 处理数据源
+     */
+    private IndicatorDefinition handleApiSelection(IndicatorSelectionRequest request) {
+        // 1. 创建新指标
+        IndicatorDefinition.IndicatorType type = null;
+        if (request.getIndicatorType() != null) {
+            type = IndicatorDefinition.IndicatorType.valueOf(request.getIndicatorType());
         }
-        log.info("数据源复制完成: 从指标 {} 到指标 {}", sourceIndicatorId, targetIndicatorId);
+
+        IndicatorDefinition indicator = IndicatorDefinition.builder()
+                .indicatorName(request.getOriginalName())
+                .indicatorType(type)
+                .formula(request.getFormula())
+                .formulaDescription(request.getFormulaDescription())
+                .calculationMethod(request.getCalculationMethod())
+                .description(request.getDescription())
+                .unit(request.getUnit())
+                .category(request.getCategory())
+                .isFromAi(true)
+                .aiConfidence(BigDecimal.valueOf(85.0))
+                .isActive(true)
+                .build();
+        indicator = indicatorRepository.save(indicator);
+        log.info("新指标创建成功: {}", indicator.getIndicatorName());
+
+        // 2. 处理每个数据源
+        List<Map<String, Object>> sourceDataMappings = new ArrayList<>();
+
+        if (request.getSourceDataMappings() != null) {
+            for (IndicatorSelectionRequest.SourceDataMapping mapping : request.getSourceDataMappings()) {
+                Map<String, Object> sourceMapping = new LinkedHashMap<>();
+                sourceMapping.put("apiSourceDataName", mapping.getSourceDataName());
+                sourceMapping.put("selectedField", mapping.getSelectedField());
+                sourceMapping.put("selectionType", mapping.getSelectionType() != null ? mapping.getSelectionType().name() : "API_RECOMMENDED");
+                sourceMapping.put("selectedAt", LocalDateTime.now().toString());
+
+                if (mapping.getSelectionType() == SourceDataSelectionType.EXISTING_DATABASE) {
+                    // 选择已有数据源 → 记录关联关系
+                    sourceMapping.put("relatedSourceDataId", mapping.getRelatedSourceDataId());
+                    sourceDataMappings.add(sourceMapping);
+                    log.info("数据源 '{}' 关联到已有数据源 ID: {}", mapping.getSourceDataName(), mapping.getRelatedSourceDataId());
+                } else {
+                    // API推荐 → 新增 source_data 记录
+                    IndicatorSourceData sourceData = IndicatorSourceData.builder()
+                            .indicatorId(indicator.getId())
+                            .sourceDataName(mapping.getSourceDataName())
+                            .formulaSymbol(mapping.getFormulaSymbol())
+                            .unit(mapping.getUnit())
+                            .measurementMethod(mapping.getMeasurementMethod())
+                            .dataType(mapping.getDataType() != null ?
+                                    IndicatorSourceData.DataType.valueOf(mapping.getDataType()) : null)
+                            .isFormulaRelated(true)
+                            .isEssential(true)
+                            .priority(1)
+                            .build();
+                    sourceData = sourceDataRepository.save(sourceData);
+                    log.info("新增API数据源: {}, ID: {}", mapping.getSourceDataName(), sourceData.getId());
+
+                    // 将新建的数据源ID也添加到关联关系中
+                    sourceMapping.put("relatedSourceDataId", sourceData.getId());
+                    sourceDataMappings.add(sourceMapping);
+
+                    // 同步向量到 Chroma
+                    try {
+                        List<Double> vector = indicatorVectorService.encodeText(sourceData.getSourceDataName());
+                        if (!vector.isEmpty()) {
+                            chromaVectorService.addSourceData(
+                                    Collections.singletonList(sourceData.getId()),
+                                    Collections.singletonList(sourceData.getSourceDataName()),
+                                    Collections.singletonList(vector)
+                            );
+                            log.debug("数据源向量已添加到 Chroma: {}", sourceData.getSourceDataName());
+                        }
+                    } catch (Exception e) {
+                        log.warn("数据源向量同步到 Chroma 失败: {}", sourceData.getSourceDataName(), e);
+                    }
+                }
+            }
+        }
+
+        // 3. 保存数据源关联关系
+        if (!sourceDataMappings.isEmpty()) {
+            Map<String, Object> relatedSourceData = new LinkedHashMap<>();
+            relatedSourceData.put("mappings", sourceDataMappings);
+            indicator.setRelatedSourceData(toJson(relatedSourceData));
+            indicatorRepository.save(indicator);
+        }
+
+        // 4. 同步向量到 Chroma
+        try {
+            List<Double> vector = indicatorVectorService.encodeText(indicator.getIndicatorName());
+            if (!vector.isEmpty()) {
+                chromaVectorService.addIndicators(
+                        Collections.singletonList(indicator.getId()),
+                        Collections.singletonList(indicator.getIndicatorName()),
+                        Collections.singletonList(vector)
+                );
+                log.info("指标向量已添加到 Chroma: {}", indicator.getIndicatorName());
+            }
+        } catch (Exception e) {
+            log.error("指标向量同步到 Chroma 失败: {}", indicator.getIndicatorName(), e);
+        }
+
+        return indicator;
+    }
+
+    /**
+     * 场景3: 手动输入 - 新建指标
+     */
+    private IndicatorDefinition handleManualInput(IndicatorSelectionRequest request) {
+        IndicatorDefinition.IndicatorType type = null;
+        if (request.getIndicatorType() != null) {
+            type = IndicatorDefinition.IndicatorType.valueOf(request.getIndicatorType());
+        }
+
+        IndicatorDefinition indicator = IndicatorDefinition.builder()
+                .indicatorName(request.getOriginalName())
+                .indicatorType(type)
+                .formula(request.getFormula())
+                .formulaDescription(request.getFormulaDescription())
+                .calculationMethod(request.getCalculationMethod())
+                .description(request.getDescription())
+                .unit(request.getUnit())
+                .category(request.getCategory())
+                .isFromAi(false)
+                .isActive(true)
+                .build();
+
+        indicator = indicatorRepository.save(indicator);
+        log.info("手动输入指标创建成功: {}", indicator.getIndicatorName());
+
+        // 同步向量到 Chroma
+        try {
+            List<Double> vector = indicatorVectorService.encodeText(indicator.getIndicatorName());
+            if (!vector.isEmpty()) {
+                chromaVectorService.addIndicators(
+                        Collections.singletonList(indicator.getId()),
+                        Collections.singletonList(indicator.getIndicatorName()),
+                        Collections.singletonList(vector)
+                );
+            }
+        } catch (Exception e) {
+            log.error("指标向量同步到 Chroma 失败: {}", indicator.getIndicatorName(), e);
+        }
+
+        return indicator;
+    }
+
+    /**
+     * 解析 JSON 字符串为 Map
+     */
+    private Map<String, Object> parseJson(String json) {
+        if (json == null || json.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            return objectMapper.readValue(json, LinkedHashMap.class);
+        } catch (JsonProcessingException e) {
+            log.warn("JSON解析失败: {}", json, e);
+            return new LinkedHashMap<>();
+        }
+    }
+
+    /**
+     * 将 Map 转换为 JSON 字符串
+     */
+    private String toJson(Map<String, Object> map) {
+        try {
+            return objectMapper.writeValueAsString(map);
+        } catch (JsonProcessingException e) {
+            log.error("JSON序列化失败", e);
+            return "{}";
+        }
     }
 
     // ============================================

@@ -39,4 +39,7 @@ public class ColumnSimilarityResult {
 
     @Schema(description = "字段描述")
     private String description;
+
+    @Schema(description = "关联的数据源ID（indicator_source_data 表主键）")
+    private Long relatedSourceDataId;
 }
